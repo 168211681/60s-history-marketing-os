@@ -57,3 +57,39 @@ effect, stable list keys, labeled controls and no dangerous HTML injection.
 - Credentials were not requested or embedded. All routes are intentionally public
   sample pages. Owner authentication and access controls are prerequisites for
   introducing private analytics in a later milestone.
+
+## Phase 2 foundation verification
+
+The database migration was applied to a fresh, disposable PostgreSQL 18 cluster
+with test-only Supabase roles and identity functions. `npm run test:db` passed all
+18 tests, including two-owner row isolation, explicit grants, idea mutation
+policies, private job access, cross-channel foreign keys, idempotent upserts,
+missing metric values and account-deletion isolation. This is not a hosted
+Supabase Auth or Data API test; no cloud migration was applied.
+
+After adding the typed analytics reader contract, `npm run lint`,
+`npm run typecheck` and the 6 unit tests passed. The production build completed
+with `npm run build -- --webpack` and prerendered all five routes. The default
+Turbopack build failed in this workspace while its CSS worker attempted to bind
+a port (`Operation not permitted`); it passed earlier on the Phase 1 commit.
+The code was not changed to suppress the failure. `git diff --check` passed.
+
+GitHub Actions for PR #1 did not reach checkout or tests. Its check annotation
+reported that the account was locked due to a billing issue. A single rerun
+produced the same annotation. No GitHub CI success is claimed.
+
+## Local verification without GitHub Actions
+
+The Phase 2 branch removes the automatic GitHub Actions workflow and provides
+`npm run verify:local`. It runs lint, typecheck, unit tests, the disposable
+PostgreSQL tests, a webpack production build and desktop/mobile browser tests.
+This avoids the blocked GitHub runner and does not require a paid CI service.
+It must be run on each change before commit/push; it does not provide an
+independent remote status check or prevent an unverified direct push.
+
+On 2026-09-18, `npm run verify:local` passed outside the restricted command
+sandbox: lint, typecheck, 6 unit tests, 18 database tests, the production
+webpack build (all five routes prerendered), and 25 Playwright tests. Two
+mobile keyboard tests were intentionally skipped. An initial run inside the
+restricted sandbox stopped at `npm test` because `tsx` could not create its
+local IPC socket (`EPERM`); the unrestricted rerun passed.
