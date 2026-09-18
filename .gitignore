@@ -7,3 +7,5 @@ out/
 playwright-report/
 test-results/
 .DS_Store
+supabase/.temp/
+supabase/.branches/

@@ -1,6 +1,8 @@
 # 60s History Marketing OS
 
 Phase 1: a responsive, sample-data analytics dashboard for a history Shorts channel.
+Phase 2 foundation: a Supabase-compatible migration and locally verified ownership/RLS
+rules, ready for a later authenticated integration. See [database setup](docs/database.md).
 **Every metric and video title is fictional. No YouTube, database, authentication,
 or AI service is connected.** This milestone does not generate or publish content.
 
@@ -22,6 +24,10 @@ small mobile screens, including iPhone sizes. Production mode:
 npm run build
 npm start
 ```
+
+If the local Turbopack build cannot start its CSS worker in a restricted
+environment, `npm run build -- --webpack` uses Next.js's supported webpack
+builder. The local verification command uses this builder in restricted environments.
 
 ## Pages
 
@@ -51,7 +57,11 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/sample-data.ts`: explicit fictional fixtures.
 - `src/lib/analytics.ts`: pure, tested metric calculations, filtering and sorting.
 - `tests/`: unit tests and browser acceptance tests.
-- `.github/workflows/ci.yml`: install/lint/types/tests/build/browser checks.
+- `npm run verify:local`: lint, types, unit, database, build and browser checks.
+- `supabase/migrations/`: database schema, explicit grants and owner-scoped RLS.
+- `tests/database.test.mjs`: isolated PostgreSQL integration tests (no cloud credentials).
+- `src/lib/data/analytics-contract.ts`: types for a future session-scoped reader;
+  no database connection or credentials are used in Phase 2 foundation.
 
 Calculations have no AI-vendor dependency. A future provider adapter and optional
 MCP layer can be added when real-data analysis is implemented. Neither is required
@@ -60,14 +70,22 @@ The project follows the [Next.js installation guidance](https://nextjs.org/docs/
 
 ## Verification
 
+GitHub Actions could not start jobs for this repository because the account is
+locked by a billing issue. The workflow has been removed; verification runs
+locally before commit/push with no CI service or paid account. Install browser
+dependencies and native PostgreSQL 15+ tools first. On Ubuntu:
+
 ```sh
-npm run lint
-npm run typecheck
-npm test
-npm run build
+sudo apt-get install postgresql postgresql-contrib
 npx playwright install --with-deps chromium webkit
-npm run test:e2e
+npm run verify:local
 ```
+
+Run as a regular user, not root. You can also run each `lint`, `typecheck`,
+`test`, `test:db`, `build` and `test:e2e` command separately. Database tests
+initialize their own disposable cluster,
+use a private Unix socket with TCP disabled, and never connect to `DATABASE_URL`.
+See [database setup](docs/database.md) for the schema, permission matrix and limitations.
 
 Browser tests start the production server automatically (build first). They cover
 all routes, sample labeling, navigation, search/sort/empty recovery, chart values,
@@ -92,9 +110,11 @@ authentication and server-side authorization, channel ownership, PostgreSQL RLS,
 encrypted token storage, and authenticated sync endpoints. Do not log tokens.
 Search input is local state rendered by React, never executed as code/HTML/SQL.
 
-## Next milestones (not implemented)
+## Next milestones
 
-1. Database migrations, ownership model and RLS with isolation tests.
+1. **Foundation prepared:** database migration, ownership model and RLS isolation
+   tests. Cloud deployment, Supabase Auth/Data API verification and application
+   database integration remain unimplemented.
 2. Owner sign-in and Google OAuth: verified state, least-privilege scopes, secure
    refresh-token storage, refresh/revocation and disconnect handling.
 3. YouTube Data/Analytics sync with quota management, backoff and idempotency.
@@ -105,5 +125,5 @@ Google setup and variable names will be documented alongside the actual OAuth
 implementation; no OAuth callback or connection exists in Phase 1. Do not enter
 credentials into this sample workspace. ChatGPT Plus is not API billing.
 
-Vercel deployment is separate. A local build does not mean this project has been
-deployed or that GitHub CI has passed.
+Vercel deployment is separate. Local verification does not mean this project has
+been deployed, and GitHub will not show a CI pass for this branch.

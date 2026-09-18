@@ -12,7 +12,9 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test tests/analytics.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:db": "node --test tests/database.test.mjs",
+    "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"
   },
   "dependencies": {
     "next": "16.3.5",
