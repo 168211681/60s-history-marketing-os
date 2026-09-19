@@ -23,5 +23,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/videos", "/analytics", "/insights", "/settings", "/auth/callback", "/api/youtube/:path*"],
+  matcher: ["/", "/videos", "/analytics", "/insights", "/scripts", "/settings", "/auth/callback", "/api/youtube/:path*", "/api/scripts/:path*"],
 };

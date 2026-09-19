@@ -23,6 +23,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
 | `private.youtube_connections` | Encrypted refresh token and owner/channel binding | No access |
+| `private.production_workflow_events` | Sanitized production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
 
@@ -94,11 +95,11 @@ The test-only bootstrap supplies minimal `auth.users` and `auth.uid()` contracts
 files simulate the role/identity boundary for database tests, not JWT verification
 or the Supabase Auth service. SQL tests do not certify PostgREST/GraphQL behavior.
 
-Coverage includes fresh migration application, nine RLS-protected tables,
+Coverage includes fresh migration application, thirteen RLS-protected tables,
 legacy-grant removal, two-owner isolation, missing identity, anonymous denial,
 read-only analytics, owner idea CRUD, cross-owner mutation denial, private jobs,
 cross-channel FK integrity, sync job acquisition/transactional upserts, nullable metrics, invalid values,
-insight provenance and account deletion isolation.
+insight provenance, workflow telemetry grants and account deletion isolation.
 
 ## Applying to Supabase later
 

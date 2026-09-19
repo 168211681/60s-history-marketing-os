@@ -8,6 +8,7 @@ const links = [
   { href: "/videos", label: "Videos", symbol: "▷" },
   { href: "/analytics", label: "Analytics", symbol: "▥" },
   { href: "/insights", label: "Insights", symbol: "✧" },
+  { href: "/scripts", label: "Scripts", symbol: "✎" },
   { href: "/settings", label: "Settings", symbol: "⚙" },
 ];
 export function Navigation() {

@@ -67,6 +67,78 @@ h3 {
 .muted {
   color: var(--muted);
 }
+.stack-lg {
+  display: grid;
+  gap: 20px;
+}
+.draft-grid {
+  display: grid;
+  gap: 18px;
+}
+.draft-grid > div {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.script-panel-actions,
+.script-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.script-actions .button {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.workflow-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.workflow-row > div {
+  flex: 1 1 220px;
+}
+.workflow-row p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.error-text {
+  color: #9b2c2c;
+  font-size: 12px;
+}
+.workflow-events {
+  flex: 1 1 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 12px;
+}
+.workflow-events summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.workflow-event-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.workflow-event-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+}
+.workflow-event-list time {
+  white-space: nowrap;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+}
 .app-shell {
   min-height: 100vh;
   display: grid;

@@ -3,6 +3,7 @@
 Phase 1: a responsive, sample-data analytics dashboard for a history Shorts channel.
 Phase 2 foundation: a Supabase-compatible migration and locally verified ownership/RLS
 rules, ready for a later authenticated integration. See [database setup](docs/database.md).
+The phased delivery status and acceptance gates are tracked in [the roadmap](docs/roadmap.md).
 The owner-only flow can connect YouTube, manually import supported analytics, and
 render the latest successful reporting window. Anonymous sessions retain the clearly
 labeled fictional workspace. This milestone does not generate or publish content.
@@ -70,19 +71,26 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
 - `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
 - `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
+- `src/lib/ai/provider.ts`: optional provider-agnostic AI adapter with bounded structured output; unavailable by default. See [AI adapter setup](docs/ai.md).
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
 - `docs/connection-setup.md`: Supabase and Google console configuration.
+- `docs/mcp.md`: Optional Codex/MCP endpoint setup and tool contract.
 
-Calculations have no AI-vendor dependency. A future provider adapter and optional
-MCP layer can be added when real-data analysis is implemented. Neither is required
-to operate this dashboard. No integration stubs claim success.
+Calculations have no AI-vendor dependency. The first optional MCP layer is available
+at `/api/mcp`, protected by the server-only `MCP_SECRET` bearer secret. It exposes
+owner-scoped tools for synced metrics, video rankings, evidence-backed hypotheses,
+content ideas, and structured 60-second script drafts. Drafts remain in `draft`
+status and require human review before any future video generation or publishing.
+No OpenAI API key is required; the dashboard remains functional without MCP.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
 
-GitHub Actions could not start jobs for this repository because the account is
-locked by a billing issue. The workflow has been removed; verification runs
-locally before commit/push with no CI service or paid account. Install browser
+GitHub Actions may be unavailable for this repository while the account is
+locked by a billing issue. The production worker workflow is included in
+`.github/workflows/production-worker.yml` and can be triggered manually or every
+five minutes when Actions is available. Verification still runs locally before
+commit/push. Install browser
 dependencies and native PostgreSQL 15+ tools first. On Ubuntu:
 
 ```sh
@@ -136,8 +144,10 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
    Videos and Analytics views with explicit sample/live/error states.
 4. **Implemented locally:** deterministic topic analysis and evidence-labeled
    recommendations over stored or sample analytics.
-5. Add replaceable AI adapters for hypotheses and experiments with evidence labels.
-6. Future production tools and optional MCP, explicit human publishing approval.
+5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
+6. Add an optional video provider adapter after human-approved script drafts. The implemented provider boundary supports `huggingface`; other providers must remain unavailable until their contracts are verified.
+7. Configure a private Supabase Storage bucket named `video-artifacts` before enabling a provider that returns raw video bytes. The server-only `SUPABASE_SERVICE_ROLE_KEY` is used only to upload artifacts and create short-lived signed URLs for the private YouTube upload worker.
+8. Set `VIDEO_PROVIDER=huggingface` with `HF_TOKEN`, `HF_VIDEO_MODEL`, and `HF_VIDEO_PROVIDER` to enable the synchronous Hugging Face adapter. The free GitHub Actions worker is documented in [production worker setup](docs/production-worker.md).
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.

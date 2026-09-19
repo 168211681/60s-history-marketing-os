@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { appOrigin, ownerId } from "../src/lib/auth/config";
 import { decryptToken, encryptToken, sameSecret, tokenEncryptionConfigured } from "../src/lib/youtube/crypto";
-import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, refreshAccessToken, revokeToken, youtubeScopes } from "../src/lib/youtube/google";
+import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, publishVideo, refreshAccessToken, revokeToken, uploadVideoPrivate, youtubeScopes } from "../src/lib/youtube/google";
 import {
   defaultSyncPeriod,
   durationSeconds,
@@ -55,7 +55,7 @@ test("refresh token encryption round-trips and detects tampering", () => {
   assert.throws(() => decryptToken(encrypted));
 });
 
-test("OAuth request uses read-only scopes, offline access, state, and PKCE", () => {
+test("OAuth request uses analytics and upload scopes, offline access, state, and PKCE", () => {
   const first = newOAuthState();
   const second = newOAuthState();
   assert.notEqual(first.state, second.state);
@@ -68,6 +68,37 @@ test("OAuth request uses read-only scopes, offline access, state, and PKCE", () 
   assert.equal(url.searchParams.get("state"), first.state);
   assert.equal(url.searchParams.get("code_challenge"), createHash("sha256").update(first.verifier).digest("base64url"));
   assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+});
+
+test("YouTube upload uses a resumable private-video session", async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: URL | RequestInfo, init?: RequestInit) => {
+    const url = String(input);
+    calls.push(url);
+    if (url === "https://cdn.example/video.mp4") return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "video/mp4" } });
+    if (url.includes("upload/youtube/v3/videos")) {
+      assert.equal(init?.method, "POST");
+      assert.match(String(init?.body), /"privacyStatus":"private"/);
+      return new Response(null, { status: 200, headers: { location: "https://upload.example/session-1" } });
+    }
+    assert.equal(url, "https://upload.example/session-1");
+    assert.equal(init?.method, "PUT");
+    return Response.json({ id: "youtube-video-1" });
+  }) as typeof fetch;
+  assert.deepEqual(await uploadVideoPrivate("access", "https://cdn.example/video.mp4", { title: "History", description: "A short" }, fetcher), { youtubeVideoId: "youtube-video-1" });
+  assert.equal(calls.length, 3);
+});
+
+test("YouTube publish requires an explicit public status update", async () => {
+  const fetcher = (async (url: URL | RequestInfo, init?: RequestInit) => {
+    assert.equal(String(url), "https://www.googleapis.com/youtube/v3/videos?part=status");
+    assert.equal(init?.method, "PUT");
+    assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer access");
+    assert.deepEqual(JSON.parse(String(init?.body)), { id: "youtube-video-1", status: { privacyStatus: "public" } });
+    return Response.json({ id: "youtube-video-1" });
+  }) as typeof fetch;
+  assert.deepEqual(await publishVideo("access", "youtube-video-1", fetcher), { youtubeVideoId: "youtube-video-1" });
+  await assert.rejects(publishVideo("access", "bad id", fetcher));
 });
 
 test("code exchange requires refresh token and complete scopes", async () => {
