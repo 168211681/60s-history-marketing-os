@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
+import { AiAnalysisPanel } from "@/components/ai-analysis-panel";
 import { workspaceData } from "@/lib/data/workspace";
 import { buildMarketingInsights, type InsightKind } from "@/lib/insights";
 export const metadata = { title: "Insights" };
@@ -20,16 +21,11 @@ export default async function InsightsPage() {
         title="Marketing insights"
         description="Separate what happened from what might explain it."
       />
-      <Panel
-        title="AI marketing analysis"
-        action={<span className="badge neutral">Unavailable</span>}
-      >
-        <EmptyState title="No AI report generated">
-          <p>No AI provider is configured. Stored analytics, when available, are not sent to an AI service.</p>
-          <p>Adding an API key alone will not enable this feature.</p>
-          <Link className="text-link" href="/settings">
-            View connection status →
-          </Link>
+      <AiAnalysisPanel />
+      <Panel title="Provider setup" description="AI is optional and remains unavailable until a server-side provider is configured.">
+        <EmptyState title="No provider? Deterministic insights still work">
+          <p>Stored analytics are not sent to an AI service unless you explicitly configure one.</p>
+          <Link className="text-link" href="/settings">View connection status →</Link>
         </EmptyState>
       </Panel>
       <Panel

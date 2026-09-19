@@ -2,6 +2,7 @@ import { EmptyState, PageHeading, Panel } from "@/components/ui";
 import { ScriptStatusActions } from "@/components/script-status-actions";
 import { productionWorkflowsForOwner, scriptDraftsForOwner } from "@/lib/data/script-drafts";
 import { ScriptDraftForm } from "@/components/script-draft-form";
+import { AiScriptDraftForm } from "@/components/ai-script-draft-form";
 import { RunWorkerButton } from "@/components/run-worker-button";
 import { RetryWorkflowButton } from "@/components/retry-workflow-button";
 
@@ -21,6 +22,9 @@ export default async function ScriptsPage() {
         title="Script drafts"
         description="Review structured 60-second drafts before any production or publishing step."
       />
+      <Panel title="Generate with AI provider" description="Optional server-side AI integration. Every result stays a draft until you review it.">
+        <AiScriptDraftForm />
+      </Panel>
       {!drafts.length ? (
         <Panel title="No drafts yet">
           <EmptyState title="Your review queue is empty">

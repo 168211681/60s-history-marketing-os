@@ -73,7 +73,7 @@ test("navigation, filtering, empty recovery and sorting work", async ({
     ).toHaveAttribute("aria-current", "page");
   }
 });
-test("chart has exact values and AI report is unavailable", async ({
+test("chart has exact values and AI analysis remains optional", async ({
   page,
 }) => {
   await page.goto("/analytics");
@@ -84,7 +84,13 @@ test("chart has exact values and AI report is unavailable", async ({
   ).toBeVisible();
   await page.goto("/insights");
   await expect(
-    page.getByRole("heading", { name: "No AI report generated" }),
+    page.getByRole("heading", { name: "AI marketing analysis" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate AI analysis" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No provider? Deterministic insights still work" }),
   ).toBeVisible();
 });
 test("connection controls fail closed when credentials are absent", async ({
