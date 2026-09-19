@@ -14,10 +14,14 @@ export async function GET(request: NextRequest) {
   const client = await serverAuth(response);
   if (!client) return NextResponse.redirect(new URL("/settings?auth=unavailable", origin));
   const { error } = await client.auth.exchangeCodeForSession(code);
-  if (error) return NextResponse.redirect(new URL("/settings?auth=failed", origin));
+  if (error) {
+    console.error("Supabase Google callback failed", error.message);
+    return NextResponse.redirect(new URL("/settings?auth=failed", origin));
+  }
 
   const { data } = await client.auth.getUser();
   if (data.user?.id.toLowerCase() !== ownerId()) {
+    console.error("Supabase Google callback owner mismatch", data.user?.id ?? "missing user");
     await client.auth.signOut();
     response.headers.set("Location", new URL("/settings?auth=denied", origin).toString());
   }
