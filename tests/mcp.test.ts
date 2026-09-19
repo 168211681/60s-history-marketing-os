@@ -19,13 +19,16 @@ test("script approval follows the human review sequence", () => {
 });
 
 test("Higgsfield remains unavailable without server credentials", async () => {
-  const originalKey = process.env.HIGGSFIELD_API_KEY;
-  const originalUrl = process.env.HIGGSFIELD_API_URL;
-  delete process.env.HIGGSFIELD_API_KEY;
-  delete process.env.HIGGSFIELD_API_URL;
+  const originalId = process.env.HF_API_KEY_ID;
+  const originalSecret = process.env.HF_API_KEY_SECRET;
+  const originalEnabled = process.env.HIGGSFIELD_GENERATION_ENABLED;
+  delete process.env.HF_API_KEY_ID;
+  delete process.env.HF_API_KEY_SECRET;
+  delete process.env.HIGGSFIELD_GENERATION_ENABLED;
   const provider = higgsfieldProvider();
   assert.equal(provider.configured, false);
   await assert.rejects(() => provider.submit({ draftId: "draft", title: "title", hook: "hook", scriptBody: "body", sceneCues: "", captionText: "" }), /HIGGSFIELD_NOT_CONFIGURED/);
-  if (originalKey === undefined) delete process.env.HIGGSFIELD_API_KEY; else process.env.HIGGSFIELD_API_KEY = originalKey;
-  if (originalUrl === undefined) delete process.env.HIGGSFIELD_API_URL; else process.env.HIGGSFIELD_API_URL = originalUrl;
+  if (originalId === undefined) delete process.env.HF_API_KEY_ID; else process.env.HF_API_KEY_ID = originalId;
+  if (originalSecret === undefined) delete process.env.HF_API_KEY_SECRET; else process.env.HF_API_KEY_SECRET = originalSecret;
+  if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
 });

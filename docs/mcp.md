@@ -31,6 +31,9 @@ publishing adapter. The endpoint returns `401` when `MCP_SECRET` is missing or
 the bearer header does not match.
 
 Video generation is separate from MCP script drafting. The app accepts a
-generation request only for an `approved` draft. Higgsfield credentials and an
-approved provider API contract are still required; no generation job is claimed
-until the provider returns an external job ID.
+generation request only for an `approved` draft. The Higgsfield adapter is
+disabled unless `HIGGSFIELD_GENERATION_ENABLED=true` and the server-only
+`HF_API_KEY_ID` / `HF_API_KEY_SECRET` variables are set. Keep this disabled
+until the provider request/response contract is verified and the account has
+explicitly been funded. No generation job is claimed until the provider
+returns an external job ID.
