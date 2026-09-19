@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   if (!user) return new Response("Unauthorized", { status: 401 });
   const google = googleConfig();
   if (!google || !databaseConfigured()) return new Response("Connection is not configured", { status: 503 });
-  console.info("YouTube OAuth redirect URI", google.redirectUri);
+  console.info("YouTube OAuth client and redirect URI", google.clientId, google.redirectUri);
 
   const { state, verifier } = newOAuthState();
   const response = NextResponse.redirect(authorizationUrl(google, state, verifier), 303);
