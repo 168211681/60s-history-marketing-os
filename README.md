@@ -3,6 +3,7 @@
 Phase 1: a responsive, sample-data analytics dashboard for a history Shorts channel.
 Phase 2 foundation: a Supabase-compatible migration and locally verified ownership/RLS
 rules, ready for a later authenticated integration. See [database setup](docs/database.md).
+The phased delivery status and acceptance gates are tracked in [the roadmap](docs/roadmap.md).
 The owner-only flow can connect YouTube, manually import supported analytics, and
 render the latest successful reporting window. Anonymous sessions retain the clearly
 labeled fictional workspace. This milestone does not generate or publish content.
