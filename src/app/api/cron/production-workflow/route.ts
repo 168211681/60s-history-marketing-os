@@ -9,6 +9,7 @@ import { recordWorkflowEvent } from "@/lib/workflows/events";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const RENDER_TIMEOUT_MINUTES = 60;
 
 function authorized(request: NextRequest) {
   return isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET);
@@ -61,6 +62,29 @@ async function renderingWorkflow(channelId: string) {
     [channelId],
   );
   return result.rows[0] ?? null;
+}
+
+async function timeoutRenderingWorkflow(channelId: string) {
+  return transaction(async (client) => {
+    const result = await client.query<{ id: string; channel_id: string; attempts: number }>(
+      `with stale_workflow as (
+         select w.id
+           from public.production_workflows w
+          where w.channel_id = $1 and w.status = 'rendering'
+            and w.updated_at < now() - ($2::text || ' minutes')::interval
+          order by w.updated_at asc
+          for update skip locked
+          limit 1
+       )
+       update public.production_workflows w
+          set status = 'failed', current_step = 'failed', error_code = 'PROVIDER_TIMEOUT', updated_at = now()
+         from stale_workflow s
+        where w.id = s.id and w.status = 'rendering'
+       returning w.id, w.channel_id, w.attempts`,
+      [channelId, RENDER_TIMEOUT_MINUTES],
+    );
+    return result.rows[0] ?? null;
+  });
 }
 
 async function claimRenderedWorkflow(channelId: string) {
@@ -127,6 +151,19 @@ export async function GET(request: NextRequest) {
 
   const workflow = await claimWorkflow(channelId);
   if (!workflow) {
+    const timedOut = await timeoutRenderingWorkflow(channelId);
+    if (timedOut) {
+      await recordWorkflowEvent({
+        workflowId: timedOut.id,
+        channelId: timedOut.channel_id,
+        attempt: timedOut.attempts,
+        eventType: "failed",
+        status: "failed",
+        errorCode: "PROVIDER_TIMEOUT",
+        metadata: { stage: "timeout" },
+      });
+      return NextResponse.json({ status: "failed", workflowId: timedOut.id, code: "PROVIDER_TIMEOUT" }, { status: 504 });
+    }
     const pending = await renderingWorkflow(channelId);
     if (!pending?.provider_job_id) return NextResponse.json({ status: "idle" });
     try {

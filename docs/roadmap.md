@@ -80,7 +80,7 @@ Acceptance criteria:
 Remaining work: verify the configured provider with a real low-cost/free run
 and verify the end-to-end artifact path on the deployed environment. Worker
 state transitions now write sanitized backend-only telemetry; retry limits and
-failure codes remain enforced.
+failure codes remain enforced, including a 60-minute stale-render timeout.
 
 ## Phase 5 — private YouTube upload and human publish gate
 

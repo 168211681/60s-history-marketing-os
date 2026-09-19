@@ -21,3 +21,12 @@ the `CRON_SECRET` check or make the endpoint public.
 For a one-off run, an owner can open `/scripts` and select **Run worker now**.
 This button uses the same protected worker endpoint and keeps the cron secret on
 the server. It is a fallback for testing or when the scheduled worker is delayed.
+
+## Timeout and recovery
+
+An in-progress provider job that has not changed state for 60 minutes is marked
+`failed` with the constrained error code `PROVIDER_TIMEOUT`. The worker records
+the transition in the backend-only workflow event table and returns HTTP 504.
+The owner can use the retry control in `/scripts`; the existing ten-attempt cap
+prevents an endless retry loop. A timeout does not expose provider payloads or
+credentials.
