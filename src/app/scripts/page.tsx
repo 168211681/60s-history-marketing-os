@@ -1,6 +1,7 @@
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
 import { ScriptStatusActions } from "@/components/script-status-actions";
 import { scriptDraftsForOwner } from "@/lib/data/script-drafts";
+import { ScriptDraftForm } from "@/components/script-draft-form";
 
 export const metadata = { title: "Script drafts" };
 
@@ -20,7 +21,8 @@ export default async function ScriptsPage() {
       {!drafts.length ? (
         <Panel title="No drafts yet">
           <EmptyState title="Your review queue is empty">
-            <p>Use the MCP tool <code>save_script_draft</code> after analyzing synced channel data.</p>
+            <ScriptDraftForm />
+            <p>หรือใช้ MCP tool <code>save_script_draft</code> หลังวิเคราะห์ข้อมูลช่อง</p>
             <p>Drafts are never published automatically and are not sample analytics.</p>
           </EmptyState>
         </Panel>
