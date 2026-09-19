@@ -33,13 +33,10 @@ publishing adapter. The endpoint returns `401` when `MCP_SECRET` is missing or
 the bearer header does not match.
 
 Video generation is separate from MCP script drafting. The app accepts a
-generation request only for an `approved` draft. The Higgsfield adapter is
-disabled unless `HIGGSFIELD_GENERATION_ENABLED=true` and the server-only
-`HF_API_KEY_ID` / `HF_API_KEY_SECRET` variables are set. Keep this disabled
-until the provider account has explicitly been funded. When enabled, the
-server submits a 5-second 9:16 text-to-video request and stores the returned
-`request_id`; no generation job is claimed when the provider does not return a
-valid request ID.
+production workflow only for an `approved` draft. The current optional provider
+is Hugging Face Inference Providers and requires server-only `HF_TOKEN`, model,
+provider, and private Supabase Storage settings. Provider quotas and billing are
+controlled by Hugging Face; ChatGPT Plus does not cover them.
 
 An approved draft can be placed in the owner-scoped production workflow. Its
 state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
@@ -47,10 +44,9 @@ state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
 inspect its state, but it cannot publish a video by itself.
 
 The protected `/api/cron/production-workflow` endpoint claims one queued,
-approved workflow and submits it to the configured Higgsfield provider. It
-stores the provider job ID and leaves the workflow in `rendering`; a provider
-status poll now moves completed jobs to `rendered` with a validated HTTPS
-artifact URL. The next worker run uploads that artifact using a resumable
-YouTube session with `privacyStatus=private`, then waits at
+approved workflow and submits it to the configured provider. The free worker
+schedule and required secrets are documented in [production worker setup](production-worker.md).
+When a provider returns an artifact, the next worker run uploads it using a
+resumable YouTube session with `privacyStatus=private`, then waits at
 `awaiting_publish`. Existing Google connections must reconnect once to grant
 the new `youtube.upload` scope.

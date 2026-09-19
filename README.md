@@ -84,9 +84,11 @@ The project follows the [Next.js installation guidance](https://nextjs.org/docs/
 
 ## Verification
 
-GitHub Actions could not start jobs for this repository because the account is
-locked by a billing issue. The workflow has been removed; verification runs
-locally before commit/push with no CI service or paid account. Install browser
+GitHub Actions may be unavailable for this repository while the account is
+locked by a billing issue. The production worker workflow is included in
+`.github/workflows/production-worker.yml` and can be triggered manually or every
+five minutes when Actions is available. Verification still runs locally before
+commit/push. Install browser
 dependencies and native PostgreSQL 15+ tools first. On Ubuntu:
 
 ```sh
@@ -141,9 +143,9 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 4. **Implemented locally:** deterministic topic analysis and evidence-labeled
    recommendations over stored or sample analytics.
 5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
-6. Add an optional video provider adapter after human-approved script drafts. Set `VIDEO_PROVIDER=higgsfield` for the currently implemented provider. `huggingface`, `fal`, `replicate`, and `runway` are reserved provider names for future adapters and return an honest unavailable state until implemented.
+6. Add an optional video provider adapter after human-approved script drafts. The implemented provider boundary supports `huggingface`; other providers must remain unavailable until their contracts are verified.
 7. Configure a private Supabase Storage bucket named `video-artifacts` before enabling a provider that returns raw video bytes. The server-only `SUPABASE_SERVICE_ROLE_KEY` is used only to upload artifacts and create short-lived signed URLs for the private YouTube upload worker.
-8. Set `VIDEO_PROVIDER=huggingface` with `HF_TOKEN`, `HF_VIDEO_MODEL`, and `HF_VIDEO_PROVIDER` to enable the synchronous Hugging Face adapter. It is intended for a worker invocation that can complete within the configured timeout; long-running providers still need a queue-backed async adapter.
+8. Set `VIDEO_PROVIDER=huggingface` with `HF_TOKEN`, `HF_VIDEO_MODEL`, and `HF_VIDEO_PROVIDER` to enable the synchronous Hugging Face adapter. The free GitHub Actions worker is documented in [production worker setup](docs/production-worker.md).
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
