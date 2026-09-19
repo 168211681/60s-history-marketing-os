@@ -91,6 +91,21 @@ h3 {
   padding: 7px 10px;
   font-size: 12px;
 }
+.workflow-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.workflow-row > div {
+  flex: 1 1 220px;
+}
+.workflow-row p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
 .error-text {
   color: #9b2c2c;
   font-size: 12px;

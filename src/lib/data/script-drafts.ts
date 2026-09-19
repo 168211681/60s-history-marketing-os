@@ -57,3 +57,36 @@ export async function scriptDraftsForOwner(): Promise<readonly ScriptDraft[]> {
     createdAt: row.created_at.toISOString(),
   }));
 }
+
+export type ProductionWorkflow = {
+  id: string;
+  scriptDraftId: string;
+  title: string;
+  status: string;
+  currentStep: string;
+  youtubeVideoId: string | null;
+  errorCode: string | null;
+  updatedAt: string;
+};
+
+export async function productionWorkflowsForOwner(): Promise<readonly ProductionWorkflow[]> {
+  const owner = await currentOwner();
+  if (!owner || !databaseConfigured()) return [];
+  const result = await database().query<{
+    id: string; script_draft_id: string; title: string; status: string;
+    current_step: string; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
+  }>(
+    `select w.id, w.script_draft_id, d.title, w.status, w.current_step,
+            w.youtube_video_id, w.error_code, w.updated_at
+       from public.production_workflows w
+       join public.script_drafts d on d.id = w.script_draft_id
+       join public.channels c on c.id = w.channel_id and c.owner_id = $1
+      order by w.updated_at desc limit 20`,
+    [owner.id],
+  );
+  return result.rows.map((row) => ({
+    id: row.id, scriptDraftId: row.script_draft_id, title: row.title, status: row.status,
+    currentStep: row.current_step, youtubeVideoId: row.youtube_video_id,
+    errorCode: row.error_code, updatedAt: row.updated_at.toISOString(),
+  }));
+}

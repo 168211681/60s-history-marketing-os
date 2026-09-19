@@ -1,6 +1,6 @@
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
 import { ScriptStatusActions } from "@/components/script-status-actions";
-import { scriptDraftsForOwner } from "@/lib/data/script-drafts";
+import { productionWorkflowsForOwner, scriptDraftsForOwner } from "@/lib/data/script-drafts";
 import { ScriptDraftForm } from "@/components/script-draft-form";
 
 export const metadata = { title: "Script drafts" };
@@ -11,6 +11,7 @@ function dateLabel(value: string) {
 
 export default async function ScriptsPage() {
   const drafts = await scriptDraftsForOwner();
+  const workflows = await productionWorkflowsForOwner();
   return (
     <>
       <PageHeading
@@ -47,6 +48,14 @@ export default async function ScriptsPage() {
           ))}
         </div>
       )}
+      {workflows.length ? <Panel title="Production workflows" description="Private rendering and upload status">
+        <div className="stack-md">{workflows.map((workflow) => <div className="workflow-row" key={workflow.id}>
+          <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep}</p></div>
+          <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
+          {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
+          {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
+        </div>)}</div>
+      </Panel> : null}
     </>
   );
 }
