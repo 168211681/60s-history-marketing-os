@@ -38,9 +38,9 @@ async function claimWorkflow(channelId: string) {
           limit 1
        )
        update public.production_workflows w
-          set status = 'rendering', current_step = 'rendering', updated_at = now()
+          set status = 'rendering', current_step = 'rendering', attempts = attempts + 1, updated_at = now()
          from next_workflow n, public.script_drafts d
-        where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved'
+        where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved' and w.attempts < 10
        returning w.id, w.script_draft_id, w.channel_id, d.title, d.hook,
                  d.script_body, d.scene_cues, d.caption_text`,
       [channelId],

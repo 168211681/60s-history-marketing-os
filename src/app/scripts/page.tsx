@@ -52,7 +52,7 @@ export default async function ScriptsPage() {
       )}
       {workflows.length ? <Panel title="Production workflows" description="Private rendering and upload status" action={<RunWorkerButton />}>
         <div className="stack-md">{workflows.map((workflow) => <div className="workflow-row" key={workflow.id}>
-          <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep}</p></div>
+          <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep} · attempt {workflow.attempts}/10</p></div>
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
           {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}

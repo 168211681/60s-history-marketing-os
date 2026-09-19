@@ -130,18 +130,18 @@ after(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("migrations create nine tables with forced RLS and safe grants", () => {
+test("migrations create protected tables with forced RLS and safe grants", () => {
   assert.equal(
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "9",
+    "12",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-    "9",
+      "12",
   );
   assert.equal(
     sql(

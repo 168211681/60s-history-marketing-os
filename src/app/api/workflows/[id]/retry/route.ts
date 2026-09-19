@@ -24,7 +24,8 @@ export async function POST(
     current_step: string;
   }>(
     `update public.production_workflows w
-        set status = 'queued', current_step = 'awaiting_render', error_code = null, updated_at = now()
+        set status = 'queued', current_step = 'awaiting_render', error_code = null,
+            provider_job_id = null, artifact_url = null, youtube_video_id = null, updated_at = now()
        from public.channels c
       where w.id = $1 and w.channel_id = c.id and c.owner_id = $2 and w.status = 'failed'
       returning w.id, w.status, w.current_step`,

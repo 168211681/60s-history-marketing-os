@@ -64,6 +64,7 @@ export type ProductionWorkflow = {
   title: string;
   status: string;
   currentStep: string;
+  attempts: number;
   youtubeVideoId: string | null;
   errorCode: string | null;
   updatedAt: string;
@@ -74,9 +75,9 @@ export async function productionWorkflowsForOwner(): Promise<readonly Production
   if (!owner || !databaseConfigured()) return [];
   const result = await database().query<{
     id: string; script_draft_id: string; title: string; status: string;
-    current_step: string; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
+    current_step: string; attempts: number; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
   }>(
-    `select w.id, w.script_draft_id, d.title, w.status, w.current_step,
+    `select w.id, w.script_draft_id, d.title, w.status, w.current_step, w.attempts,
             w.youtube_video_id, w.error_code, w.updated_at
        from public.production_workflows w
        join public.script_drafts d on d.id = w.script_draft_id
@@ -86,7 +87,7 @@ export async function productionWorkflowsForOwner(): Promise<readonly Production
   );
   return result.rows.map((row) => ({
     id: row.id, scriptDraftId: row.script_draft_id, title: row.title, status: row.status,
-    currentStep: row.current_step, youtubeVideoId: row.youtube_video_id,
+    currentStep: row.current_step, attempts: row.attempts, youtubeVideoId: row.youtube_video_id,
     errorCode: row.error_code, updatedAt: row.updated_at.toISOString(),
   }));
 }

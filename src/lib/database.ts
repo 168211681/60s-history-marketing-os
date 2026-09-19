@@ -19,6 +19,16 @@ function connectionString() {
   }
 }
 
+function localDatabase(value: string | undefined) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
 export function databaseConfigured() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -33,7 +43,7 @@ export function database() {
     // Supabase's shared pooler presents a chain that Node's bundled CA
     // store may not trust in serverless runtimes. Keep TLS encryption while
     // allowing the provider endpoint to complete its certificate handshake.
-    ssl: { rejectUnauthorized: false },
+    ssl: localDatabase(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false },
   });
   return pool;
 }
