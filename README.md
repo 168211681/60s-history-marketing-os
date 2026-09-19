@@ -69,6 +69,7 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/auth/`: cookie-based Supabase owner session utilities.
 - `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
 - `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
+- `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
 - `docs/connection-setup.md`: Supabase and Google console configuration.
 
@@ -127,9 +128,10 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
    batching, retry/backoff, daily upserts and idempotent reporting-window jobs.
 3. **Implemented locally:** authenticated PostgreSQL reader and owner-only Dashboard,
    Videos and Analytics views with explicit sample/live/error states.
-4. Add deterministic analysis over stored analytics, then replaceable AI adapters
-   for hypotheses and experiments with evidence labels.
-5. Future production tools and optional MCP, explicit human publishing approval.
+4. **Implemented locally:** deterministic topic analysis and evidence-labeled
+   recommendations over stored or sample analytics.
+5. Add replaceable AI adapters for hypotheses and experiments with evidence labels.
+6. Future production tools and optional MCP, explicit human publishing approval.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
