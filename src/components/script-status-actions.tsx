@@ -8,6 +8,16 @@ export function ScriptStatusActions({ id, status }: { id: string; status: Script
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const next = current === "draft" ? "reviewed" : current === "reviewed" ? "approved" : null;
+  async function startWorkflow() {
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`/api/scripts/${id}/workflow`, { method: "POST", credentials: "same-origin" });
+      if (!response.ok) throw new Error(await response.text());
+      setError("Production workflow queued.");
+    } catch (value) { setError(value instanceof Error ? value.message : "Could not start workflow"); }
+    finally { setBusy(false); }
+  }
+  if (current === "approved") return <div className="script-actions"><button className="button" type="button" onClick={startWorkflow} disabled={busy}>{busy ? "Starting…" : "Start production"}</button>{error ? <span className="muted" role="status">{error}</span> : null}</div>;
   if (!next) return null;
   const target = next;
 
