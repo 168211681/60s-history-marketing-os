@@ -79,6 +79,22 @@ h3 {
   border-top: 1px solid var(--line);
   padding-top: 12px;
 }
+.script-panel-actions,
+.script-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.script-actions .button {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.error-text {
+  color: #9b2c2c;
+  font-size: 12px;
+}
 .pre-wrap {
   white-space: pre-wrap;
 }

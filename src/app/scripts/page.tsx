@@ -1,4 +1,5 @@
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
+import { ScriptStatusActions } from "@/components/script-status-actions";
 import { scriptDraftsForOwner } from "@/lib/data/script-drafts";
 
 export const metadata = { title: "Script drafts" };
@@ -30,7 +31,7 @@ export default async function ScriptsPage() {
               key={draft.id}
               title={draft.title}
               description={`${draft.source === "codex_mcp" ? "Codex/MCP draft" : "Human draft"} · ${dateLabel(draft.createdAt)}`}
-              action={<span className="badge neutral">{draft.status}</span>}
+              action={<div className="script-panel-actions"><span className="badge neutral">{draft.status}</span><ScriptStatusActions id={draft.id} status={draft.status} /></div>}
             >
               <div className="draft-grid">
                 <div><p className="eyebrow">HOOK</p><p>{draft.hook}</p></div>
