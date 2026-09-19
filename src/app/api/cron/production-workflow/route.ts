@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { database, databaseConfigured, transaction } from "@/lib/database";
 import { ownerId } from "@/lib/auth/config";
 import { higgsfieldProvider } from "@/lib/video/higgsfield";
+import { uploadVideoPrivate } from "@/lib/youtube/google";
+import { accessTokenForOwner } from "@/lib/youtube/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,6 +23,7 @@ type ClaimedWorkflow = {
   scene_cues: string;
   caption_text: string;
   provider_job_id?: string;
+  artifact_url?: string;
 };
 
 async function claimWorkflow(channelId: string) {
@@ -58,6 +61,26 @@ async function renderingWorkflow(channelId: string) {
   return result.rows[0] ?? null;
 }
 
+async function claimRenderedWorkflow(channelId: string) {
+  return transaction(async (client) => {
+    const result = await client.query<ClaimedWorkflow>(
+      `with next_workflow as (
+         select w.id from public.production_workflows w
+          where w.channel_id = $1 and w.status = 'rendered'
+            and w.current_step = 'awaiting_upload' and w.artifact_url is not null
+          order by w.updated_at asc for update skip locked limit 1
+       )
+       update public.production_workflows w
+          set current_step = 'uploading_private', updated_at = now()
+         from next_workflow n, public.script_drafts d
+        where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved'
+       returning w.id, w.script_draft_id, w.channel_id, w.artifact_url, d.title, d.script_body`,
+      [channelId],
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
 export async function GET(request: NextRequest) {
   if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
   const owner = ownerId();
@@ -71,6 +94,31 @@ export async function GET(request: NextRequest) {
   );
   const channelId = channel.rows[0]?.id;
   if (!channelId) return NextResponse.json({ status: "not-connected" }, { status: 409 });
+
+  const upload = await claimRenderedWorkflow(channelId);
+  if (upload?.artifact_url) {
+    try {
+      const accessToken = await accessTokenForOwner(owner);
+      if (!accessToken) throw new Error("YOUTUBE_CONNECTION_MISSING");
+      const result = await uploadVideoPrivate(accessToken, upload.artifact_url, { title: upload.title, description: upload.script_body });
+      await database().query(
+        `update public.production_workflows
+            set status = 'uploaded_private', current_step = 'awaiting_publish', youtube_video_id = $2, error_code = null, updated_at = now()
+          where id = $1 and channel_id = $3 and current_step = 'uploading_private'`,
+        [upload.id, result.youtubeVideoId, channelId],
+      );
+      return NextResponse.json({ status: "uploaded_private", workflowId: upload.id, youtubeVideoId: result.youtubeVideoId });
+    } catch (error) {
+      const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "YOUTUBE_UPLOAD_FAILED";
+      await database().query(
+        `update public.production_workflows
+            set status = 'failed', current_step = 'failed', error_code = $2, updated_at = now()
+          where id = $1 and channel_id = $3 and current_step = 'uploading_private'`,
+        [upload.id, code, channelId],
+      );
+      return NextResponse.json({ status: "failed", workflowId: upload.id, code }, { status: 502 });
+    }
+  }
 
   const workflow = await claimWorkflow(channelId);
   if (!workflow) {

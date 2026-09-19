@@ -50,4 +50,7 @@ The protected `/api/cron/production-workflow` endpoint claims one queued,
 approved workflow and submits it to the configured Higgsfield provider. It
 stores the provider job ID and leaves the workflow in `rendering`; a provider
 status poll now moves completed jobs to `rendered` with a validated HTTPS
-artifact URL. YouTube upload remains a separate protected step.
+artifact URL. The next worker run uploads that artifact using a resumable
+YouTube session with `privacyStatus=private`, then waits at
+`awaiting_publish`. Existing Google connections must reconnect once to grant
+the new `youtube.upload` scope.
