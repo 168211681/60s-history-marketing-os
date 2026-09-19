@@ -25,7 +25,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { data } = auth ? await auth.auth.getUser() : { data: { user: null } };
   const user = data.user;
   const isOwner = Boolean(user && ownerId() && user.id.toLowerCase() === ownerId());
-  const connectionReady = Boolean(isOwner && googleConfig() && databaseConfigured());
+  const googleReady = Boolean(googleConfig());
+  const databaseReady = databaseConfigured();
+  const connectionReady = Boolean(isOwner && googleReady && databaseReady);
   let connection: Awaited<ReturnType<typeof connectionForOwner>> = null;
   let connectionError = false;
   if (connectionReady && user) {
@@ -75,7 +77,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </EmptyState>
         ) : !connectionReady ? (
           <EmptyState title="YouTube connection is not configured">
-            <p>Configure Google OAuth, DATABASE_URL and TOKEN_ENCRYPTION_KEY on the server first.</p>
+            <p>Configure the missing server settings before connecting YouTube.</p>
+            <ul className="check-list">
+              <li className={googleReady ? "check-pass" : "check-fail"}>Google OAuth: {googleReady ? "ready" : "missing or invalid"}</li>
+              <li className={databaseReady ? "check-pass" : "check-fail"}>Database and token encryption: {databaseReady ? "ready" : "missing or invalid"}</li>
+            </ul>
           </EmptyState>
         ) : connectionError ? (
           <EmptyState title="Connection status unavailable">
