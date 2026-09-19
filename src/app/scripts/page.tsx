@@ -56,7 +56,7 @@ export default async function ScriptsPage() {
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
           {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
-          {workflow.status === "failed" ? <RetryWorkflowButton id={workflow.id} /> : null}
+          {workflow.status === "failed" && workflow.attempts < 10 ? <RetryWorkflowButton id={workflow.id} /> : workflow.status === "failed" ? <span className="error-text">Retry limit reached</span> : null}
         </div>)}</div>
       </Panel> : null}
     </>

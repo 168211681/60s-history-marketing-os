@@ -27,10 +27,11 @@ export async function POST(
         set status = 'queued', current_step = 'awaiting_render', error_code = null,
             provider_job_id = null, artifact_url = null, youtube_video_id = null, updated_at = now()
        from public.channels c
-      where w.id = $1 and w.channel_id = c.id and c.owner_id = $2 and w.status = 'failed'
+      where w.id = $1 and w.channel_id = c.id and c.owner_id = $2
+        and w.status = 'failed' and w.attempts < 10
       returning w.id, w.status, w.current_step`,
     [id, owner.id],
   );
-  if (!result.rowCount) return NextResponse.json({ error: "Only an owned failed workflow can be retried" }, { status: 409 });
+  if (!result.rowCount) return NextResponse.json({ error: "Only an owned failed workflow below the retry limit can be retried" }, { status: 409 });
   return NextResponse.json({ workflow: result.rows[0] }, { headers: { "Cache-Control": "private, no-store" } });
 }
