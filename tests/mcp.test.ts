@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isMcpAuthorized } from "../src/lib/ai/mcp-auth";
 import { canAdvanceScriptStatus } from "../src/lib/data/script-status";
+import { canAdvanceProductionWorkflow } from "../src/lib/data/production-workflow";
 import { higgsfieldProvider } from "../src/lib/video/higgsfield";
 
 test("MCP authorization requires the configured bearer secret", () => {
@@ -16,6 +17,14 @@ test("script approval follows the human review sequence", () => {
   assert.equal(canAdvanceScriptStatus("reviewed", "approved"), true);
   assert.equal(canAdvanceScriptStatus("draft", "approved"), false);
   assert.equal(canAdvanceScriptStatus("approved", "reviewed"), false);
+});
+
+test("production workflow requires private upload before human publication", () => {
+  assert.equal(canAdvanceProductionWorkflow("queued", "rendering"), true);
+  assert.equal(canAdvanceProductionWorkflow("rendered", "uploaded_private"), true);
+  assert.equal(canAdvanceProductionWorkflow("uploaded_private", "published"), true);
+  assert.equal(canAdvanceProductionWorkflow("queued", "published"), false);
+  assert.equal(canAdvanceProductionWorkflow("published", "queued"), false);
 });
 
 test("Higgsfield remains unavailable without server credentials", async () => {

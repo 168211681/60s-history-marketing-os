@@ -112,6 +112,53 @@ export async function saveScriptDraft(
   return result.rows[0];
 }
 
+export async function createProductionWorkflow(context: OwnerContext, scriptDraftId: string) {
+  const result = await database().query<{
+    id: string;
+    script_draft_id: string;
+    status: string;
+    current_step: string;
+    created_at: string;
+  }>(
+    `insert into public.production_workflows (channel_id, script_draft_id)
+     select d.channel_id, d.id
+       from public.script_drafts d
+      where d.id = $1 and d.channel_id = $2 and d.status = 'approved'
+     on conflict (script_draft_id, workflow_type) do update
+       set updated_at = now()
+     returning id, script_draft_id, status, current_step, created_at`,
+    [scriptDraftId, context.channelId],
+  );
+  if (!result.rowCount) throw new Error("Only an approved script owned by the connected channel can start a workflow");
+  return result.rows[0];
+}
+
+export async function productionWorkflows(context: OwnerContext, limit: number) {
+  const result = await database().query<{
+    id: string;
+    script_draft_id: string;
+    title: string;
+    status: string;
+    current_step: string;
+    artifact_url: string | null;
+    youtube_video_id: string | null;
+    error_code: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `select w.id, w.script_draft_id, d.title, w.status, w.current_step,
+            w.artifact_url, w.youtube_video_id, w.error_code,
+            w.created_at, w.updated_at
+       from public.production_workflows w
+       join public.script_drafts d on d.id = w.script_draft_id
+      where w.channel_id = $1
+      order by w.created_at desc
+      limit $2`,
+    [context.channelId, limit],
+  );
+  return result.rows;
+}
+
 export function insightSnapshot(context: OwnerContext) {
   return {
     source: "calculated_from_stored_youtube_analytics",

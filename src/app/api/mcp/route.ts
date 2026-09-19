@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
-import { insightSnapshot, ownerContext, saveAiInsight, saveContentIdea, saveScriptDraft } from "@/lib/ai/mcp-data";
+import { createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveScriptDraft } from "@/lib/ai/mcp-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +69,23 @@ function server() {
     },
   }, async (input) => {
     try { return result({ source: "codex_mcp", approval: "human_required", draft: await saveScriptDraft(await ownerContext(), input) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("start_production_workflow", {
+    title: "Start production workflow",
+    description: "Create an owner-scoped production workflow only for a human-approved script. This queues work and never publishes to YouTube.",
+    inputSchema: { scriptDraftId: z.string().uuid() },
+  }, async ({ scriptDraftId }) => {
+    try { return result({ source: "codex_mcp", approval: "human_required_for_publish", workflow: await createProductionWorkflow(await ownerContext(), scriptDraftId) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("get_production_workflows", {
+    title: "Get production workflows",
+    description: "Read the connected owner's production state machine jobs and current steps.",
+    inputSchema: { limit: z.number().int().min(1).max(20).default(10) },
+  }, async ({ limit }) => {
+    try {
+      const context = await ownerContext();
+      return result({ source: "stored_production_workflows", channel: context.channelTitle, workflows: await productionWorkflows(context, limit) });
+    } catch (error) { return failure(error); }
   });
   return mcp;
 }

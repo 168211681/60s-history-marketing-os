@@ -24,6 +24,8 @@ channel's stored analytics:
 - `create_content_idea`
 - `save_marketing_hypothesis`
 - `save_script_draft`
+- `start_production_workflow`
+- `get_production_workflows`
 
 AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or
@@ -38,3 +40,8 @@ until the provider account has explicitly been funded. When enabled, the
 server submits a 5-second 9:16 text-to-video request and stores the returned
 `request_id`; no generation job is claimed when the provider does not return a
 valid request ID.
+
+An approved draft can be placed in the owner-scoped production workflow. Its
+state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
+`published` is a separate human-approved step. MCP can queue a workflow and
+inspect its state, but it cannot publish a video by itself.
