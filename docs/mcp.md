@@ -1,0 +1,31 @@
+# MCP connection
+
+The Marketing OS exposes an optional MCP endpoint at `/api/mcp`. It is a
+stateless, server-side endpoint for an external Codex or MCP-compatible client.
+
+1. Generate a private bearer secret locally:
+
+   ```bash
+   openssl rand -base64 48
+   ```
+
+2. Add that value as the Vercel Production environment variable `MCP_SECRET`.
+   Do not put it in Git, a `NEXT_PUBLIC_*` variable, or a chat message.
+3. Redeploy the project after changing the environment variable.
+4. Configure the client with the endpoint URL and an HTTP header:
+   `Authorization: Bearer <your-secret>`.
+
+Available tools are owner-scoped to `OWNER_USER_ID` and read only the connected
+channel's stored analytics:
+
+- `get_channel_metrics`
+- `get_top_videos`
+- `get_marketing_insights`
+- `create_content_idea`
+- `save_marketing_hypothesis`
+- `save_script_draft`
+
+AI text is stored with provenance. A script draft always starts with status
+`draft`; human review is required before adding any future video-generation or
+publishing adapter. The endpoint returns `401` when `MCP_SECRET` is missing or
+the bearer header does not match.

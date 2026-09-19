@@ -72,10 +72,14 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
 - `docs/connection-setup.md`: Supabase and Google console configuration.
+- `docs/mcp.md`: Optional Codex/MCP endpoint setup and tool contract.
 
-Calculations have no AI-vendor dependency. A future provider adapter and optional
-MCP layer can be added when real-data analysis is implemented. Neither is required
-to operate this dashboard. No integration stubs claim success.
+Calculations have no AI-vendor dependency. The first optional MCP layer is available
+at `/api/mcp`, protected by the server-only `MCP_SECRET` bearer secret. It exposes
+owner-scoped tools for synced metrics, video rankings, evidence-backed hypotheses,
+content ideas, and structured 60-second script drafts. Drafts remain in `draft`
+status and require human review before any future video generation or publishing.
+No OpenAI API key is required; the dashboard remains functional without MCP.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
@@ -136,8 +140,8 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
    Videos and Analytics views with explicit sample/live/error states.
 4. **Implemented locally:** deterministic topic analysis and evidence-labeled
    recommendations over stored or sample analytics.
-5. Add replaceable AI adapters for hypotheses and experiments with evidence labels.
-6. Future production tools and optional MCP, explicit human publishing approval.
+5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
+6. Add an optional Higgsfield video adapter after human-approved script drafts.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
