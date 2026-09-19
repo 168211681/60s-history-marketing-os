@@ -137,4 +137,7 @@ Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do
 enter credentials into tracked files. ChatGPT Plus is not API billing.
 
 Vercel deployment is separate. Local verification does not mean this project has
-been deployed, and GitHub will not show a CI pass for this branch.
+been deployed, and GitHub will not show a CI pass for this branch. A sample-data
+preview is available at [60s-history-marketing-os.vercel.app](https://60s-history-marketing-os.vercel.app).
+Configure the owner flow only after following [connection setup](docs/connection-setup.md);
+never place its server secrets in the repository or `NEXT_PUBLIC_*` variables.

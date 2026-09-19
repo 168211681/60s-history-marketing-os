@@ -20,6 +20,26 @@ values are configured. Never commit a populated `.env.local` file.
 4. Sign in once in a controlled environment, copy the Auth user's UUID, then set
    it as `OWNER_USER_ID`. Other users cannot connect or inspect the channel.
 
+### Vercel deployment
+
+For the shared deployment, use the stable Vercel origin as `APP_ORIGIN`:
+
+```text
+https://60s-history-marketing-os.vercel.app
+```
+
+Add these exact URLs to the Supabase redirect allow list and Google OAuth client:
+
+```text
+https://60s-history-marketing-os.vercel.app/auth/callback
+https://60s-history-marketing-os.vercel.app/api/youtube/callback
+```
+
+Set the same values in Vercel Project Settings → Environment Variables. Use the
+Preview environment only with a separate test OAuth client; preview URLs are
+branch-specific and can change. The public sample dashboard does not require any
+of these values.
+
 Supabase Auth is the application login. Its provider tokens are deliberately not
 used as the long-lived YouTube credential.
 
