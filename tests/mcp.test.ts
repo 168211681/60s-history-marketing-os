@@ -5,6 +5,7 @@ import { canAdvanceScriptStatus } from "../src/lib/data/script-status";
 import { canAdvanceProductionWorkflow } from "../src/lib/data/production-workflow";
 import { higgsfieldProvider } from "../src/lib/video/higgsfield";
 import { videoProvider } from "../src/lib/video";
+import { storeVideoArtifact } from "../src/lib/video/artifacts";
 
 test("MCP authorization requires the configured bearer secret", () => {
   assert.equal(isMcpAuthorized("Bearer test-secret", "test-secret"), true);
@@ -54,6 +55,19 @@ test("video provider selection keeps unimplemented providers unavailable", async
   } finally {
     if (previous === undefined) delete process.env.VIDEO_PROVIDER;
     else process.env.VIDEO_PROVIDER = previous;
+  }
+});
+
+test("video artifacts require server-only storage configuration", async () => {
+  const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  try {
+    await assert.rejects(() => storeVideoArtifact(new Uint8Array([1])), /VIDEO_ARTIFACT_STORAGE_NOT_CONFIGURED/);
+  } finally {
+    if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
   }
 });
 
