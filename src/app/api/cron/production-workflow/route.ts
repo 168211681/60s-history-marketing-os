@@ -4,13 +4,13 @@ import { ownerId } from "@/lib/auth/config";
 import { videoProvider } from "@/lib/video";
 import { uploadVideoPrivate } from "@/lib/youtube/google";
 import { accessTokenForOwner } from "@/lib/youtube/store";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function authorized(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
+  return isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET);
 }
 
 type ClaimedWorkflow = {
