@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/youtube-sync",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/production-workflow",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
