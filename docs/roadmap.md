@@ -76,6 +76,8 @@ Acceptance criteria:
 - A worker can retry safely and records each step and failure.
 - The owner can run the worker manually from `/scripts` when hosted scheduling is
   unavailable; scheduled execution remains optional.
+- The owner can inspect sanitized workflow events from `/scripts` without exposing
+  the private telemetry table to the browser.
 
 Remaining work: verify the configured provider with a real low-cost/free run
 and verify the end-to-end artifact path on the deployed environment. Worker

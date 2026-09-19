@@ -110,6 +110,32 @@ h3 {
   color: #9b2c2c;
   font-size: 12px;
 }
+.workflow-events {
+  flex: 1 1 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 12px;
+}
+.workflow-events summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.workflow-event-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.workflow-event-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+}
+.workflow-event-list time {
+  white-space: nowrap;
+}
 .pre-wrap {
   white-space: pre-wrap;
 }
