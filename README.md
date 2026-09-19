@@ -71,6 +71,7 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
 - `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
 - `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
+- `src/lib/ai/provider.ts`: optional provider-agnostic AI adapter with bounded structured output; unavailable by default. See [AI adapter setup](docs/ai.md).
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
 - `docs/connection-setup.md`: Supabase and Google console configuration.
 - `docs/mcp.md`: Optional Codex/MCP endpoint setup and tool contract.

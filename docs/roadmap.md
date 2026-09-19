@@ -51,7 +51,7 @@ manual Vercel owner-flow check after the PR is merged or deployed.
 
 ## Phase 3 — insights and reviewed script drafts
 
-**Status: implemented locally; provider-backed AI is intentionally not enabled.**
+**Status: implemented locally; provider-backed AI remains opt-in.**
 
 Acceptance criteria:
 
@@ -61,6 +61,8 @@ Acceptance criteria:
 - An owner can create, edit, review, and approve a script draft.
 - Approval is required before a production workflow can start.
 - No AI key produces an honest unavailable state and never fake AI output.
+- The optional provider-agnostic adapter validates structured analysis and script
+  output before any future persistence or UI use.
 
 ## Phase 4 — production workflow and private artifacts
 
