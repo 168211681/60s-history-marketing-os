@@ -3,7 +3,6 @@ import { z } from "zod";
 import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { database, databaseConfigured } from "@/lib/database";
-import { videoProvider } from "@/lib/video";
 
 export const runtime = "nodejs";
 
@@ -20,11 +19,10 @@ export async function POST(
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid draft id" }, { status: 400 });
 
   const draft = await database().query<{
-    id: string; channel_id: string; title: string; hook: string; script_body: string;
-    scene_cues: string; caption_text: string;
+    id: string; channel_id: string;
     status: "draft" | "reviewed" | "approved" | "archived";
   }>(
-    `select d.id, d.channel_id, d.title, d.hook, d.script_body, d.scene_cues, d.caption_text, d.status
+    `select d.id, d.channel_id, d.status
        from public.script_drafts d
        join public.channels c on c.id = d.channel_id and c.owner_id = $2
       where d.id = $1`,
@@ -33,20 +31,12 @@ export async function POST(
   const row = draft.rows[0];
   if (!row) return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   if (row.status !== "approved") return NextResponse.json({ error: "Only approved drafts can request video generation" }, { status: 409 });
-
-  const provider = videoProvider();
-  if (!provider.configured) return NextResponse.json({ error: `${provider.name.toUpperCase()}_NOT_CONFIGURED` }, { status: 503 });
-  try {
-    const job = await provider.submit({ draftId: row.id, title: row.title, hook: row.hook, scriptBody: row.script_body, sceneCues: row.scene_cues, captionText: row.caption_text });
-    const saved = await database().query<{ id: string; status: string; external_job_id: string }>(
-      `insert into public.video_generation_jobs (channel_id, script_draft_id, provider, status, external_job_id)
-       values ($1, $2, $3, 'queued', $4)
-       returning id, status, external_job_id`,
-      [row.channel_id, row.id, provider.name, job.externalJobId],
-    );
-    return NextResponse.json({ job: saved.rows[0] }, { status: 202, headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) {
-    const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "PROVIDER_FAILED";
-    return NextResponse.json({ error: code }, { status: 502 });
-  }
+  const workflow = await database().query<{ id: string; status: string; current_step: string }>(
+    `insert into public.production_workflows (channel_id, script_draft_id)
+     values ($1, $2)
+     on conflict (script_draft_id, workflow_type) do update set updated_at = now()
+     returning id, status, current_step`,
+    [row.channel_id, row.id],
+  );
+  return NextResponse.json({ workflow: workflow.rows[0] }, { status: 202, headers: { "Cache-Control": "private, no-store" } });
 }
