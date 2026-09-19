@@ -3,12 +3,14 @@
 Phase 1: a responsive, sample-data analytics dashboard for a history Shorts channel.
 Phase 2 foundation: a Supabase-compatible migration and locally verified ownership/RLS
 rules, ready for a later authenticated integration. See [database setup](docs/database.md).
-**Every metric and video title is fictional. No YouTube, database, authentication,
-or AI service is connected.** This milestone does not generate or publish content.
+The owner-only flow can connect YouTube, manually import supported analytics, and
+render the latest successful reporting window. Anonymous sessions retain the clearly
+labeled fictional workspace. This milestone does not generate or publish content.
 
 ## Run locally
 
-Requires Node.js 20.9+ (Node.js 22 recommended) and npm.
+Requires Node.js 22+ and npm. The current Supabase client requires Node.js 22.
+If nvm is installed, run `nvm use` from the repository root.
 
 ```sh
 npm ci
@@ -16,7 +18,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. The environment file is optional; no keys are needed.
+Open http://localhost:3000. The environment file is optional for sample mode; no keys are needed.
 In Codespaces, open the forwarded port 3000 in the Ports tab. The layout supports
 small mobile screens, including iPhone sizes. Production mode:
 
@@ -37,7 +39,7 @@ builder. The local verification command uses this builder in restricted environm
 | `/videos`    | Search titles/topics, sort by recency/views/average duration, empty state              |
 | `/analytics` | Totals, engagement, accessible weekly values and metric definitions                    |
 | `/insights`  | Unavailable AI state and handwritten evidence/comparison/hypothesis/experiment example |
-| `/settings`  | Read-only connection status and future integration requirements                        |
+| `/settings`  | Owner access, read-only YouTube connection, manual sync and setup status               |
 
 The reporting window is fixed at Aug 22–Sep 18, 2026; this is not live data.
 Video metrics cover the reporting window, not lifetime totals. Subscriber growth
@@ -60,8 +62,15 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `npm run verify:local`: lint, types, unit, database, build and browser checks.
 - `supabase/migrations/`: database schema, explicit grants and owner-scoped RLS.
 - `tests/database.test.mjs`: isolated PostgreSQL integration tests (no cloud credentials).
-- `src/lib/data/analytics-contract.ts`: types for a future session-scoped reader;
-  no database connection or credentials are used in Phase 2 foundation.
+- `src/lib/data/analytics-contract.ts` and `postgres-reader.ts`: owner-bound read
+  contract and PostgreSQL implementation for private dashboard data.
+- `src/lib/data/workspace.ts`: selects private synced analytics for the verified
+  owner and safely falls back to labeled samples for other sessions or failures.
+- `src/lib/auth/`: cookie-based Supabase owner session utilities.
+- `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
+- `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
+- `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
+- `docs/connection-setup.md`: Supabase and Google console configuration.
 
 Calculations have no AI-vendor dependency. A future provider adapter and optional
 MCP layer can be added when real-data analysis is implemented. Neither is required
@@ -98,32 +107,32 @@ just to demonstrate them.
 
 ## Security and configuration
 
-There are no required environment variables in Phase 1. `.env.example` documents
-that contract; adding credentials does not activate any integration. `.env*` files
+There are no required environment variables for sample mode. `.env.example`
+documents optional owner/YouTube connection variables. `.env*` files
 are ignored except this example. Never commit tokens, OAuth secrets, private keys,
 or service-role credentials. Use local `.env.local` or encrypted hosting settings
 for later integrations; never put server secrets in `NEXT_PUBLIC_*`.
 
-All current routes are public and contain fictional data only. **Do not replace
-fixtures with private analytics.** Before introducing real data, implement owner
-authentication and server-side authorization, channel ownership, PostgreSQL RLS,
-encrypted token storage, and authenticated sync endpoints. Do not log tokens.
+Anonymous analytics routes contain fictional data only. A verified owner session can
+render private stored analytics; every reader query also constrains `owner_id`, and
+matched routes send `private, no-store`. PostgreSQL RLS protects stored analytics and
+refresh tokens are encrypted before database storage. Do not log tokens.
 Search input is local state rendered by React, never executed as code/HTML/SQL.
 
 ## Next milestones
 
-1. **Foundation prepared:** database migration, ownership model and RLS isolation
-   tests. Cloud deployment, Supabase Auth/Data API verification and application
-   database integration remain unimplemented.
-2. Owner sign-in and Google OAuth: verified state, least-privilege scopes, secure
-   refresh-token storage, refresh/revocation and disconnect handling.
-3. YouTube Data/Analytics sync with quota management, backoff and idempotency.
-4. Analysis over stored analytics, replaceable AI adapters and evidence labels.
+1. **Implemented locally:** database ownership/RLS, owner sign-in, read-only Google
+   OAuth, encrypted refresh-token storage and disconnect/revocation.
+2. **Implemented locally:** manual YouTube Data/Analytics import with pagination,
+   batching, retry/backoff, daily upserts and idempotent reporting-window jobs.
+3. **Implemented locally:** authenticated PostgreSQL reader and owner-only Dashboard,
+   Videos and Analytics views with explicit sample/live/error states.
+4. Add deterministic analysis over stored analytics, then replaceable AI adapters
+   for hypotheses and experiments with evidence labels.
 5. Future production tools and optional MCP, explicit human publishing approval.
 
-Google setup and variable names will be documented alongside the actual OAuth
-implementation; no OAuth callback or connection exists in Phase 1. Do not enter
-credentials into this sample workspace. ChatGPT Plus is not API billing.
+Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
+enter credentials into tracked files. ChatGPT Plus is not API billing.
 
 Vercel deployment is separate. Local verification does not mean this project has
 been deployed, and GitHub will not show a CI pass for this branch.

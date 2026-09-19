@@ -1,9 +1,4 @@
-/**
- * Server-side contract for the future authenticated analytics adapter.
- * No implementation is exported until owner sign-in and token handling exist.
- * Methods must derive channel access from the verified session used to create
- * the adapter. A channel ID supplied by a caller is never authorization.
- */
+/** Server-side contract bound to one verified owner session. */
 
 export type MetricDate = string; // YYYY-MM-DD as reported by the source API.
 export type DecimalValue = string; // Exact PostgreSQL numeric; never a float guess.
@@ -59,6 +54,7 @@ export interface AuthenticatedAnalyticsReader {
   listChannels(): Promise<readonly ChannelRecord[]>;
   /** Return null when the channel is missing or not owned by this session. */
   getChannel(channelId: string): Promise<ChannelRecord | null>;
+  getLatestReportingPeriod(channelId: string): Promise<ReportingPeriod | null>;
   listVideos(channelId: string): Promise<readonly VideoRecord[]>;
   getChannelMetrics(
     channelId: string,
@@ -67,6 +63,10 @@ export interface AuthenticatedAnalyticsReader {
   getVideoMetrics(
     channelId: string,
     videoId: string,
+    period: ReportingPeriod,
+  ): Promise<readonly VideoDailyMetric[]>;
+  listVideoMetrics(
+    channelId: string,
     period: ReportingPeriod,
   ): Promise<readonly VideoDailyMetric[]>;
 }

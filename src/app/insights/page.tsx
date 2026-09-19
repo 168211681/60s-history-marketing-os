@@ -20,7 +20,7 @@ export default function InsightsPage() {
         action={<span className="badge neutral">Unavailable</span>}
       >
         <EmptyState title="No AI report generated">
-          <p>Real analytics and an AI provider are not connected in Phase 1.</p>
+          <p>No AI provider is configured. Stored analytics, when available, are not sent to an AI service.</p>
           <p>Adding an API key alone will not enable this feature.</p>
           <Link className="text-link" href="/settings">
             View connection status →

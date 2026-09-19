@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import {
   formatNumber,
   formatDuration,
-  summarize,
-  type VideoMetrics,
+  type AnalyticsSummary,
 } from "@/lib/analytics";
 
 export function PageHeading({
@@ -69,18 +68,19 @@ export function EmptyState({
     </div>
   );
 }
-export function MetricCards({ videos }: { videos: readonly VideoMetrics[] }) {
-  const metrics = summarize(videos);
+export function MetricCards({ metrics, periodLabel }: { metrics: AnalyticsSummary; periodLabel: string }) {
   const cards = [
-    ["Total views", formatNumber(metrics.views), "Across the sample period"],
+    ["Total views", formatNumber(metrics.views), `Across ${periodLabel}`],
     [
       "Watch time",
-      `${formatNumber(metrics.watchHours)} hrs`,
+      metrics.watchHours === null ? "No data" : `${formatNumber(metrics.watchHours)} hrs`,
       "Estimated minutes converted to hours",
     ],
     [
       "Subscriber growth",
-      `${metrics.netSubscribers >= 0 ? "+" : ""}${formatNumber(metrics.netSubscribers)}`,
+      metrics.netSubscribers === null
+        ? "No data"
+        : `${metrics.netSubscribers >= 0 ? "+" : ""}${formatNumber(metrics.netSubscribers)}`,
       `${formatNumber(metrics.gained)} gained · ${formatNumber(metrics.lost)} lost`,
     ],
     [

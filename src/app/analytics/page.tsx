@@ -1,39 +1,40 @@
 import { PageHeading, Panel, MetricCards } from "@/components/ui";
 import { TrendChart } from "@/components/trend-chart";
-import { formatNumber, summarize } from "@/lib/analytics";
-import { samplePeriod, sampleVideos } from "@/lib/sample-data";
+import { formatNumber } from "@/lib/analytics";
+import { workspaceData } from "@/lib/data/workspace";
 export const metadata = { title: "Analytics" };
-export default function AnalyticsPage() {
-  const totals = summarize(sampleVideos);
+export default async function AnalyticsPage() {
+  const data = await workspaceData();
+  const totals = data.summary;
   return (
     <>
       <PageHeading
         eyebrow="UNDERSTAND YOUR AUDIENCE"
         title="Channel analytics"
-        description={`Sample period: ${samplePeriod}. All totals are derived from the six fictional videos.`}
+        description={`${data.source === "sample" ? "Sample" : "Synced"} period: ${data.period}. ${data.source === "sample" ? "All totals are fictional." : "Channel totals come from private daily Analytics reports."}`}
       />
-      <MetricCards videos={sampleVideos} />
+      <MetricCards metrics={totals} periodLabel={data.period} />
       <div className="content-grid">
         <Panel
           title="Views over time"
-          description="Weekly sample totals · no previous-period comparison"
+          description={`Weekly ${data.source === "sample" ? "sample" : "channel"} totals · no previous-period comparison`}
         >
-          <TrendChart />
+          <TrendChart values={data.weeklyViews} source={data.source} />
         </Panel>
         <Panel
           title="Audience actions"
-          description="Sample engagement during the selected period"
+          description={`${data.source === "sample" ? "Sample" : "Synced"} engagement during the selected period`}
         >
           <dl className="definition-list">
-            {[
+            {([
               ["Likes", totals.likes],
               ["Comments", totals.comments],
               ["Subscribers gained", totals.gained],
               ["Subscribers lost", totals.lost],
-            ].map(([label, count]) => (
+            ] satisfies [string, number | null][]).map(([label, count]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>{formatNumber(Number(count))}</dd>
+                <dd>{formatNumber(count)}</dd>
               </div>
             ))}
           </dl>
@@ -42,7 +43,7 @@ export default function AnalyticsPage() {
       <Panel title="How to read these metrics">
         <div className="explanation-grid">
           <div>
-            <h3>Calculated from the sample</h3>
+            <h3>Calculated from the {data.source === "sample" ? "sample" : "synced reports"}</h3>
             <p className="muted">
               Watch time is estimated minutes watched ÷ 60. Average view
               duration is total watch seconds ÷ total views. Subscriber growth
@@ -50,10 +51,10 @@ export default function AnalyticsPage() {
             </p>
           </div>
           <div>
-            <h3>Not available yet</h3>
+            <h3>Not collected</h3>
             <p className="muted">
-              Real channel analytics, retention curves, impressions CTR,
-              revenue, and causal explanations are not provided in this MVP.
+              Retention curves, impressions CTR, revenue, and causal explanations
+              are not collected or inferred in this MVP.
             </p>
           </div>
         </div>

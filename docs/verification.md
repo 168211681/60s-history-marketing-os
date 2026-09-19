@@ -93,3 +93,58 @@ webpack build (all five routes prerendered), and 25 Playwright tests. Two
 mobile keyboard tests were intentionally skipped. An initial run inside the
 restricted sandbox stopped at `npm test` because `tsx` could not create its
 local IPC socket (`EPERM`); the unrestricted rerun passed.
+
+## Owner and YouTube connection verification — 2026-09-19
+
+The connection branch was verified with Node.js 22.23.2. Lint and typecheck
+passed. Twelve unit tests passed, including OAuth state/PKCE construction,
+read-only scopes, encrypted refresh-token round trips, tamper rejection, token
+POST bodies and provider-response validation. Nineteen disposable PostgreSQL
+tests passed, including private connection access and owner/channel binding.
+
+The webpack production build passed and emitted the three YouTube handlers, the
+Supabase callback, Proxy and dynamic Settings route. The expanded browser suite
+passed 28 tests with two intentional mobile keyboard skips across desktop
+Chromium, iPhone-sized Chromium and iPhone WebKit. It confirmed that missing
+credentials hide connection controls and make connection endpoints fail closed.
+`npm ci` completed from the lockfile and the production dependency audit reported
+zero known vulnerabilities. npm warned that ESLint 9.39.5 is out of support;
+ESLint 10 was not retained because the current Next.js transitive plugins reject
+it in their peer ranges. No hosted
+Supabase project, Google OAuth client, real channel, or real refresh token was
+available, so the end-to-end provider callback is not claimed as verified.
+
+## Manual YouTube sync verification — 2026-09-19
+
+The owner-only sync imports the latest 28 complete UTC days. Unit tests cover
+uploads pagination, 50-video metadata batches, 500-video Analytics filters,
+header-driven report parsing, missing rows, ISO 8601 durations, transient retry,
+quota classification and channel identity validation. The disposable PostgreSQL
+suite verifies one-job acquisition, duplicate suppression and transactional video,
+channel metric and video metric upserts through the application storage functions.
+
+The final `npm run verify:local` passed: lint, typecheck, 17 unit tests, 20 database
+tests, the webpack production build, and 28 Playwright tests across desktop Chromium,
+iPhone-sized Chromium and iPhone WebKit. Two mobile keyboard tests were intentionally
+skipped. No live Google or hosted Supabase credentials were available; therefore no
+real provider response, quota usage or cloud persistence is claimed.
+
+## Authenticated analytics reader verification — 2026-09-19
+
+The PostgreSQL reader derives every query from a verified owner ID and repeats the
+owner constraint in SQL. Its disposable-database test reads a completed reporting
+window, converts PostgreSQL dates/counts into the declared contract, and confirms
+that a second owner cannot retrieve the channel or videos. Pure model tests verify
+separate channel/video totals, four UTC week buckets, unavailable-value propagation,
+and rejection of counts outside JavaScript's safe UI range.
+
+`npm run verify:local` passed with lint, typecheck, 20 unit tests, 20 database tests,
+the webpack production build, and 28 Playwright tests across desktop Chromium,
+iPhone-sized Chromium and iPhone WebKit. Two mobile keyboard tests were intentionally
+skipped. After explicitly forcing authenticated pages to dynamic rendering, the
+production build listed Dashboard, Videos, Analytics, Insights and Settings as
+server-rendered routes, and the 28 browser tests passed again.
+
+No hosted Supabase session or real synced channel was available for browser testing.
+The private owner UI path is covered at the reader/model boundary; a cloud integration
+test remains required before claiming production access or live-data verification.

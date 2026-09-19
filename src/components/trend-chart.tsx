@@ -1,26 +1,26 @@
 import { formatNumber } from "@/lib/analytics";
-import { sampleWeeklyViews } from "@/lib/sample-data";
+import type { WeeklyViews } from "@/lib/data/workspace";
 
-export function TrendChart() {
-  const max = Math.max(...sampleWeeklyViews.map((week) => week.views));
+export function TrendChart({ values, source }: { values: readonly WeeklyViews[]; source: "sample" | "live" }) {
+  const max = Math.max(0, ...values.map((week) => week.views ?? 0));
   return (
     <div>
       <div className="trend-bars" aria-hidden="true">
-        {sampleWeeklyViews.map((week) => (
+        {values.map((week) => (
           <div className="bar-column" key={week.label}>
             <span>{formatNumber(week.views)}</span>
             <div
               className="bar"
-              style={{ height: `${(week.views / max) * 145}px` }}
+              style={{ height: `${max > 0 ? ((week.views ?? 0) / max) * 145 : 0}px` }}
             />
             <span className="muted">{week.label}</span>
           </div>
         ))}
       </div>
       <details className="chart-details">
-        <summary>View weekly sample values</summary>
+        <summary>View weekly {source === "sample" ? "sample" : "analytics"} values</summary>
         <table>
-          <caption className="sr-only">Sample weekly views</caption>
+          <caption className="sr-only">Weekly {source === "sample" ? "sample" : "channel"} views</caption>
           <thead>
             <tr>
               <th scope="col">Week</th>
@@ -28,7 +28,7 @@ export function TrendChart() {
             </tr>
           </thead>
           <tbody>
-            {sampleWeeklyViews.map((week) => (
+            {values.map((week) => (
               <tr key={week.label}>
                 <th scope="row">{week.label}</th>
                 <td>{formatNumber(week.views)}</td>

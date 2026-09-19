@@ -87,6 +87,28 @@ test("chart has exact values and AI report is unavailable", async ({
     page.getByRole("heading", { name: "No AI report generated" }),
   ).toBeVisible();
 });
+test("connection controls fail closed when credentials are absent", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("heading", { name: "Authentication is not configured" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect YouTube channel" }),
+  ).toHaveCount(0);
+  const connect = await request.post("/api/youtube/connect", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(connect.status()).toBe(403);
+  const sync = await request.post("/api/youtube/sync", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(sync.status()).toBe(403);
+  const callback = await request.get("/auth/callback?code=untrusted");
+  expect(callback.status()).toBe(503);
+});
 test("unknown route has a 404 and recovery link", async ({ page }) => {
   const response = await page.goto("/does-not-exist");
   expect(response?.status()).toBe(404);
