@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { database, databaseConfigured, transaction } from "@/lib/database";
 import { ownerId } from "@/lib/auth/config";
-import { higgsfieldProvider } from "@/lib/video/higgsfield";
+import { videoProvider } from "@/lib/video";
 import { uploadVideoPrivate } from "@/lib/youtube/google";
 import { accessTokenForOwner } from "@/lib/youtube/store";
 
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     const pending = await renderingWorkflow(channelId);
     if (!pending?.provider_job_id) return NextResponse.json({ status: "idle" });
     try {
-      const current = await higgsfieldProvider().status(pending.provider_job_id);
+      const current = await videoProvider().status(pending.provider_job_id);
       if (current.status === "completed") {
         await database().query(
           `update public.production_workflows
@@ -148,7 +148,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const job = await higgsfieldProvider().submit({
+    const provider = videoProvider();
+    if (!provider.configured) throw new Error(`${provider.name.toUpperCase()}_NOT_CONFIGURED`);
+    const job = await provider.submit({
       draftId: workflow.script_draft_id,
       title: workflow.title,
       hook: workflow.hook,

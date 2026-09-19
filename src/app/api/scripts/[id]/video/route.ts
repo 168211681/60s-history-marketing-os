@@ -3,7 +3,7 @@ import { z } from "zod";
 import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { database, databaseConfigured } from "@/lib/database";
-import { higgsfieldProvider } from "@/lib/video/higgsfield";
+import { videoProvider } from "@/lib/video";
 
 export const runtime = "nodejs";
 
@@ -34,15 +34,15 @@ export async function POST(
   if (!row) return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   if (row.status !== "approved") return NextResponse.json({ error: "Only approved drafts can request video generation" }, { status: 409 });
 
-  const provider = higgsfieldProvider();
-  if (!provider.configured) return NextResponse.json({ error: "Higgsfield provider is not configured" }, { status: 503 });
+  const provider = videoProvider();
+  if (!provider.configured) return NextResponse.json({ error: `${provider.name.toUpperCase()}_NOT_CONFIGURED` }, { status: 503 });
   try {
     const job = await provider.submit({ draftId: row.id, title: row.title, hook: row.hook, scriptBody: row.script_body, sceneCues: row.scene_cues, captionText: row.caption_text });
     const saved = await database().query<{ id: string; status: string; external_job_id: string }>(
       `insert into public.video_generation_jobs (channel_id, script_draft_id, provider, status, external_job_id)
-       values ($1, $2, 'higgsfield', 'queued', $3)
+       values ($1, $2, $3, 'queued', $4)
        returning id, status, external_job_id`,
-      [row.channel_id, row.id, job.externalJobId],
+      [row.channel_id, row.id, provider.name, job.externalJobId],
     );
     return NextResponse.json({ job: saved.rows[0] }, { status: 202, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

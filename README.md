@@ -141,7 +141,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 4. **Implemented locally:** deterministic topic analysis and evidence-labeled
    recommendations over stored or sample analytics.
 5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
-6. Add an optional Higgsfield video adapter after human-approved script drafts.
+6. Add an optional video provider adapter after human-approved script drafts. Set `VIDEO_PROVIDER=higgsfield` for the currently implemented provider. `huggingface`, `fal`, `replicate`, and `runway` are reserved provider names for future adapters and return an honest unavailable state until implemented.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.

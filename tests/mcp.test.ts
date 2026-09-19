@@ -4,6 +4,7 @@ import { isMcpAuthorized } from "../src/lib/ai/mcp-auth";
 import { canAdvanceScriptStatus } from "../src/lib/data/script-status";
 import { canAdvanceProductionWorkflow } from "../src/lib/data/production-workflow";
 import { higgsfieldProvider } from "../src/lib/video/higgsfield";
+import { videoProvider } from "../src/lib/video";
 
 test("MCP authorization requires the configured bearer secret", () => {
   assert.equal(isMcpAuthorized("Bearer test-secret", "test-secret"), true);
@@ -40,6 +41,20 @@ test("Higgsfield remains unavailable without server credentials", async () => {
   if (originalId === undefined) delete process.env.HF_API_KEY_ID; else process.env.HF_API_KEY_ID = originalId;
   if (originalSecret === undefined) delete process.env.HF_API_KEY_SECRET; else process.env.HF_API_KEY_SECRET = originalSecret;
   if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
+});
+
+test("video provider selection keeps unimplemented providers unavailable", async () => {
+  const previous = process.env.VIDEO_PROVIDER;
+  process.env.VIDEO_PROVIDER = "huggingface";
+  try {
+    const provider = videoProvider();
+    assert.equal(provider.name, "huggingface");
+    assert.equal(provider.configured, false);
+    await assert.rejects(() => provider.submit({ draftId: "draft", title: "title", hook: "hook", scriptBody: "body", sceneCues: "", captionText: "" }), /HUGGINGFACE_NOT_IMPLEMENTED/);
+  } finally {
+    if (previous === undefined) delete process.env.VIDEO_PROVIDER;
+    else process.env.VIDEO_PROVIDER = previous;
+  }
 });
 
 test("Higgsfield submits an approved script as a server-side request", async () => {
