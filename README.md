@@ -143,6 +143,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
 6. Add an optional video provider adapter after human-approved script drafts. Set `VIDEO_PROVIDER=higgsfield` for the currently implemented provider. `huggingface`, `fal`, `replicate`, and `runway` are reserved provider names for future adapters and return an honest unavailable state until implemented.
 7. Configure a private Supabase Storage bucket named `video-artifacts` before enabling a provider that returns raw video bytes. The server-only `SUPABASE_SERVICE_ROLE_KEY` is used only to upload artifacts and create short-lived signed URLs for the private YouTube upload worker.
+8. Set `VIDEO_PROVIDER=huggingface` with `HF_TOKEN`, `HF_VIDEO_MODEL`, and `HF_VIDEO_PROVIDER` to enable the synchronous Hugging Face adapter. It is intended for a worker invocation that can complete within the configured timeout; long-running providers still need a queue-backed async adapter.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.

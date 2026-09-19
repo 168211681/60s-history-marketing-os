@@ -12,7 +12,7 @@ export type VideoProviderName = "higgsfield" | "huggingface" | "fal" | "replicat
 export type VideoGenerationProvider = {
   name: VideoProviderName;
   configured: boolean;
-  submit(request: VideoGenerationRequest): Promise<{ externalJobId: string }>;
+  submit(request: VideoGenerationRequest): Promise<{ externalJobId: string; artifactUrl?: string }>;
   status(externalJobId: string): Promise<{ status: "queued" | "rendering" | "completed" | "failed"; artifactUrl?: string }>;
 };
 

@@ -17,6 +17,7 @@
     "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"
   },
   "dependencies": {
+    "@huggingface/inference": "4.13.30",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.116.0",

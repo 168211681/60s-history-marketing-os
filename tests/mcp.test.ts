@@ -51,7 +51,7 @@ test("video provider selection keeps unimplemented providers unavailable", async
     const provider = videoProvider();
     assert.equal(provider.name, "huggingface");
     assert.equal(provider.configured, false);
-    await assert.rejects(() => provider.submit({ draftId: "draft", title: "title", hook: "hook", scriptBody: "body", sceneCues: "", captionText: "" }), /HUGGINGFACE_NOT_IMPLEMENTED/);
+    await assert.rejects(() => provider.submit({ draftId: "draft", title: "title", hook: "hook", scriptBody: "body", sceneCues: "", captionText: "" }), /HUGGINGFACE_NOT_CONFIGURED/);
   } finally {
     if (previous === undefined) delete process.env.VIDEO_PROVIDER;
     else process.env.VIDEO_PROVIDER = previous;

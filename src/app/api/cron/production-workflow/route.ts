@@ -158,6 +158,15 @@ export async function GET(request: NextRequest) {
       sceneCues: workflow.scene_cues,
       captionText: workflow.caption_text,
     });
+    if (job.artifactUrl) {
+      await database().query(
+        `update public.production_workflows
+            set provider_job_id = $2, artifact_url = $3, status = 'rendered', current_step = 'awaiting_upload', updated_at = now()
+          where id = $1 and channel_id = $4 and status = 'rendering'`,
+        [workflow.id, job.externalJobId, job.artifactUrl, channelId],
+      );
+      return NextResponse.json({ status: "rendered", workflowId: workflow.id });
+    }
     await database().query(
       `update public.production_workflows
           set provider_job_id = $2, updated_at = now()
