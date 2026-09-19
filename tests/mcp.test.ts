@@ -25,6 +25,7 @@ test("production workflow requires private upload before human publication", () 
   assert.equal(canAdvanceProductionWorkflow("queued", "rendering"), true);
   assert.equal(canAdvanceProductionWorkflow("rendered", "uploaded_private"), true);
   assert.equal(canAdvanceProductionWorkflow("uploaded_private", "published"), true);
+  assert.equal(canAdvanceProductionWorkflow("failed", "queued"), true);
   assert.equal(canAdvanceProductionWorkflow("queued", "published"), false);
   assert.equal(canAdvanceProductionWorkflow("published", "queued"), false);
 });
