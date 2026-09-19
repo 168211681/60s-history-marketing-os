@@ -22,3 +22,17 @@ and script fields so causal claims and spoken copy are not silently mixed.
 
 This is an adapter contract, not a claim that a provider account, quota, or
 billing plan is available. ChatGPT Plus does not supply an API key.
+
+## Owner-only routes
+
+When the adapter is configured, the signed-in owner can call:
+
+- `POST /api/ai/analyze` to generate a structured analysis for the current
+  reporting window. The response is private and is not written as an
+  authoritative insight until it is reviewed.
+- `POST /api/ai/script` with `topic`, and optional `angle`, `evidence`, and
+  `researchNotes`, to save an AI-generated script as a `draft`.
+
+Both routes require the owner session and an exact `Origin` matching
+`APP_ORIGIN`. Script output is explicitly marked `ai_provider` and remains
+subject to human review before any production workflow or YouTube upload.

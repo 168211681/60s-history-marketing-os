@@ -11,7 +11,7 @@ export type ScriptDraft = {
   callToAction: string;
   researchNotes: string;
   status: "draft" | "reviewed" | "approved" | "archived";
-  source: "codex_mcp" | "human";
+  source: "codex_mcp" | "ai_provider" | "human";
   modelIdentifier: string | null;
   createdAt: string;
 };

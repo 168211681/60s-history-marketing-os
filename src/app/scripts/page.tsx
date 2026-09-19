@@ -35,7 +35,7 @@ export default async function ScriptsPage() {
             <Panel
               key={draft.id}
               title={draft.title}
-              description={`${draft.source === "codex_mcp" ? "Codex/MCP draft" : "Human draft"} · ${dateLabel(draft.createdAt)}`}
+              description={`${draft.source === "codex_mcp" ? "Codex/MCP draft" : draft.source === "ai_provider" ? "AI provider draft" : "Human draft"} · ${dateLabel(draft.createdAt)}`}
               action={<div className="script-panel-actions"><span className="badge neutral">{draft.status}</span><ScriptStatusActions id={draft.id} status={draft.status} /></div>}
             >
               <div className="draft-grid">

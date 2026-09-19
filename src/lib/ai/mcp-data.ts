@@ -80,6 +80,7 @@ export async function saveScriptDraft(
     researchNotes: string;
     contentIdeaId?: string;
     modelIdentifier?: string;
+    source?: "codex_mcp" | "ai_provider" | "human";
   },
 ) {
   if (input.contentIdeaId) {
@@ -94,7 +95,7 @@ export async function saveScriptDraft(
     `insert into public.script_drafts
        (channel_id, content_idea_id, title, hook, script_body, scene_cues, caption_text,
         call_to_action, research_notes, source, model_identifier)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'codex_mcp', $10)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      returning id, title, status, created_at`,
     [
       context.channelId,
@@ -106,6 +107,7 @@ export async function saveScriptDraft(
       input.captionText.trim(),
       input.callToAction.trim(),
       input.researchNotes.trim(),
+      input.source ?? "codex_mcp",
       input.modelIdentifier?.trim() || "codex-mcp",
     ],
   );
