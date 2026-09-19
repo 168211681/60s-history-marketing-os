@@ -94,7 +94,7 @@ The test-only bootstrap supplies minimal `auth.users` and `auth.uid()` contracts
 files simulate the role/identity boundary for database tests, not JWT verification
 or the Supabase Auth service. SQL tests do not certify PostgREST/GraphQL behavior.
 
-Coverage includes fresh migration application, nine RLS-protected tables,
+Coverage includes fresh migration application, twelve RLS-protected tables,
 legacy-grant removal, two-owner isolation, missing identity, anonymous denial,
 read-only analytics, owner idea CRUD, cross-owner mutation denial, private jobs,
 cross-channel FK integrity, sync job acquisition/transactional upserts, nullable metrics, invalid values,
