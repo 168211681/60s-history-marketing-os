@@ -83,6 +83,7 @@ Remaining work: verify the configured provider with a real low-cost/free run
 and verify the end-to-end artifact path on the deployed environment. Worker
 state transitions now write sanitized backend-only telemetry; retry limits and
 failure codes remain enforced, including a 60-minute stale-render timeout.
+Use `docs/workflow-live-test.md` to capture the required deployed evidence.
 
 ## Phase 5 — private YouTube upload and human publish gate
 
