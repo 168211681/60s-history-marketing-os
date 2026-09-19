@@ -4,6 +4,11 @@
 must call `/api/cron/production-workflow` to process that row and upload the
 finished artifact to YouTube as Private.
 
+Provider-generated URLs are treated as untrusted, short-lived inputs. The worker
+copies a completed provider artifact into the private Supabase Storage bucket
+before persisting its signed URL or sending it to YouTube. A provider URL is
+never stored as the workflow artifact.
+
 Vercel Hobby only supports one scheduled cron invocation per day. The repository
 therefore includes `.github/workflows/production-worker.yml` with a five-minute
 schedule and a manual `workflow_dispatch` option.

@@ -8,11 +8,11 @@ function storageConfig() {
   return { url: url.replace(/\/$/, ""), serviceKey, bucket };
 }
 
-export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video/mp4") {
+export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video/mp4", fetcher: typeof fetch = fetch) {
   if (bytes.byteLength === 0 || bytes.byteLength > 256 * 1024 * 1024) throw new Error("VIDEO_ARTIFACT_INVALID_SIZE");
   const config = storageConfig();
   const path = `generated/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp4`;
-  const upload = await fetch(`${config.url}/storage/v1/object/${config.bucket}/${path}`, {
+  const upload = await fetcher(`${config.url}/storage/v1/object/${config.bucket}/${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.serviceKey}`,
@@ -25,7 +25,7 @@ export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video
   });
   if (!upload.ok) throw new Error("VIDEO_ARTIFACT_UPLOAD_FAILED");
 
-  const signed = await fetch(`${config.url}/storage/v1/object/sign/${config.bucket}/${path}`, {
+  const signed = await fetcher(`${config.url}/storage/v1/object/sign/${config.bucket}/${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.serviceKey}`,
@@ -40,4 +40,22 @@ export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video
   const signedPath = typeof payload.signedURL === "string" ? payload.signedURL : typeof payload.signedUrl === "string" ? payload.signedUrl : null;
   if (!signedPath) throw new Error("VIDEO_ARTIFACT_INVALID_SIGNED_URL");
   return { path, artifactUrl: signedPath.startsWith("http") ? signedPath : `${config.url}/storage/v1${signedPath}` };
+}
+
+/**
+ * Provider results are external URLs. Copy them into the private bucket before
+ * any downstream upload so the provider URL is never persisted as a workflow
+ * artifact or exposed to the browser.
+ */
+export async function storeVideoArtifactFromUrl(artifactUrl: string, fetcher: typeof fetch = fetch) {
+  if (!/^https:\/\//.test(artifactUrl) || artifactUrl.length > 2000) {
+    throw new Error("VIDEO_ARTIFACT_INVALID_URL");
+  }
+  const response = await fetcher(artifactUrl, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error("VIDEO_ARTIFACT_FETCH_FAILED");
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (declaredLength > 256 * 1024 * 1024) throw new Error("VIDEO_ARTIFACT_INVALID_SIZE");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0] || "video/mp4";
+  return storeVideoArtifact(bytes, contentType, fetcher);
 }

@@ -6,6 +6,7 @@ import { uploadVideoPrivate } from "@/lib/youtube/google";
 import { accessTokenForOwner } from "@/lib/youtube/store";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { recordWorkflowEvent } from "@/lib/workflows/events";
+import { storeVideoArtifactFromUrl } from "@/lib/video/artifacts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -213,11 +214,12 @@ export async function GET(request: NextRequest) {
       captionText: workflow.caption_text,
     });
     if (job.artifactUrl) {
+      const storedArtifact = await storeVideoArtifactFromUrl(job.artifactUrl);
       await database().query(
         `update public.production_workflows
             set provider_job_id = $2, artifact_url = $3, status = 'rendered', current_step = 'awaiting_upload', updated_at = now()
           where id = $1 and channel_id = $4 and status = 'rendering'`,
-        [workflow.id, job.externalJobId, job.artifactUrl, channelId],
+        [workflow.id, job.externalJobId, storedArtifact.artifactUrl, channelId],
       );
       await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "rendered", status: "rendered", metadata: { provider: provider.name } });
       return NextResponse.json({ status: "rendered", workflowId: workflow.id });
