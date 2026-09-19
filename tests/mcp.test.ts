@@ -32,3 +32,29 @@ test("Higgsfield remains unavailable without server credentials", async () => {
   if (originalSecret === undefined) delete process.env.HF_API_KEY_SECRET; else process.env.HF_API_KEY_SECRET = originalSecret;
   if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
 });
+
+test("Higgsfield submits an approved script as a server-side request", async () => {
+  const originalId = process.env.HF_API_KEY_ID;
+  const originalSecret = process.env.HF_API_KEY_SECRET;
+  const originalEnabled = process.env.HIGGSFIELD_GENERATION_ENABLED;
+  process.env.HF_API_KEY_ID = "key-id";
+  process.env.HF_API_KEY_SECRET = "key-secret";
+  process.env.HIGGSFIELD_GENERATION_ENABLED = "true";
+  const originalFetch = globalThis.fetch;
+  let captured: RequestInit | undefined;
+  globalThis.fetch = async (_input, init) => {
+    captured = init;
+    return new Response(JSON.stringify({ request_id: "hf-request-1" }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const result = await higgsfieldProvider().submit({ draftId: "draft", title: "A title", hook: "A hook", scriptBody: "Body", sceneCues: "Scenes", captionText: "Captions" });
+    assert.deepEqual(result, { externalJobId: "hf-request-1" });
+    assert.equal((captured?.headers as Record<string, string>).Authorization, "Key key-id:key-secret");
+    assert.match(String(captured?.body), /A title/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalId === undefined) delete process.env.HF_API_KEY_ID; else process.env.HF_API_KEY_ID = originalId;
+    if (originalSecret === undefined) delete process.env.HF_API_KEY_SECRET; else process.env.HF_API_KEY_SECRET = originalSecret;
+    if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
+  }
+});

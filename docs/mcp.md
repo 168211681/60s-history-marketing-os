@@ -34,6 +34,7 @@ Video generation is separate from MCP script drafting. The app accepts a
 generation request only for an `approved` draft. The Higgsfield adapter is
 disabled unless `HIGGSFIELD_GENERATION_ENABLED=true` and the server-only
 `HF_API_KEY_ID` / `HF_API_KEY_SECRET` variables are set. Keep this disabled
-until the provider request/response contract is verified and the account has
-explicitly been funded. No generation job is claimed until the provider
-returns an external job ID.
+until the provider account has explicitly been funded. When enabled, the
+server submits a 5-second 9:16 text-to-video request and stores the returned
+`request_id`; no generation job is claimed when the provider does not return a
+valid request ID.
