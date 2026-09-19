@@ -44,7 +44,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <PageHeading
         eyebrow="YOUR WORKSPACE"
         title="Settings & connections"
-        description="Owner access, read-only YouTube connection, and manual analytics synchronization."
+        description="Owner access, YouTube connection, private uploads, and manual analytics synchronization."
       />
       {params.youtube && messages[params.youtube] ? <p className="settings-notice" role="status">{messages[params.youtube]}</p> : null}
       {params.auth === "failed" ? <p className="settings-notice" role="alert">Sign-in failed. Please try again.</p> : null}
@@ -87,12 +87,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         ) : connectionError ? (
           <EmptyState title="Connection status unavailable">
             <p>The database could not be reached. No connection status is being inferred.</p>
+            <form action="/api/youtube/disconnect" method="post">
+              <button className="button secondary" type="submit">Try disconnecting YouTube</button>
+            </form>
           </EmptyState>
         ) : connection ? (
           <div className="settings-actions">
             <p><strong>{connection.title}</strong> · {connection.youtube_channel_id}</p>
             <p className="muted">
-              Read-only access. Last successful sync: {connection.last_synced_at ? connection.last_synced_at.toISOString().replace("T", " ").slice(0, 19) + " UTC" : "Never"}.
+              Analytics access plus private video upload. Last successful sync: {connection.last_synced_at ? connection.last_synced_at.toISOString().replace("T", " ").slice(0, 19) + " UTC" : "Never"}.
               Signed-in owner dashboard pages use the latest successful sync; anonymous visitors see fictional sample data.
             </p>
             <form action="/api/youtube/sync" method="post">
@@ -104,7 +107,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         ) : (
           <div className="settings-actions">
-            <p>Grant read-only access to channel details and Analytics reports.</p>
+            <p>Grant Analytics access and private video upload access to the connected channel.</p>
             <form action="/api/youtube/connect" method="post">
               <button className="button" type="submit">Connect YouTube channel</button>
             </form>
