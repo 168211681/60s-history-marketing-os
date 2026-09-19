@@ -29,8 +29,8 @@ channel's stored analytics:
 
 AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or
-publishing adapter. The endpoint returns `401` when `MCP_SECRET` is missing or
-the bearer header does not match.
+publishing adapter. The endpoint returns `503 MCP is not configured` when
+`MCP_SECRET` is missing and `401` when the bearer header does not match.
 
 Video generation is separate from MCP script drafting. The app accepts a
 production workflow only for an `approved` draft. The current optional provider

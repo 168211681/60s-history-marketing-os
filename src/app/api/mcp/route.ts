@@ -91,7 +91,9 @@ function server() {
 }
 
 async function handle(request: Request) {
-  if (!isMcpAuthorized(request.headers.get("authorization"), process.env.MCP_SECRET)) return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
+  const secret = process.env.MCP_SECRET;
+  if (!secret) return new Response("MCP is not configured", { status: 503, headers: { "Cache-Control": "no-store" } });
+  if (!isMcpAuthorized(request.headers.get("authorization"), secret)) return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
   const transport = new WebStandardStreamableHTTPServerTransport({
     enableJsonResponse: true,
     // Vercel handlers are stateless; each request creates its own transport.
