@@ -5,6 +5,7 @@ const routes = [
   ["/videos", "Video performance"],
   ["/analytics", "Channel analytics"],
   ["/insights", "Marketing insights"],
+  ["/scripts", "Script drafts"],
   ["/settings", "Settings & connections"],
 ] as const;
 for (const [route, heading] of routes) {
@@ -63,7 +64,7 @@ test("navigation, filtering, empty recovery and sorting work", async ({
   await expect(page.locator(".video-list li").first()).toContainText(
     "One day inside a Roman legion",
   );
-  for (const name of ["Analytics", "Insights", "Settings", "Dashboard"]) {
+  for (const name of ["Analytics", "Insights", "Scripts", "Settings", "Dashboard"]) {
     await page
       .getByRole("navigation")
       .getByRole("link", { name, exact: true })
