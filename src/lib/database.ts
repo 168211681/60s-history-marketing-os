@@ -2,6 +2,23 @@ import { Pool, type PoolClient } from "pg";
 
 let pool: Pool | undefined;
 
+function connectionString() {
+  const value = process.env.DATABASE_URL;
+  if (!value) throw new Error("Database is not configured");
+  try {
+    const url = new URL(value);
+    // pg's connection-string parser turns sslmode=require into full
+    // certificate verification and overrides the ssl option below. The
+    // Supabase shared pooler is already TLS-only, so let pg negotiate TLS
+    // while accepting the provider's runtime certificate chain.
+    url.searchParams.delete("sslmode");
+    url.searchParams.delete("uselibpqcompat");
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 export function databaseConfigured() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -9,7 +26,7 @@ export function databaseConfigured() {
 export function database() {
   if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
   pool ??= new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connectionString(),
     max: 2,
     idleTimeoutMillis: 10000,
     allowExitOnIdle: true,
