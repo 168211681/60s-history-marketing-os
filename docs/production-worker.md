@@ -17,3 +17,7 @@ The workflow sends the secret only in the `Authorization` header. If GitHub
 Actions is unavailable because the account is locked or quota-limited, queued work
 is retained and another scheduler can call the protected endpoint. Never remove
 the `CRON_SECRET` check or make the endpoint public.
+
+For a one-off run, an owner can open `/scripts` and select **Run worker now**.
+This button uses the same protected worker endpoint and keeps the cron secret on
+the server. It is a fallback for testing or when the scheduled worker is delayed.
