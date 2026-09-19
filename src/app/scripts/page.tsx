@@ -17,6 +17,7 @@ function dateLabel(value: string) {
 export default async function ScriptsPage() {
   const drafts = await scriptDraftsForOwner();
   const workflows = await productionWorkflowsForOwner();
+  const hasApprovedDraft = drafts.some((draft) => draft.status === "approved");
   return (
     <>
       <PageHeading
@@ -56,7 +57,8 @@ export default async function ScriptsPage() {
           ))}
         </div>
       )}
-      {workflows.length ? <Panel title="Production workflows" description="Private rendering and upload status" action={<RunWorkerButton />}>
+      {workflows.length || hasApprovedDraft ? <Panel title="Production workflows" description="Private rendering and upload status" action={<RunWorkerButton />}>
+        {!workflows.length ? <p className="muted">An approved draft is ready. Run the worker to process the queued workflow.</p> : null}
         <div className="stack-md">{workflows.map((workflow) => <div className="workflow-row" key={workflow.id}>
           <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep} · attempt {workflow.attempts}/10</p></div>
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
