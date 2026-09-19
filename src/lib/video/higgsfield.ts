@@ -34,5 +34,25 @@ export function higgsfieldProvider(): VideoGenerationProvider {
       }
       return { externalJobId: payload.request_id };
     },
+    async status(externalJobId) {
+      if (!enabled || !keyId || !keySecret || !model) throw new Error("HIGGSFIELD_NOT_CONFIGURED");
+      if (!/^[A-Za-z0-9_-]{1,300}$/.test(externalJobId)) throw new Error("HIGGSFIELD_INVALID_JOB_ID");
+      const response = await fetch(`${HIGGSFIELD_API_URL}/requests/${encodeURIComponent(externalJobId)}/status`, {
+        headers: { Authorization: `Key ${keyId}:${keySecret}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error("HIGGSFIELD_STATUS_ERROR");
+      const payload = (await response.json()) as { status?: unknown; video?: { url?: unknown }; results?: { raw?: { url?: unknown } } };
+      if (payload.status === "completed") {
+        const artifactUrl = typeof payload.video?.url === "string" ? payload.video.url : typeof payload.results?.raw?.url === "string" ? payload.results.raw.url : null;
+        if (!artifactUrl || !/^https:\/\//.test(artifactUrl) || artifactUrl.length > 2000) throw new Error("HIGGSFIELD_INVALID_RESULT");
+        return { status: "completed", artifactUrl };
+      }
+      if (payload.status === "failed" || payload.status === "nsfw") return { status: "failed" };
+      if (payload.status === "queued") return { status: "queued" };
+      if (payload.status === "in_progress" || payload.status === "processing") return { status: "rendering" };
+      throw new Error("HIGGSFIELD_INVALID_STATUS");
+    },
   };
 }

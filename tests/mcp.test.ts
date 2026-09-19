@@ -67,3 +67,25 @@ test("Higgsfield submits an approved script as a server-side request", async () 
     if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
   }
 });
+
+test("Higgsfield status returns a validated completed artifact", async () => {
+  const originalId = process.env.HF_API_KEY_ID;
+  const originalSecret = process.env.HF_API_KEY_SECRET;
+  const originalEnabled = process.env.HIGGSFIELD_GENERATION_ENABLED;
+  process.env.HF_API_KEY_ID = "key-id";
+  process.env.HF_API_KEY_SECRET = "key-secret";
+  process.env.HIGGSFIELD_GENERATION_ENABLED = "true";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.match(String(input), /requests\/job-1\/status$/);
+    return new Response(JSON.stringify({ status: "completed", video: { url: "https://cdn.example/video.mp4" } }), { status: 200 });
+  };
+  try {
+    assert.deepEqual(await higgsfieldProvider().status("job-1"), { status: "completed", artifactUrl: "https://cdn.example/video.mp4" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalId === undefined) delete process.env.HF_API_KEY_ID; else process.env.HF_API_KEY_ID = originalId;
+    if (originalSecret === undefined) delete process.env.HF_API_KEY_SECRET; else process.env.HF_API_KEY_SECRET = originalSecret;
+    if (originalEnabled === undefined) delete process.env.HIGGSFIELD_GENERATION_ENABLED; else process.env.HIGGSFIELD_GENERATION_ENABLED = originalEnabled;
+  }
+});

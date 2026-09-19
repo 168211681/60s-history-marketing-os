@@ -49,5 +49,5 @@ inspect its state, but it cannot publish a video by itself.
 The protected `/api/cron/production-workflow` endpoint claims one queued,
 approved workflow and submits it to the configured Higgsfield provider. It
 stores the provider job ID and leaves the workflow in `rendering`; a provider
-status adapter is still required before an artifact can be uploaded to
-YouTube.
+status poll now moves completed jobs to `rendered` with a validated HTTPS
+artifact URL. YouTube upload remains a separate protected step.

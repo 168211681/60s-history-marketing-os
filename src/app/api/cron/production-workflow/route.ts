@@ -20,6 +20,7 @@ type ClaimedWorkflow = {
   script_body: string;
   scene_cues: string;
   caption_text: string;
+  provider_job_id?: string;
 };
 
 async function claimWorkflow(channelId: string) {
@@ -45,6 +46,18 @@ async function claimWorkflow(channelId: string) {
   });
 }
 
+async function renderingWorkflow(channelId: string) {
+  const result = await database().query<ClaimedWorkflow>(
+    `select w.id, w.script_draft_id, w.channel_id, w.provider_job_id
+       from public.production_workflows w
+       join public.script_drafts d on d.id = w.script_draft_id and d.status = 'approved'
+      where w.channel_id = $1 and w.status = 'rendering' and w.provider_job_id is not null
+      order by w.updated_at asc limit 1`,
+    [channelId],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function GET(request: NextRequest) {
   if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
   const owner = ownerId();
@@ -60,7 +73,31 @@ export async function GET(request: NextRequest) {
   if (!channelId) return NextResponse.json({ status: "not-connected" }, { status: 409 });
 
   const workflow = await claimWorkflow(channelId);
-  if (!workflow) return NextResponse.json({ status: "idle" });
+  if (!workflow) {
+    const pending = await renderingWorkflow(channelId);
+    if (!pending?.provider_job_id) return NextResponse.json({ status: "idle" });
+    try {
+      const current = await higgsfieldProvider().status(pending.provider_job_id);
+      if (current.status === "completed") {
+        await database().query(
+          `update public.production_workflows
+              set status = 'rendered', current_step = 'awaiting_upload', artifact_url = $2, error_code = null, updated_at = now()
+            where id = $1 and channel_id = $3 and status = 'rendering'`,
+          [pending.id, current.artifactUrl, channelId],
+        );
+      } else if (current.status === "failed") {
+        await database().query(
+          `update public.production_workflows
+              set status = 'failed', current_step = 'failed', error_code = 'PROVIDER_FAILED', updated_at = now()
+            where id = $1 and channel_id = $2 and status = 'rendering'`,
+          [pending.id, channelId],
+        );
+      }
+      return NextResponse.json({ status: current.status, workflowId: pending.id });
+    } catch (error) {
+      return NextResponse.json({ status: "poll-failed", workflowId: pending.id, code: error instanceof Error ? error.message : "POLL_FAILED" }, { status: 502 });
+    }
+  }
 
   try {
     const job = await higgsfieldProvider().submit({
