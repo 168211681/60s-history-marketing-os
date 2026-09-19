@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (!code || code.length > 2048) return NextResponse.redirect(new URL("/settings?auth=failed", origin));
 
-  const client = await serverAuth();
+  const response = NextResponse.redirect(new URL("/settings", origin));
+  const client = await serverAuth(response);
   if (!client) return NextResponse.redirect(new URL("/settings?auth=unavailable", origin));
   const { error } = await client.auth.exchangeCodeForSession(code);
   if (error) return NextResponse.redirect(new URL("/settings?auth=failed", origin));
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const { data } = await client.auth.getUser();
   if (data.user?.id.toLowerCase() !== ownerId()) {
     await client.auth.signOut();
-    return NextResponse.redirect(new URL("/settings?auth=denied", origin));
+    response.headers.set("Location", new URL("/settings?auth=denied", origin).toString());
   }
-  return NextResponse.redirect(new URL("/settings", origin));
+  return response;
 }
