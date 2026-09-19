@@ -29,3 +29,8 @@ AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or
 publishing adapter. The endpoint returns `401` when `MCP_SECRET` is missing or
 the bearer header does not match.
+
+Video generation is separate from MCP script drafting. The app accepts a
+generation request only for an `approved` draft. Higgsfield credentials and an
+approved provider API contract are still required; no generation job is claimed
+until the provider returns an external job ID.
