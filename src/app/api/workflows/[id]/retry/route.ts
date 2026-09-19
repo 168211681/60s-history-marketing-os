@@ -3,6 +3,7 @@ import { z } from "zod";
 import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { database, databaseConfigured } from "@/lib/database";
+import { recordWorkflowEvent } from "@/lib/workflows/events";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,8 @@ export async function POST(
 
   const result = await database().query<{
     id: string;
+    channel_id: string;
+    attempts: number;
     status: string;
     current_step: string;
   }>(
@@ -29,9 +32,16 @@ export async function POST(
        from public.channels c
       where w.id = $1 and w.channel_id = c.id and c.owner_id = $2
         and w.status = 'failed' and w.attempts < 10
-      returning w.id, w.status, w.current_step`,
+      returning w.id, w.channel_id, w.attempts, w.status, w.current_step`,
     [id, owner.id],
   );
   if (!result.rowCount) return NextResponse.json({ error: "Only an owned failed workflow below the retry limit can be retried" }, { status: 409 });
+  await recordWorkflowEvent({
+    workflowId: result.rows[0].id,
+    channelId: result.rows[0].channel_id,
+    attempt: result.rows[0].attempts,
+    eventType: "retry_queued",
+    status: "queued",
+  });
   return NextResponse.json({ workflow: result.rows[0] }, { headers: { "Cache-Control": "private, no-store" } });
 }

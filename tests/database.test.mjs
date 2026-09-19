@@ -135,14 +135,16 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "12",
+    "13",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "12",
+      "13",
   );
+  assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
+  assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
   assert.equal(
     sql(
       "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef",

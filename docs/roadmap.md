@@ -77,9 +77,10 @@ Acceptance criteria:
 - The owner can run the worker manually from `/scripts` when hosted scheduling is
   unavailable; scheduled execution remains optional.
 
-Remaining work: verify the configured provider with a real low-cost/free run,
-add durable retry/timeout telemetry, and verify the end-to-end artifact path on
-the deployed environment.
+Remaining work: verify the configured provider with a real low-cost/free run
+and verify the end-to-end artifact path on the deployed environment. Worker
+state transitions now write sanitized backend-only telemetry; retry limits and
+failure codes remain enforced.
 
 ## Phase 5 — private YouTube upload and human publish gate
 
@@ -93,8 +94,8 @@ Acceptance criteria:
 - The owner can review the private artifact and explicitly publish it in YouTube
   through the owner-only `/api/workflows/[id]/publish` route and Scripts UI.
 
-Remaining work: production verification with a real artifact, upload failure
-recovery, and a UI review/publish handoff.
+Remaining work: production verification with a real artifact and upload failure
+recovery. The owner-only UI review/publish handoff is implemented.
 
 ## Phase 6 — closed-loop marketing system
 

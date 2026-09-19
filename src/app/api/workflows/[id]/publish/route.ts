@@ -5,6 +5,7 @@ import { currentOwner } from "@/lib/auth/server";
 import { database, databaseConfigured } from "@/lib/database";
 import { publishVideo } from "@/lib/youtube/google";
 import { accessTokenForOwner } from "@/lib/youtube/store";
+import { recordWorkflowEvent } from "@/lib/workflows/events";
 
 export const runtime = "nodejs";
 
@@ -17,8 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid workflow id" }, { status: 400 });
 
-  const workflow = await database().query<{ id: string; channel_id: string; youtube_video_id: string | null; status: string }>(
-    `select w.id, w.channel_id, w.youtube_video_id, w.status
+  const workflow = await database().query<{ id: string; channel_id: string; youtube_video_id: string | null; status: string; attempts: number }>(
+    `select w.id, w.channel_id, w.youtube_video_id, w.status, w.attempts
        from public.production_workflows w
        join public.channels c on c.id = w.channel_id and c.owner_id = $2
       where w.id = $1 and (w.status = 'published' or (w.status = 'uploaded_private' and w.current_step = 'awaiting_publish'))`,
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         where id = $1 and channel_id = $2 and status = 'uploaded_private'`,
       [row.id, row.channel_id],
     );
+    await recordWorkflowEvent({ workflowId: row.id, channelId: row.channel_id, attempt: row.attempts, eventType: "published", status: "published" });
     return NextResponse.json({ status: "published", workflowId: row.id, youtubeVideoId: row.youtube_video_id }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "YOUTUBE_PUBLISH_FAILED";
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         where id = $1 and channel_id = $3 and status = 'uploaded_private'`,
       [row.id, code, row.channel_id],
     );
+    await recordWorkflowEvent({ workflowId: row.id, channelId: row.channel_id, attempt: row.attempts, eventType: "failed", status: "uploaded_private", errorCode: code, metadata: { stage: "publish" } });
     return NextResponse.json({ status: "uploaded_private", workflowId: row.id, code }, { status: 502 });
   }
 }

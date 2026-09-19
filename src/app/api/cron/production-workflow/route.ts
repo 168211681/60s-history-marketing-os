@@ -5,6 +5,7 @@ import { videoProvider } from "@/lib/video";
 import { uploadVideoPrivate } from "@/lib/youtube/google";
 import { accessTokenForOwner } from "@/lib/youtube/store";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { recordWorkflowEvent } from "@/lib/workflows/events";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,6 +23,7 @@ type ClaimedWorkflow = {
   script_body: string;
   scene_cues: string;
   caption_text: string;
+  attempts: number;
   provider_job_id?: string;
   artifact_url?: string;
 };
@@ -42,7 +44,7 @@ async function claimWorkflow(channelId: string) {
          from next_workflow n, public.script_drafts d
         where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved' and w.attempts < 10
        returning w.id, w.script_draft_id, w.channel_id, d.title, d.hook,
-                 d.script_body, d.scene_cues, d.caption_text`,
+                 d.script_body, d.scene_cues, d.caption_text, w.attempts`,
       [channelId],
     );
     return result.rows[0] ?? null;
@@ -51,7 +53,7 @@ async function claimWorkflow(channelId: string) {
 
 async function renderingWorkflow(channelId: string) {
   const result = await database().query<ClaimedWorkflow>(
-    `select w.id, w.script_draft_id, w.channel_id, w.provider_job_id
+    `select w.id, w.script_draft_id, w.channel_id, w.provider_job_id, w.attempts
        from public.production_workflows w
        join public.script_drafts d on d.id = w.script_draft_id and d.status = 'approved'
       where w.channel_id = $1 and w.status = 'rendering' and w.provider_job_id is not null
@@ -74,7 +76,7 @@ async function claimRenderedWorkflow(channelId: string) {
           set current_step = 'uploading_private', updated_at = now()
          from next_workflow n, public.script_drafts d
         where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved'
-       returning w.id, w.script_draft_id, w.channel_id, w.artifact_url, d.title, d.script_body`,
+      returning w.id, w.script_draft_id, w.channel_id, w.artifact_url, w.attempts, d.title, d.script_body`,
       [channelId],
     );
     return result.rows[0] ?? null;
@@ -97,6 +99,7 @@ export async function GET(request: NextRequest) {
 
   const upload = await claimRenderedWorkflow(channelId);
   if (upload?.artifact_url) {
+    await recordWorkflowEvent({ workflowId: upload.id, channelId, attempt: upload.attempts, eventType: "upload_started", status: "rendered" });
     try {
       const accessToken = await accessTokenForOwner(owner);
       if (!accessToken) throw new Error("YOUTUBE_CONNECTION_MISSING");
@@ -107,6 +110,7 @@ export async function GET(request: NextRequest) {
           where id = $1 and channel_id = $3 and current_step = 'uploading_private'`,
         [upload.id, result.youtubeVideoId, channelId],
       );
+      await recordWorkflowEvent({ workflowId: upload.id, channelId, attempt: upload.attempts, eventType: "uploaded_private", status: "uploaded_private" });
       return NextResponse.json({ status: "uploaded_private", workflowId: upload.id, youtubeVideoId: result.youtubeVideoId });
     } catch (error) {
       const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "YOUTUBE_UPLOAD_FAILED";
@@ -116,6 +120,7 @@ export async function GET(request: NextRequest) {
           where id = $1 and channel_id = $3 and current_step = 'uploading_private'`,
         [upload.id, code, channelId],
       );
+      await recordWorkflowEvent({ workflowId: upload.id, channelId, attempt: upload.attempts, eventType: "failed", status: "failed", errorCode: code, metadata: { stage: "upload" } });
       return NextResponse.json({ status: "failed", workflowId: upload.id, code }, { status: 502 });
     }
   }
@@ -126,6 +131,14 @@ export async function GET(request: NextRequest) {
     if (!pending?.provider_job_id) return NextResponse.json({ status: "idle" });
     try {
       const current = await videoProvider().status(pending.provider_job_id);
+      await recordWorkflowEvent({
+        workflowId: pending.id,
+        channelId,
+        attempt: pending.attempts,
+        eventType: "polled",
+        status: current.status === "completed" ? "rendered" : current.status === "failed" ? "failed" : "rendering",
+        metadata: { provider_status: current.status },
+      });
       if (current.status === "completed") {
         await database().query(
           `update public.production_workflows
@@ -133,6 +146,7 @@ export async function GET(request: NextRequest) {
             where id = $1 and channel_id = $3 and status = 'rendering'`,
           [pending.id, current.artifactUrl, channelId],
         );
+        await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: "rendered", status: "rendered" });
       } else if (current.status === "failed") {
         await database().query(
           `update public.production_workflows
@@ -140,14 +154,17 @@ export async function GET(request: NextRequest) {
             where id = $1 and channel_id = $2 and status = 'rendering'`,
           [pending.id, channelId],
         );
+        await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: "failed", status: "failed", errorCode: "PROVIDER_FAILED", metadata: { stage: "poll" } });
       }
       return NextResponse.json({ status: current.status, workflowId: pending.id });
     } catch (error) {
+      await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: "poll_failed", status: "rendering", metadata: { stage: "poll" } });
       return NextResponse.json({ status: "poll-failed", workflowId: pending.id, code: error instanceof Error ? error.message : "POLL_FAILED" }, { status: 502 });
     }
   }
 
   try {
+    await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "claimed", status: "rendering" });
     const provider = videoProvider();
     if (!provider.configured) throw new Error(`${provider.name.toUpperCase()}_NOT_CONFIGURED`);
     const job = await provider.submit({
@@ -165,6 +182,7 @@ export async function GET(request: NextRequest) {
           where id = $1 and channel_id = $4 and status = 'rendering'`,
         [workflow.id, job.externalJobId, job.artifactUrl, channelId],
       );
+      await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "rendered", status: "rendered", metadata: { provider: provider.name } });
       return NextResponse.json({ status: "rendered", workflowId: workflow.id });
     }
     await database().query(
@@ -173,6 +191,7 @@ export async function GET(request: NextRequest) {
         where id = $1 and channel_id = $3 and status = 'rendering'`,
       [workflow.id, job.externalJobId, channelId],
     );
+    await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "submitted", status: "rendering", metadata: { provider: provider.name } });
     return NextResponse.json({ status: "submitted", workflowId: workflow.id, providerJobId: job.externalJobId });
   } catch (error) {
     const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "PROVIDER_FAILED";
@@ -182,6 +201,7 @@ export async function GET(request: NextRequest) {
         where id = $1 and channel_id = $3 and status = 'rendering'`,
       [workflow.id, code, channelId],
     );
+    await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "failed", status: "failed", errorCode: code, metadata: { stage: "submit" } });
     return NextResponse.json({ status: "failed", workflowId: workflow.id, code }, { status: 502 });
   }
 }
