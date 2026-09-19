@@ -3,6 +3,7 @@ import { ScriptStatusActions } from "@/components/script-status-actions";
 import { productionWorkflowsForOwner, scriptDraftsForOwner } from "@/lib/data/script-drafts";
 import { ScriptDraftForm } from "@/components/script-draft-form";
 import { RunWorkerButton } from "@/components/run-worker-button";
+import { RetryWorkflowButton } from "@/components/retry-workflow-button";
 
 export const metadata = { title: "Script drafts" };
 
@@ -55,6 +56,7 @@ export default async function ScriptsPage() {
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
           {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
+          {workflow.status === "failed" ? <RetryWorkflowButton id={workflow.id} /> : null}
         </div>)}</div>
       </Panel> : null}
     </>
