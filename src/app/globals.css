@@ -67,6 +67,21 @@ h3 {
 .muted {
   color: var(--muted);
 }
+.stack-lg {
+  display: grid;
+  gap: 20px;
+}
+.draft-grid {
+  display: grid;
+  gap: 18px;
+}
+.draft-grid > div {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+}
 .app-shell {
   min-height: 100vh;
   display: grid;
