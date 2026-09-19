@@ -147,7 +147,7 @@ export async function productionWorkflows(context: OwnerContext, limit: number) 
     updated_at: string;
   }>(
     `select w.id, w.script_draft_id, d.title, w.status, w.current_step,
-            w.artifact_url, w.youtube_video_id, w.error_code,
+            w.artifact_url, w.youtube_video_id, w.provider_job_id, w.error_code,
             w.created_at, w.updated_at
        from public.production_workflows w
        join public.script_drafts d on d.id = w.script_draft_id

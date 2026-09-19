@@ -45,3 +45,9 @@ An approved draft can be placed in the owner-scoped production workflow. Its
 state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
 `published` is a separate human-approved step. MCP can queue a workflow and
 inspect its state, but it cannot publish a video by itself.
+
+The protected `/api/cron/production-workflow` endpoint claims one queued,
+approved workflow and submits it to the configured Higgsfield provider. It
+stores the provider job ID and leaves the workflow in `rendering`; a provider
+status adapter is still required before an artifact can be uploaded to
+YouTube.

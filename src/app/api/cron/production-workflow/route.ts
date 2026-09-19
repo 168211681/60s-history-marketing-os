@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from "next/server";
+import { database, databaseConfigured, transaction } from "@/lib/database";
+import { ownerId } from "@/lib/auth/config";
+import { higgsfieldProvider } from "@/lib/video/higgsfield";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+function authorized(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
+}
+
+type ClaimedWorkflow = {
+  id: string;
+  script_draft_id: string;
+  channel_id: string;
+  title: string;
+  hook: string;
+  script_body: string;
+  scene_cues: string;
+  caption_text: string;
+};
+
+async function claimWorkflow(channelId: string) {
+  return transaction(async (client) => {
+    const result = await client.query<ClaimedWorkflow>(
+      `with next_workflow as (
+         select w.id
+           from public.production_workflows w
+          where w.channel_id = $1 and w.status = 'queued'
+          order by w.created_at asc
+          for update skip locked
+          limit 1
+       )
+       update public.production_workflows w
+          set status = 'rendering', current_step = 'rendering', updated_at = now()
+         from next_workflow n, public.script_drafts d
+        where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved'
+       returning w.id, w.script_draft_id, w.channel_id, d.title, d.hook,
+                 d.script_body, d.scene_cues, d.caption_text`,
+      [channelId],
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
+export async function GET(request: NextRequest) {
+  if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
+  const owner = ownerId();
+  if (!owner || !databaseConfigured()) return new Response("Workflow is not configured", { status: 503 });
+
+  const channel = await database().query<{ id: string }>(
+    `select c.id from public.channels c
+      join private.youtube_connections yc on yc.channel_id = c.id and yc.owner_id = c.owner_id
+     where c.owner_id = $1 limit 1`,
+    [owner],
+  );
+  const channelId = channel.rows[0]?.id;
+  if (!channelId) return NextResponse.json({ status: "not-connected" }, { status: 409 });
+
+  const workflow = await claimWorkflow(channelId);
+  if (!workflow) return NextResponse.json({ status: "idle" });
+
+  try {
+    const job = await higgsfieldProvider().submit({
+      draftId: workflow.script_draft_id,
+      title: workflow.title,
+      hook: workflow.hook,
+      scriptBody: workflow.script_body,
+      sceneCues: workflow.scene_cues,
+      captionText: workflow.caption_text,
+    });
+    await database().query(
+      `update public.production_workflows
+          set provider_job_id = $2, updated_at = now()
+        where id = $1 and channel_id = $3 and status = 'rendering'`,
+      [workflow.id, job.externalJobId, channelId],
+    );
+    return NextResponse.json({ status: "submitted", workflowId: workflow.id, providerJobId: job.externalJobId });
+  } catch (error) {
+    const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "PROVIDER_FAILED";
+    await database().query(
+      `update public.production_workflows
+          set status = 'failed', current_step = 'failed', error_code = $2, updated_at = now()
+        where id = $1 and channel_id = $3 and status = 'rendering'`,
+      [workflow.id, code, channelId],
+    );
+    return NextResponse.json({ status: "failed", workflowId: workflow.id, code }, { status: 502 });
+  }
+}
