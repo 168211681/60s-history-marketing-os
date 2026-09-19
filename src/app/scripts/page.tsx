@@ -5,6 +5,7 @@ import { ScriptDraftForm } from "@/components/script-draft-form";
 import { AiScriptDraftForm } from "@/components/ai-script-draft-form";
 import { RunWorkerButton } from "@/components/run-worker-button";
 import { RetryWorkflowButton } from "@/components/retry-workflow-button";
+import { PublishWorkflowButton } from "@/components/publish-workflow-button";
 
 export const metadata = { title: "Script drafts" };
 
@@ -59,6 +60,7 @@ export default async function ScriptsPage() {
           <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep} · attempt {workflow.attempts}/10</p></div>
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
           {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
+          {workflow.status === "uploaded_private" && workflow.youtubeVideoId ? <PublishWorkflowButton id={workflow.id} /> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
           {workflow.status === "failed" && workflow.attempts < 10 ? <RetryWorkflowButton id={workflow.id} /> : workflow.status === "failed" ? <span className="error-text">Retry limit reached</span> : null}
         </div>)}</div>

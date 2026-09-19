@@ -90,7 +90,8 @@ Acceptance criteria:
 - A completed artifact uploads as `private` through the owner’s YouTube token.
 - Upload retries are idempotent and quota-aware, with clear error states.
 - No unattended public publishing exists.
-- The owner can review the artifact and explicitly publish it in YouTube.
+- The owner can review the private artifact and explicitly publish it in YouTube
+  through the owner-only `/api/workflows/[id]/publish` route and Scripts UI.
 
 Remaining work: production verification with a real artifact, upload failure
 recovery, and a UI review/publish handoff.

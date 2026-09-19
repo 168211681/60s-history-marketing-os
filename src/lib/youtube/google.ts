@@ -148,3 +148,24 @@ export async function uploadVideoPrivate(
   if (typeof payload.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(payload.id)) throw new Error("YOUTUBE_UPLOAD_RESPONSE_INVALID");
   return { youtubeVideoId: payload.id };
 }
+
+export async function publishVideo(
+  accessToken: string,
+  youtubeVideoId: string,
+  fetcher: typeof fetch = fetch,
+) {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(youtubeVideoId)) throw new Error("YOUTUBE_VIDEO_ID_INVALID");
+  const response = await fetcher("https://www.googleapis.com/youtube/v3/videos?part=status", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=UTF-8",
+    },
+    body: JSON.stringify({ id: youtubeVideoId, status: { privacyStatus: "public" } }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error("YOUTUBE_PUBLISH_FAILED");
+  const payload = (await response.json()) as { id?: unknown };
+  if (payload.id !== youtubeVideoId) throw new Error("YOUTUBE_PUBLISH_RESPONSE_INVALID");
+  return { youtubeVideoId };
+}

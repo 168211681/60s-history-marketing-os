@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { appOrigin, ownerId } from "../src/lib/auth/config";
 import { decryptToken, encryptToken, sameSecret, tokenEncryptionConfigured } from "../src/lib/youtube/crypto";
-import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, refreshAccessToken, revokeToken, uploadVideoPrivate, youtubeScopes } from "../src/lib/youtube/google";
+import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, publishVideo, refreshAccessToken, revokeToken, uploadVideoPrivate, youtubeScopes } from "../src/lib/youtube/google";
 import {
   defaultSyncPeriod,
   durationSeconds,
@@ -87,6 +87,18 @@ test("YouTube upload uses a resumable private-video session", async () => {
   }) as typeof fetch;
   assert.deepEqual(await uploadVideoPrivate("access", "https://cdn.example/video.mp4", { title: "History", description: "A short" }, fetcher), { youtubeVideoId: "youtube-video-1" });
   assert.equal(calls.length, 3);
+});
+
+test("YouTube publish requires an explicit public status update", async () => {
+  const fetcher = (async (url: URL | RequestInfo, init?: RequestInit) => {
+    assert.equal(String(url), "https://www.googleapis.com/youtube/v3/videos?part=status");
+    assert.equal(init?.method, "PUT");
+    assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer access");
+    assert.deepEqual(JSON.parse(String(init?.body)), { id: "youtube-video-1", status: { privacyStatus: "public" } });
+    return Response.json({ id: "youtube-video-1" });
+  }) as typeof fetch;
+  assert.deepEqual(await publishVideo("access", "youtube-video-1", fetcher), { youtubeVideoId: "youtube-video-1" });
+  await assert.rejects(publishVideo("access", "bad id", fetcher));
 });
 
 test("code exchange requires refresh token and complete scopes", async () => {

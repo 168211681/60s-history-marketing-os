@@ -41,7 +41,8 @@ controlled by Hugging Face; ChatGPT Plus does not cover them.
 An approved draft can be placed in the owner-scoped production workflow. Its
 state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
 `published` is a separate human-approved step. MCP can queue a workflow and
-inspect its state, but it cannot publish a video by itself.
+inspect its state, but it cannot publish a video by itself; publishing is only
+available through the signed-in owner Scripts UI.
 
 The protected `/api/cron/production-workflow` endpoint claims one queued,
 approved workflow and submits it to the configured provider. The free worker
