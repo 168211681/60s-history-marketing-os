@@ -114,6 +114,12 @@ are ignored except this example. Never commit tokens, OAuth secrets, private key
 or service-role credentials. Use local `.env.local` or encrypted hosting settings
 for later integrations; never put server secrets in `NEXT_PUBLIC_*`.
 
+When the owner connection is configured on Vercel, set `CRON_SECRET` to a long
+random server-only value. The Vercel Cron job calls `/api/cron/youtube-sync` daily
+at 03:00 UTC and imports the latest complete 28-day window. The endpoint rejects
+requests without the matching `Authorization: Bearer` secret and reuses the
+database idempotency key, so a successful window is not imported twice.
+
 Anonymous analytics routes contain fictional data only. A verified owner session can
 render private stored analytics; every reader query also constrains `owner_id`, and
 matched routes send `private, no-store`. PostgreSQL RLS protects stored analytics and
