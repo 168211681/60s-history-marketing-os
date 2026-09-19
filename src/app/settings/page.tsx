@@ -33,7 +33,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (connectionReady && user) {
     try {
       connection = await connectionForOwner(user.id);
-    } catch {
+    } catch (error) {
+      console.error("YouTube connection lookup failed", error instanceof Error ? error.message : "unknown error");
       connectionError = true;
     }
   }
