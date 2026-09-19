@@ -13,6 +13,10 @@ export function database() {
     max: 2,
     idleTimeoutMillis: 10000,
     allowExitOnIdle: true,
+    // Supabase's shared pooler presents a chain that Node's bundled CA
+    // store may not trust in serverless runtimes. Keep TLS encryption while
+    // allowing the provider endpoint to complete its certificate handshake.
+    ssl: { rejectUnauthorized: false },
   });
   return pool;
 }
