@@ -41,9 +41,9 @@ credentials.
 
 ## Uploaded images and narration
 
-With `VIDEO_PROVIDER=public-domain`, the worker uses up to three owner-uploaded
-images from the Scripts page before searching Wikimedia Commons for any missing
-scenes. To require narration, set `VIDEO_REQUIRE_VOICE=true`, keep `HF_TOKEN`
+With `VIDEO_PROVIDER=public-domain`, the worker requires owner-uploaded images
+from the Scripts page and repeats an image when fewer than three are available;
+it does not substitute images from another source. To require narration, set `VIDEO_REQUIRE_VOICE=true`, keep `HF_TOKEN`
 server-only, and set `HF_TTS_MODEL` to a supported Hugging Face text-to-speech
 model. If voice settings are missing, the worker leaves narration disabled and
 renders the image-only MVP rather than claiming that audio was generated.

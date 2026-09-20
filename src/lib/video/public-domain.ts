@@ -5,57 +5,22 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import { storeVideoArtifact } from "./artifacts";
-import type { VideoGenerationProvider, VideoGenerationRequest } from "./provider";
+import type { VideoGenerationProvider } from "./provider";
 import { voiceProvider } from "./voice";
 
 const execFileAsync = promisify(execFile);
-const WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php";
 const IMAGE_COUNT = 3;
 const MIN_IMAGE_SECONDS = 4;
 const MAX_IMAGE_SECONDS = 20;
 
 type WikimediaImage = { url: string; originalUrl: string; title: string; license: string };
 
-function searchTerms(request: VideoGenerationRequest) {
-  return `${request.title} ${request.sceneCues}`.replace(/[\n\r]+/g, " ").trim().slice(0, 180) || "history";
-}
-
-async function searchFreeImages(query: string): Promise<WikimediaImage[]> {
-  const params = new URLSearchParams({
-    action: "query", format: "json", origin: "*", generator: "search",
-    gsrsearch: query, gsrnamespace: "6", gsrlimit: "20", prop: "imageinfo",
-    iiprop: "url|mime|extmetadata", iiurlwidth: "720",
-  });
-  const response = await fetch(`${WIKIMEDIA_API}?${params}`, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(12_000) });
-  if (!response.ok) throw new Error("PUBLIC_DOMAIN_SEARCH_FAILED");
-  const payload = (await response.json()) as { query?: { pages?: Record<string, { title?: string; imageinfo?: Array<{ thumburl?: string; url?: string; mime?: string; extmetadata?: { LicenseShortName?: { value?: string } } }> }> } };
-  return Object.values(payload.query?.pages ?? {}).flatMap((page) => {
-    const info = page.imageinfo?.[0];
-    const url = info?.thumburl ?? info?.url;
-    const license = info?.extmetadata?.LicenseShortName?.value?.trim() ?? "";
-    if (!url || !/^https:\/\//.test(url) || !info?.mime?.startsWith("image/") || !/(public domain|cc0|cc by|cc-by|cc by-sa|cc-by-sa)/i.test(license)) return [];
-    return [{ url, originalUrl: info.url ?? url, title: page.title ?? "Wikimedia Commons image", license }];
-  });
-}
-
-async function findFreeImages(request: VideoGenerationRequest): Promise<WikimediaImage[]> {
-  const queries = [searchTerms(request), "ancient computer", "history archive", "public domain history"];
-  const images: WikimediaImage[] = [];
-  for (const query of queries) {
-    const results = await searchFreeImages(query);
-    for (const image of results) {
-      if (!images.some((existing) => existing.originalUrl === image.originalUrl)) images.push(image);
-      if (images.length === IMAGE_COUNT) return images;
-    }
-  }
-  throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
-}
-
-async function downloadImage(image: Pick<WikimediaImage, "url" | "originalUrl" | "title">, path: string) {
+async function downloadImage(image: Pick<WikimediaImage, "url" | "originalUrl" | "title" | "license">, path: string) {
   let lastError = "PUBLIC_DOMAIN_IMAGE_DOWNLOAD_FAILED";
   const fileName = image.title.replace(/^File:/i, "");
   const specialFilePath = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=960`;
-  for (const url of [image.url, image.originalUrl, specialFilePath]) {
+  const urls = image.license === "Owner uploaded" ? [image.url] : [image.url, image.originalUrl, specialFilePath];
+  for (const url of urls) {
     try {
       const response = await fetch(url, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(15_000) });
       if (!response.ok) { lastError = `PUBLIC_DOMAIN_IMAGE_HTTP_${response.status}`; continue; }
@@ -90,13 +55,8 @@ export function publicDomainProvider(): VideoGenerationProvider {
     async submit(request) {
       const uploaded = (request.imageAssets ?? []).filter((asset) => /^https:\/\//.test(asset.url)).slice(0, IMAGE_COUNT)
         .map((asset) => ({ url: asset.url, originalUrl: asset.url, title: asset.path, license: "Owner uploaded" }));
-      const images = [...uploaded];
-      if (images.length < IMAGE_COUNT) {
-        for (const image of await findFreeImages(request)) {
-          if (!images.some((existing) => existing.originalUrl === image.originalUrl)) images.push(image);
-          if (images.length === IMAGE_COUNT) break;
-        }
-      }
+      if (!uploaded.length) throw new Error("IMAGE_ASSETS_REQUIRED");
+      const images = Array.from({ length: IMAGE_COUNT }, (_, index) => uploaded[index % uploaded.length]);
       const workdir = await mkdtemp(join(tmpdir(), "marketing-os-images-"));
       try {
         await mkdir(workdir, { recursive: true });
@@ -111,7 +71,7 @@ export function publicDomainProvider(): VideoGenerationProvider {
           }
           if (downloaded.length === IMAGE_COUNT) break;
         }
-        if (downloaded.length < IMAGE_COUNT) throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
+        if (downloaded.length < IMAGE_COUNT) throw new Error("UPLOADED_IMAGE_DOWNLOAD_FAILED");
         const paths = downloaded.map((item) => item.path);
         const voice = voiceProvider();
         const narration = `${request.scriptBody}\n\n${request.captionText}`.trim();
