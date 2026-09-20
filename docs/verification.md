@@ -98,7 +98,7 @@ local IPC socket (`EPERM`); the unrestricted rerun passed.
 
 The connection branch was verified with Node.js 22.23.2. Lint and typecheck
 passed. Twelve unit tests passed, including OAuth state/PKCE construction,
-read-only scopes, encrypted refresh-token round trips, tamper rejection, token
+read-only plus upload scopes, encrypted refresh-token round trips, tamper rejection, token
 POST bodies and provider-response validation. Nineteen disposable PostgreSQL
 tests passed, including private connection access and owner/channel binding.
 
@@ -148,3 +148,52 @@ server-rendered routes, and the 28 browser tests passed again.
 No hosted Supabase session or real synced channel was available for browser testing.
 The private owner UI path is covered at the reader/model boundary; a cloud integration
 test remains required before claiming production access or live-data verification.
+
+## Experiment review workflow verification — 2026-09-20
+
+The MCP-first experiment workflow now includes an owner-scoped `/experiments` review
+page and a validated result endpoint. The page separates an empty experiment list
+from a database error, displays observed metrics separately from recommendations,
+and allows a reviewed owner to record a result without granting browser access to
+private experiment tables. The endpoint validates status transitions, non-negative
+finite metrics, same-channel video references, and the fixed application origin.
+It also refuses updates to experiments already marked `completed` or `cancelled`,
+preserving the experiment log as an audit record. The same guard is enforced by
+the `record_experiment_result` MCP tool so the alternate interface cannot bypass
+the review history.
+
+Local verification after the workflow changes passed:
+
+- `npm run lint`
+- `npm run typecheck`
+- `npm test` — 46 tests passed
+- `npm run test:db` — 22 tests passed, including indexes for nullable experiment FKs
+- `npm run build` — production build passed and emitted `/experiments` and its API
+- targeted Playwright `/experiments` check — 3 passed across desktop Chromium,
+  iPhone-sized Chromium, and iPhone WebKit
+- `npm run verify:local` — complete release suite passed, including 34 browser
+  tests with 2 intentional mobile keyboard skips
+- `npm audit --omit=dev` — 0 production dependency vulnerabilities
+- `git diff --check`
+
+After deployment, run `DEPLOYMENT_URL=https://example.vercel.app npm run
+verify:deployment`. The smoke checker validates every owner-facing page, the
+anonymous image-assets response, application-error markers, and the required
+security headers. It must pass against the deployed commit before the phase is
+promoted.
+
+The checker was executed against the local production server at
+`http://127.0.0.1:3000` and passed.
+
+The remaining evidence is an authenticated hosted test using the real owner’s
+channel data. It must be completed before Phase 6 starts. No commit, push, or new
+deployment is claimed by this verification entry.
+
+The currently reachable Vercel deployment was also checked for `/experiments` and
+returned HTTP 404 with `x-matched-path: /_not-found`. This confirms that the
+working-tree changes have not reached the hosted deployment yet; production
+verification remains pending a reviewed commit and deployment.
+
+A tracked-file secret-pattern scan found only empty variable declarations in
+`.env.example`; no API key, private key, service-role value, or cron secret was
+present in the worktree.

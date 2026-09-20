@@ -275,10 +275,11 @@ export async function recordContentExperimentResult(
             observed_average_view_duration_seconds = $9,
             observed_likes = $10,
             observed_comments = $11,
-            started_at = coalesce(e.started_at, case when $3 = 'running' then now() else e.started_at end),
+            started_at = coalesce(e.started_at, case when $3 in ('running', 'completed') then now() else e.started_at end),
             completed_at = case when $3 = 'completed' then now() else null end,
             updated_at = now()
       where e.id = $1 and e.channel_id = $2
+        and e.status in ('planned', 'running')
         and ($6::uuid is null or exists (select 1 from public.videos v where v.id = $6 and v.channel_id = e.channel_id))
       returning id, topic, hook_format, hypothesis, status, result_summary, recommendation,
         observed_views, observed_minutes_watched, observed_average_view_duration_seconds,

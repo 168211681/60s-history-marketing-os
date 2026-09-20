@@ -12,7 +12,9 @@ values are configured. Never commit a populated `.env.local` file.
 
 ## Supabase
 
-1. Apply both files in `supabase/migrations/` to a new or reviewed project.
+1. Apply every file in `supabase/migrations/` in filename order to a new or
+   reviewed project. The repository includes the base schema plus the content
+   experiment index migration; do not copy only a subset.
 2. Enable Google as a Supabase Auth provider. Add the Supabase callback URL shown
    in provider settings to the Google client's authorized redirect URIs.
 3. Set the Supabase Site URL and redirect allow list. Add
@@ -49,9 +51,11 @@ Create a separate OAuth Web client for the channel connection. Add
 `${APP_ORIGIN}/api/youtube/callback` as an authorized redirect URI. Set its client
 ID and secret as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
-The application requests only `youtube.readonly` and `yt-analytics.readonly`. It
-uses OAuth state, PKCE, an owner-bound ten-minute HttpOnly cookie, offline access,
-and explicit consent. Google may require app verification outside configured test users.
+The application requests `youtube.readonly`, `yt-analytics.readonly`, and
+`youtube.upload`. The upload scope is required only for the owner-approved private
+artifact handoff; public publishing remains a separate explicit action. OAuth uses
+state, PKCE, an owner-bound ten-minute HttpOnly cookie, offline access, and explicit
+consent. Google may require app verification outside configured test users.
 
 ## Server secrets
 

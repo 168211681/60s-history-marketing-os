@@ -4,21 +4,22 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 
 type Asset = { path: string; url: string; contentType: string | null; size: number | null; createdAt: string | null };
+type AssetLoad = { assets: Asset[]; authenticated?: boolean };
 
 export function ImageAssetUploader() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function load(): Promise<Asset[]> {
+  async function load(): Promise<AssetLoad> {
     const response = await fetch("/api/media/images", { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) throw new Error("Could not load image assets");
-    return ((await response.json()) as { assets: Asset[] }).assets;
+    return (await response.json()) as AssetLoad;
   }
 
   useEffect(() => {
     void load()
-      .then(setAssets)
+      .then((payload) => { setAssets(payload.assets); if (payload.authenticated === false) setMessage("Sign in to manage private image assets."); })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Could not load image assets"));
   }, []);
 
@@ -28,10 +29,11 @@ export function ImageAssetUploader() {
       for (let index = 0; index < files.length; index += 1) {
         const body = new FormData(); body.set("file", files[index]);
         const response = await fetch("/api/media/images", { method: "POST", body, credentials: "same-origin" });
+        if (response.status === 401) throw new Error("Sign in to upload private image assets.");
         if (!response.ok) throw new Error(await response.text());
         setMessage(`Uploading ${index + 1}/${files.length}…`);
       }
-      setAssets(await load()); setMessage(`${files.length} image${files.length === 1 ? "" : "s"} uploaded.`);
+      setAssets((await load()).assets); setMessage(`${files.length} image${files.length === 1 ? "" : "s"} uploaded.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Image upload failed"); }
     finally { setBusy(false); }
   }

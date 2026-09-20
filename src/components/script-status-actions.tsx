@@ -17,7 +17,7 @@ export function ScriptStatusActions({ id, status }: { id: string; status: Script
     } catch (value) { setError(value instanceof Error ? value.message : "Could not start workflow"); }
     finally { setBusy(false); }
   }
-  if (current === "approved") return <div className="script-actions"><button className="button" type="button" onClick={startWorkflow} disabled={busy}>{busy ? "Starting…" : "Start production"}</button>{error ? <span className="muted" role="status">{error}</span> : null}</div>;
+  if (current === "approved") return <div className="script-actions"><button className="button" type="button" onClick={startWorkflow} disabled={busy}>{busy ? "Starting…" : "Start experimental production"}</button>{error ? <span className="muted" role="status">{error}</span> : null}</div>;
   if (!next) return null;
   const target = next;
 

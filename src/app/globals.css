@@ -580,6 +580,34 @@ select {
   font: inherit;
   width: 100%;
 }
+textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid #acbbb1;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+  resize: vertical;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.form-grid label,
+.stack-md > label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .result-count {
   margin: 18px 0;
 }

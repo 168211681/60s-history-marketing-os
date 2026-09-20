@@ -171,6 +171,18 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     );
   }
 });
+
+test("content experiment foreign keys have supporting indexes", () => {
+  assert.equal(
+    sql(`select count(*) from pg_indexes where schemaname = 'public' and indexname in (
+      'content_experiments_content_idea_idx',
+      'content_experiments_script_draft_idx',
+      'content_experiments_video_idx'
+    )`),
+    "3",
+  );
+});
+
 for (const table of tables) {
   test(`${table}: each owner reads only their own row; missing identity reads none`, () => {
     assert.equal(

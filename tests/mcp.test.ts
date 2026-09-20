@@ -8,6 +8,7 @@ import { videoProvider } from "../src/lib/video";
 import { storeVideoArtifact } from "../src/lib/video/artifacts";
 import { summarize } from "../src/lib/analytics";
 import { contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
+import { nextExperimentMessage, type ContentExperimentRecord } from "../src/lib/data/experiments";
 import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
 
 test("MCP authorization requires the configured bearer secret", () => {
@@ -39,6 +40,12 @@ test("content generation prompt is copyable and labels analytics as evidence", (
   assert.match(result.prompt, /evidence only/);
   assert.match(result.prompt, /complete spoken script for about 60 seconds/);
   assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
+});
+
+test("experiment recommendation keeps active tests focused", () => {
+  const active = { topic: "Ancient navigation", status: "planned" } as ContentExperimentRecord;
+  assert.match(nextExperimentMessage([active]), /Finish the planned experiment/);
+  assert.match(nextExperimentMessage([]), /Plan a new comparable hook experiment/);
 });
 
 test("script approval follows the human review sequence", () => {

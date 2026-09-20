@@ -61,6 +61,8 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/analytics.ts`: pure, tested metric calculations, filtering and sorting.
 - `tests/`: unit tests and browser acceptance tests.
 - `npm run verify:local`: lint, types, unit, database, build and browser checks.
+- `npm run verify:deployment`: smoke-check a deployed URL's pages, API response
+  and security headers (`DEPLOYMENT_URL=...`).
 - `supabase/migrations/`: database schema, explicit grants and owner-scoped RLS.
 - `tests/database.test.mjs`: isolated PostgreSQL integration tests (no cloud credentials).
 - `src/lib/data/analytics-contract.ts` and `postgres-reader.ts`: owner-bound read
@@ -98,6 +100,12 @@ dependencies and native PostgreSQL 15+ tools first. On Ubuntu:
 sudo apt-get install postgresql postgresql-contrib
 npx playwright install --with-deps chromium webkit
 npm run verify:local
+```
+
+After a deployment, verify the hosted commit separately:
+
+```sh
+DEPLOYMENT_URL=https://your-deployment.example npm run verify:deployment
 ```
 
 Run as a regular user, not root. You can also run each `lint`, `typecheck`,

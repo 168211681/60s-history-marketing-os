@@ -26,6 +26,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `private.production_workflow_events` | Sanitized production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
+| `public.content_experiments` | Owner-scoped hypothesis, draft/video links, observed metrics and result recommendation | Read owned channel experiments |
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
 `updated_at` is maintained by a security-invoker trigger in `private`; no
@@ -36,9 +37,10 @@ from changing idea IDs, channel IDs or timestamps. Every update policy has both
 All channel rows ultimately belong to `channels.owner_id`. A composite FK on
 `video_metrics(video_id, channel_id)` prevents attaching one channel's video to
 another channel's metrics, even from a privileged writer. Owner/channel lookup
-columns and date/order queries have indexes. Daily metric primary keys and job
-unique keys support idempotent writes. The manual server sync claims, retries and
-completes these jobs without exposing them to clients.
+columns, experiment reference columns, and date/order queries have indexes. Daily
+metric primary keys and job unique keys support idempotent writes. The manual
+server sync claims, retries and completes these jobs without exposing them to
+clients.
 
 `anon` has no table privileges. `authenticated` has only the operations in the
 table above; all backend-owned rows are read-only. Grants are explicitly reset so
@@ -95,11 +97,12 @@ The test-only bootstrap supplies minimal `auth.users` and `auth.uid()` contracts
 files simulate the role/identity boundary for database tests, not JWT verification
 or the Supabase Auth service. SQL tests do not certify PostgREST/GraphQL behavior.
 
-Coverage includes fresh migration application, thirteen RLS-protected tables,
+Coverage includes fresh migration application, fourteen RLS-protected tables,
 legacy-grant removal, two-owner isolation, missing identity, anonymous denial,
 read-only analytics, owner idea CRUD, cross-owner mutation denial, private jobs,
 cross-channel FK integrity, sync job acquisition/transactional upserts, nullable metrics, invalid values,
-insight provenance, workflow telemetry grants and account deletion isolation.
+insight provenance, content experiment ownership/indexes, workflow telemetry
+grants and account deletion isolation.
 
 ## Applying to Supabase later
 

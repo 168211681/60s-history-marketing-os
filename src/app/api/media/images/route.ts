@@ -6,7 +6,9 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const owner = await currentOwner();
-  if (!owner) return new Response("Unauthorized", { status: 401 });
+  // Listing an empty collection for anonymous users keeps the public scripts
+  // page honest without exposing private assets; writes remain authenticated.
+  if (!owner) return NextResponse.json({ assets: [], authenticated: false }, { headers: { "Cache-Control": "private, no-store" } });
   try {
     return NextResponse.json({ assets: await listImageAssets(owner.id) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
