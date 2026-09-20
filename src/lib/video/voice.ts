@@ -29,18 +29,24 @@ function geminiVoiceProvider(): VoiceProvider {
       if (!apiKey || !model || !voice) throw new Error("VOICE_NOT_CONFIGURED");
       const value = text.trim().slice(0, 12000);
       if (!value) throw new Error("VOICE_TEXT_REQUIRED");
-      const timeoutMs = Math.max(5_000, Math.min(15_000, Number(process.env.GEMINI_TTS_TIMEOUT_MS ?? 10_000)));
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: value }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!response.ok) throw new Error(`GEMINI_TTS_HTTP_${response.status}`);
-      const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }> };
-      const inlineData = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
-      if (!inlineData?.data) throw new Error("GEMINI_TTS_EMPTY_OUTPUT");
-      const sampleRate = Number(inlineData.mimeType?.match(/rate=(\d+)/i)?.[1] ?? 24000);
-      return { bytes: pcmToWav(new Uint8Array(Buffer.from(inlineData.data, "base64")), sampleRate), contentType: "audio/wav" };
+      try {
+        const timeoutMs = Math.max(5_000, Math.min(10_000, Number(process.env.GEMINI_TTS_TIMEOUT_MS ?? 8_000)));
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: value }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) throw new Error(`GEMINI_TTS_HTTP_${response.status}`);
+        const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }> };
+        const inlineData = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
+        if (!inlineData?.data) throw new Error("GEMINI_TTS_EMPTY_OUTPUT");
+        const sampleRate = Number(inlineData.mimeType?.match(/rate=(\d+)/i)?.[1] ?? 24000);
+        return { bytes: pcmToWav(new Uint8Array(Buffer.from(inlineData.data, "base64")), sampleRate), contentType: "audio/wav" };
+      } catch (error) {
+        if (!process.env.HF_TOKEN) throw error;
+        console.warn("Gemini TTS unavailable; using Hugging Face voice fallback", { error: error instanceof Error ? error.name : "unknown" });
+        return huggingFaceVoiceProvider().synthesize(value);
+      }
     },
   };
 }
@@ -54,7 +60,7 @@ function huggingFaceVoiceProvider(): VoiceProvider {
       if (!token || !model) throw new Error("VOICE_NOT_CONFIGURED");
       const value = text.trim().slice(0, 12000);
       if (!value) throw new Error("VOICE_TEXT_REQUIRED");
-      const audio = await new InferenceClient(token).textToSpeech({ model, inputs: value }, { signal: AbortSignal.timeout(57_000) });
+      const audio = await new InferenceClient(token).textToSpeech({ model, inputs: value }, { signal: AbortSignal.timeout(15_000) });
       return { bytes: new Uint8Array(await audio.arrayBuffer()), contentType: audio.type || "audio/wav" };
     },
   };
