@@ -7,12 +7,12 @@ export type VideoGenerationRequest = {
   captionText: string;
 };
 
-export type VideoProviderName = "higgsfield" | "huggingface" | "fal" | "replicate" | "runway";
+export type VideoProviderName = "higgsfield" | "huggingface" | "public-domain" | "fal" | "replicate" | "runway";
 
 export type VideoGenerationProvider = {
   name: VideoProviderName;
   configured: boolean;
-  submit(request: VideoGenerationRequest): Promise<{ externalJobId: string; artifactUrl?: string }>;
+  submit(request: VideoGenerationRequest): Promise<{ externalJobId: string; artifactUrl?: string; sourceAttribution?: string }>;
   status(externalJobId: string): Promise<{ status: "queued" | "rendering" | "completed" | "failed"; artifactUrl?: string }>;
 };
 

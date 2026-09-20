@@ -225,7 +225,14 @@ export async function GET(request: NextRequest) {
           where id = $1 and channel_id = $4 and status = 'rendering'`,
         [workflow.id, job.externalJobId, storedArtifact.artifactUrl, channelId],
       );
-      await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "rendered", status: "rendered", metadata: { provider: provider.name } });
+      await recordWorkflowEvent({
+        workflowId: workflow.id,
+        channelId,
+        attempt: workflow.attempts,
+        eventType: "rendered",
+        status: "rendered",
+        metadata: { provider: provider.name, source_attribution: job.sourceAttribution ?? "" },
+      });
       return NextResponse.json({ status: "rendered", workflowId: workflow.id });
     }
     await database().query(
