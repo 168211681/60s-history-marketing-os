@@ -18,35 +18,35 @@ function searchTerms(request: VideoGenerationRequest) {
   return `${request.title} ${request.sceneCues}`.replace(/[\n\r]+/g, " ").trim().slice(0, 180) || "history";
 }
 
-async function findFreeImages(request: VideoGenerationRequest): Promise<WikimediaImage[]> {
+async function searchFreeImages(query: string): Promise<WikimediaImage[]> {
   const params = new URLSearchParams({
-    action: "query",
-    format: "json",
-    origin: "*",
-    generator: "search",
-    gsrsearch: `${searchTerms(request)} filetype:bitmap`,
-    gsrnamespace: "6",
-    gsrlimit: "12",
-    prop: "imageinfo",
-    iiprop: "url|extmetadata",
-    iiurlwidth: "720",
+    action: "query", format: "json", origin: "*", generator: "search",
+    gsrsearch: query, gsrnamespace: "6", gsrlimit: "20", prop: "imageinfo",
+    iiprop: "url|mime|extmetadata", iiurlwidth: "720",
   });
   const response = await fetch(`${WIKIMEDIA_API}?${params}`, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(12_000) });
   if (!response.ok) throw new Error("PUBLIC_DOMAIN_SEARCH_FAILED");
-  const payload = (await response.json()) as { query?: { pages?: Record<string, { title?: string; imageinfo?: Array<{ thumburl?: string; url?: string; extmetadata?: { LicenseShortName?: { value?: string } } }> }> } };
-  const pages = Object.values(payload.query?.pages ?? {});
-  const images: WikimediaImage[] = [];
-  for (const page of pages) {
+  const payload = (await response.json()) as { query?: { pages?: Record<string, { title?: string; imageinfo?: Array<{ thumburl?: string; url?: string; mime?: string; extmetadata?: { LicenseShortName?: { value?: string } } }> }> } };
+  return Object.values(payload.query?.pages ?? {}).flatMap((page) => {
     const info = page.imageinfo?.[0];
     const url = info?.thumburl ?? info?.url;
     const license = info?.extmetadata?.LicenseShortName?.value?.trim() ?? "";
-    if (!url || !/^https:\/\//.test(url) || !license) continue;
-    if (!/(public domain|cc0|cc by|cc-by|cc by-sa|cc-by-sa)/i.test(license)) continue;
-    images.push({ url, title: page.title ?? "Wikimedia Commons image", license });
-    if (images.length === IMAGE_COUNT) break;
+    if (!url || !/^https:\/\//.test(url) || !info?.mime?.startsWith("image/") || !/(public domain|cc0|cc by|cc-by|cc by-sa|cc-by-sa)/i.test(license)) return [];
+    return [{ url, title: page.title ?? "Wikimedia Commons image", license }];
+  });
+}
+
+async function findFreeImages(request: VideoGenerationRequest): Promise<WikimediaImage[]> {
+  const queries = [searchTerms(request), "ancient computer", "history archive", "public domain history"];
+  const images: WikimediaImage[] = [];
+  for (const query of queries) {
+    const results = await searchFreeImages(query);
+    for (const image of results) {
+      if (!images.some((existing) => existing.url === image.url)) images.push(image);
+      if (images.length === IMAGE_COUNT) return images;
+    }
   }
-  if (images.length < IMAGE_COUNT) throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
-  return images;
+  throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
 }
 
 async function downloadImage(url: string, path: string) {
