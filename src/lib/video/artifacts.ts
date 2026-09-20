@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 function storageConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().replace(/^(['"])(.*)\1$/, "$2");
   const bucket = process.env.VIDEO_ARTIFACT_BUCKET ?? "video-artifacts";
   if (!url || !serviceKey || !bucket) throw new Error("VIDEO_ARTIFACT_STORAGE_NOT_CONFIGURED");
   return { url: url.replace(/\/$/, ""), serviceKey, bucket };

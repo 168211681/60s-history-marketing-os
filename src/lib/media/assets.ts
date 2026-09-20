@@ -5,7 +5,7 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/g
 
 function config() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().replace(/^(['"])(.*)\1$/, "$2");
   const bucket = process.env.IMAGE_ASSET_BUCKET ?? "image-assets";
   if (!url || !key) throw new Error("IMAGE_ASSET_STORAGE_NOT_CONFIGURED");
   return { url, key, bucket };
