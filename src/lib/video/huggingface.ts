@@ -15,7 +15,7 @@ export function huggingfaceProvider(): VideoGenerationProvider {
       if (!token || !model || !provider) throw new Error("HUGGINGFACE_NOT_CONFIGURED");
       const client = new InferenceClient(token);
       const prompt = `${request.title}\n\nHook: ${request.hook}\n\n${request.scriptBody}\n\nScene cues: ${request.sceneCues}`.slice(0, 12000);
-      const video = await client.textToVideo({ model, provider, inputs: prompt }, { signal: AbortSignal.timeout(50_000) });
+      const video = await client.textToVideo({ model, provider, inputs: prompt }, { signal: AbortSignal.timeout(57_000) });
       const bytes = new Uint8Array(await video.arrayBuffer());
       const stored = await storeVideoArtifact(bytes, video.type || "video/mp4");
       return { externalJobId: stored.path, artifactUrl: stored.artifactUrl };

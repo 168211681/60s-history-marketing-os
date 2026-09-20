@@ -238,7 +238,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "submitted", workflowId: workflow.id, providerJobId: job.externalJobId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    const code = error instanceof Error && error.name === "ProviderOutputError"
+    const code = error instanceof Error && error.name === "TimeoutError"
+      ? "PROVIDER_TIMEOUT"
+      : error instanceof Error && error.name === "ProviderOutputError"
       ? "PROVIDER_OUTPUT_ERROR"
       : message.match(/\b[A-Z][A-Z0-9_]{3,}\b/)?.[0] ?? "PROVIDER_FAILED";
     console.error("production workflow provider failed", {
