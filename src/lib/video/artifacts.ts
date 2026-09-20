@@ -23,7 +23,11 @@ export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video
     body: Buffer.from(bytes),
     signal: AbortSignal.timeout(30_000),
   });
-  if (!upload.ok) throw new Error("VIDEO_ARTIFACT_UPLOAD_FAILED");
+  if (!upload.ok) {
+    const detail = (await upload.text()).slice(0, 500);
+    console.error("video artifact upload rejected", { status: upload.status, detail });
+    throw new Error("VIDEO_ARTIFACT_UPLOAD_FAILED");
+  }
 
   const signed = await fetcher(`${config.url}/storage/v1/object/sign/${config.bucket}/${path}`, {
     method: "POST",
@@ -35,7 +39,11 @@ export async function storeVideoArtifact(bytes: Uint8Array, contentType = "video
     body: JSON.stringify({ expiresIn: 3600 }),
     signal: AbortSignal.timeout(10_000),
   });
-  if (!signed.ok) throw new Error("VIDEO_ARTIFACT_SIGN_FAILED");
+  if (!signed.ok) {
+    const detail = (await signed.text()).slice(0, 500);
+    console.error("video artifact signing rejected", { status: signed.status, detail });
+    throw new Error("VIDEO_ARTIFACT_SIGN_FAILED");
+  }
   const payload = (await signed.json()) as { signedURL?: unknown; signedUrl?: unknown };
   const signedPath = typeof payload.signedURL === "string" ? payload.signedURL : typeof payload.signedUrl === "string" ? payload.signedUrl : null;
   if (!signedPath) throw new Error("VIDEO_ARTIFACT_INVALID_SIGNED_URL");
