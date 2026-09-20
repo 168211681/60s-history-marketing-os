@@ -238,13 +238,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "submitted", workflowId: workflow.id, providerJobId: job.externalJobId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    const code = message.match(/[A-Z][A-Z0-9_]{2,}/)?.[0] ?? "PROVIDER_FAILED";
+    const code = error instanceof Error && error.name === "ProviderOutputError"
+      ? "PROVIDER_OUTPUT_ERROR"
+      : message.match(/\b[A-Z][A-Z0-9_]{3,}\b/)?.[0] ?? "PROVIDER_FAILED";
     console.error("production workflow provider failed", {
       workflowId: workflow.id,
       provider: providerName,
       configured: providerConfigured,
       code,
       errorName: error instanceof Error ? error.name : typeof error,
+      message: message.slice(0, 500),
     });
     await database().query(
       `update public.production_workflows
