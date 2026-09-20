@@ -73,18 +73,26 @@ export type ProductionWorkflow = {
 export async function productionWorkflowsForOwner(): Promise<readonly ProductionWorkflow[]> {
   const owner = await currentOwner();
   if (!owner || !databaseConfigured()) return [];
-  const result = await database().query<{
-    id: string; script_draft_id: string; title: string; status: string;
-    current_step: string; attempts: number; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
-  }>(
-    `select w.id, w.script_draft_id, d.title, w.status, w.current_step, w.attempts,
+  const query = `select w.id, w.script_draft_id, d.title, w.status, w.current_step, w.attempts,
             w.youtube_video_id, w.error_code, w.updated_at
        from public.production_workflows w
        join public.script_drafts d on d.id = w.script_draft_id
        join public.channels c on c.id = w.channel_id and c.owner_id = $1
-      order by w.updated_at desc limit 20`,
-    [owner.id],
-  );
+      order by w.updated_at desc limit 20`;
+  let result;
+  try {
+    result = await database().query<{
+      id: string; script_draft_id: string; title: string; status: string;
+      current_step: string; attempts: number; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
+    }>(query, [owner.id]);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("column w.attempts does not exist")) throw error;
+    console.error("production workflow attempts column is missing; using compatibility fallback");
+    result = await database().query<{
+      id: string; script_draft_id: string; title: string; status: string;
+      current_step: string; attempts: number; youtube_video_id: string | null; error_code: string | null; updated_at: Date;
+    }>(query.replace("w.attempts", "0::int as attempts"), [owner.id]);
+  }
   return result.rows.map((row) => ({
     id: row.id, scriptDraftId: row.script_draft_id, title: row.title, status: row.status,
     currentStep: row.current_step, attempts: row.attempts, youtubeVideoId: row.youtube_video_id,
