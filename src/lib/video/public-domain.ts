@@ -44,7 +44,7 @@ async function renderSlideshow(images: string[], outputPath: string, audioPath: 
   const concat = `${images.map((_, index) => `[v${index}]`).join("")}concat=n=${images.length}:v=1:a=0[outv]`;
   const audioArgs = audioPath ? ["-i", audioPath] : [];
   const audioMap = audioPath ? ["-map", `${images.length}:a:0`, "-c:a", "aac", "-b:a", "128k", "-shortest"] : [];
-  const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(imageSeconds), "-i", image]), ...audioArgs, "-filter_complex", `${filters};${concat}`, "-map", "[outv]", ...audioMap, "-r", "30", "-c:v", "libx264", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
+  const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(imageSeconds), "-i", image]), ...audioArgs, "-filter_complex", `${filters};${concat}`, "-map", "[outv]", ...audioMap, "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
   try {
     await execFileAsync(ffmpegPath, args, { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 });
   } catch (error) {

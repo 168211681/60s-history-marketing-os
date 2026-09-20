@@ -4,6 +4,7 @@ import { databaseConfigured } from "@/lib/database";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   if (!await currentOwner()) return new Response("Unauthorized", { status: 401 });
