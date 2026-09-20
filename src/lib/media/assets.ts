@@ -3,6 +3,14 @@ import { randomUUID } from "node:crypto";
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
+export function decodeImageBase64(value: string) {
+  const encoded = value.startsWith("data:") ? value.split(",", 2)[1] ?? "" : value;
+  if (!encoded || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) throw new Error("IMAGE_ASSET_INVALID_BASE64");
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES || bytes.toString("base64") !== encoded) throw new Error("IMAGE_ASSET_INVALID_BASE64");
+  return new Uint8Array(bytes);
+}
+
 function config() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().replace(/^(['"])(.*)\1$/, "$2");
