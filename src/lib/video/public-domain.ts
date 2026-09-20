@@ -22,7 +22,7 @@ async function downloadImage(image: Pick<WikimediaImage, "url" | "originalUrl" |
   const urls = image.license === "Owner uploaded" ? [image.url] : [image.url, image.originalUrl, specialFilePath];
   for (const url of urls) {
     try {
-      const response = await fetch(url, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(url, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(5_000) });
       if (!response.ok) { lastError = `PUBLIC_DOMAIN_IMAGE_HTTP_${response.status}`; continue; }
       const contentType = response.headers.get("content-type") ?? "";
       const bytes = new Uint8Array(await response.arrayBuffer());
@@ -46,7 +46,7 @@ async function renderSlideshow(images: string[], outputPath: string, audioPath: 
   const audioMap = audioPath ? ["-map", `${images.length}:a:0`, "-c:a", "aac", "-b:a", "128k", "-shortest"] : [];
   const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(imageSeconds), "-i", image]), ...audioArgs, "-filter_complex", `${filters};${concat}`, "-map", "[outv]", ...audioMap, "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
   try {
-    await execFileAsync(ffmpegPath, args, { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 });
+    await execFileAsync(ffmpegPath, args, { timeout: 25_000, maxBuffer: 2 * 1024 * 1024 });
   } catch (error) {
     const failure = error as { code?: unknown; signal?: unknown; stderr?: unknown; stdout?: unknown };
     console.error("slideshow render failed", {
