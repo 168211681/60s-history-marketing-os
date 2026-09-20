@@ -30,7 +30,10 @@ function geminiVoiceProvider(): VoiceProvider {
       const value = text.trim().slice(0, 12000);
       if (!value) throw new Error("VOICE_TEXT_REQUIRED");
       try {
-        const timeoutMs = Math.max(5_000, Math.min(10_000, Number(process.env.GEMINI_TTS_TIMEOUT_MS ?? 8_000)));
+        // TTS generation can take longer than a normal metadata request. Keep
+        // the upper bound below the worker's 60s function limit while ignoring
+        // stale production values that are too short to be useful.
+        const timeoutMs = Math.max(20_000, Math.min(25_000, Number(process.env.GEMINI_TTS_TIMEOUT_MS ?? 20_000)));
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ contents: [{ parts: [{ text: value }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
@@ -43,7 +46,9 @@ function geminiVoiceProvider(): VoiceProvider {
         const sampleRate = Number(inlineData.mimeType?.match(/rate=(\d+)/i)?.[1] ?? 24000);
         return { bytes: pcmToWav(new Uint8Array(Buffer.from(inlineData.data, "base64")), sampleRate), contentType: "audio/wav" };
       } catch (error) {
-        if (!process.env.HF_TOKEN) throw error;
+        // An explicit Gemini selection must report the Gemini failure. Falling
+        // back to an unavailable HF model only hides the real provider error.
+        if (process.env.VOICE_PROVIDER === "gemini" || !process.env.HF_TOKEN) throw error;
         console.warn("Gemini TTS unavailable; using Hugging Face voice fallback", { error: error instanceof Error ? error.name : "unknown" });
         return huggingFaceVoiceProvider().synthesize(value);
       }
