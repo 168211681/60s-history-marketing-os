@@ -35,9 +35,11 @@ table.
 An in-progress provider job that has not changed state for 60 minutes is marked
 `failed` with the constrained error code `PROVIDER_TIMEOUT`. The worker records
 the transition in the backend-only workflow event table and returns HTTP 504.
-The owner can use the retry control in `/scripts`; the existing ten-attempt cap
-prevents an endless retry loop. A timeout does not expose provider payloads or
-credentials.
+Transient provider failures and timeouts are automatically re-queued while the
+workflow is below the ten-attempt cap, so the scheduled worker can continue
+without a manual click. The owner can use the retry control in `/scripts` for a
+workflow that has reached a terminal failed state. A timeout does not expose
+provider payloads or credentials.
 
 ## Uploaded images and narration
 
