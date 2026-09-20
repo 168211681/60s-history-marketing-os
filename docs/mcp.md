@@ -21,6 +21,9 @@ channel's stored analytics:
 - `get_channel_metrics`
 - `get_top_videos`
 - `get_marketing_insights`
+- `list_market_channels`
+- `sync_market_channel`
+- `get_market_snapshot`
 - `create_content_generation_prompt`
 - `create_content_idea`
 - `create_content_experiment`
@@ -40,9 +43,16 @@ publishing adapter. The endpoint returns `503 MCP is not configured` when
 `MCP_SECRET` is missing and `401` when the bearer header does not match.
 
 `create_content_generation_prompt` combines the latest stored analytics,
-evidence-labeled insights, and a requested topic into one copyable prompt. It
-does not call an AI provider; paste its `prompt` field into GPT Plus for review,
-then use `save_script_draft` only after checking the generated content.
+evidence-labeled insights, tracked public market snapshots, and a requested topic
+into one copyable prompt. It does not call an AI provider; paste its `prompt`
+field into GPT Plus for review, then use `save_script_draft` only after checking
+the generated content. Public market snapshots are explicitly labeled and never
+represent private competitor analytics.
+
+The market tools use the server-only `YOUTUBE_DATA_API_KEY`. They can list and
+sync tracked public channels without requiring a completed private analytics
+sync, but the prompt factory still needs the owner's own completed analytics
+period so comparisons remain evidence-based.
 
 Content experiments are stored separately from analytics. Use
 `create_content_experiment` before a test, `record_experiment_result` after the

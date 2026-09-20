@@ -6,24 +6,22 @@ have a security review before the next phase starts.
 
 ## Current execution goal
 
-**Active goal:** stabilize and verify the owner-controlled analytics-to-script
-workflow before adding more automation.
+**Active goal:** validate the owner-controlled marketing intelligence loop before
+adding more video automation.
 
 The current order is deliberately narrow:
 
-1. Finish local verification for the experiment review flow and its database
-   indexes.
-2. Keep production rendering experimental and require an explicit owner review
-   before any private YouTube upload.
-3. Run one complete owner test using real channel data: analyze, generate a
-   prompt/script draft, review it, record the experiment result, and inspect the
-   evidence shown in the dashboard.
-4. Only after that test passes, plan Phase 6 work for linking published-video
-   performance back to experiments.
+1. Apply and verify the market intelligence migration in the owner's Supabase
+   project.
+2. Add a small set of public reference channels and sync their latest snapshots.
+3. Generate one market-aware prompt, review it in GPT Plus, and save only a
+   human-reviewed draft.
+4. Record the resulting content experiment and compare observed performance
+   after the next YouTube sync.
+5. Keep production rendering experimental until this marketing loop is stable.
 
-This goal is resumed on the existing active Codex goal. Deployment, commit, and
-push are separate approval gates; a local green check does not imply that the
-hosted workflow is healthy.
+Deployment, commit, and push are separate approval gates; a local green check
+does not imply that the hosted workflow or Supabase migration is healthy.
 
 ## Phase 0 — repository and security baseline
 
@@ -137,7 +135,8 @@ handoff is implemented and public publishing remains explicit.
 
 ## Phase 6 — closed-loop marketing system
 
-**Status: next phase; start only after the Phase 3 core workflow is user-tested.**
+**Status: partially implemented as public market intelligence; closed-loop
+performance linking remains next.**
 
 Acceptance criteria:
 
@@ -147,6 +146,10 @@ Acceptance criteria:
   evidence-labeled.
 - Optional MCP tools expose the same owner-scoped capabilities without becoming a
   runtime dependency.
+
+Implemented foundation: `/market`, `/prompts`, the public market migration, the
+YouTube Data API market adapter, and MCP market tools. Remaining work starts
+after the owner completes the manual market-aware prompt and experiment test.
 
 ## Release gates
 

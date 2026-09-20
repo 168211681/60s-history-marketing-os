@@ -10,6 +10,7 @@ import { summarize } from "../src/lib/analytics";
 import { contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
 import { nextExperimentMessage, type ContentExperimentRecord } from "../src/lib/data/experiments";
 import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
+import { fetchPublicMarketChannel } from "../src/lib/youtube/public-market";
 
 test("MCP authorization requires the configured bearer secret", () => {
   assert.equal(isMcpAuthorized("Bearer test-secret", "test-secret"), true);
@@ -40,6 +41,27 @@ test("content generation prompt is copyable and labels analytics as evidence", (
   assert.match(result.prompt, /evidence only/);
   assert.match(result.prompt, /complete spoken script for about 60 seconds/);
   assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
+});
+
+test("public market adapter normalizes YouTube channel and video snapshots", async () => {
+  const previousKey = process.env.YOUTUBE_DATA_API_KEY;
+  process.env.YOUTUBE_DATA_API_KEY = "test-key";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("/channels?")) return new Response(JSON.stringify({ items: [{ id: "UCtest", snippet: { title: "Competitor" }, contentDetails: { relatedPlaylists: { uploads: "PLtest" } } }] }), { status: 200 });
+    if (url.includes("/playlistItems?")) return new Response(JSON.stringify({ items: [{ contentDetails: { videoId: "video-1" } }] }), { status: 200 });
+    assert.match(url, /\/videos\?/);
+    return new Response(JSON.stringify({ items: [{ id: "video-1", snippet: { title: "Public video", publishedAt: "2026-09-01T00:00:00Z" }, contentDetails: { duration: "PT1M2S" }, statistics: { viewCount: "1200", likeCount: "30", commentCount: "4" } }] }), { status: 200 });
+  };
+  try {
+    const result = await fetchPublicMarketChannel("UCtest");
+    assert.equal(result.title, "Competitor");
+    assert.deepEqual(result.videos[0], { youtubeVideoId: "video-1", title: "Public video", publishedAt: "2026-09-01T00:00:00Z", durationSeconds: 62, views: 1200, likes: 30, comments: 4 });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.YOUTUBE_DATA_API_KEY; else process.env.YOUTUBE_DATA_API_KEY = previousKey;
+  }
 });
 
 test("experiment recommendation keeps active tests focused", () => {

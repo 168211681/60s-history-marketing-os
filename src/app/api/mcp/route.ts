@@ -3,10 +3,11 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, marketSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, syncTrackedMarketChannel, trackedMarketChannels, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 import { NextRequest } from "next/server";
+import { ownerId } from "@/lib/auth/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,39 @@ function server() {
   }, async () => {
     try { return result(insightSnapshot(await ownerContext())); } catch (error) { return failure(error); }
   });
+  mcp.registerTool("list_market_channels", {
+    title: "List tracked market channels",
+    description: "List owner-scoped public YouTube channels tracked for competitor and market analysis.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      const configuredOwner = ownerId();
+      if (!configuredOwner) throw new Error("OWNER_USER_ID is not configured");
+      return result({ source: "public_youtube_market_snapshots", channels: await trackedMarketChannels({ ownerId: configuredOwner }) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("sync_market_channel", {
+    title: "Sync market channel",
+    description: "Fetch one public YouTube channel and its latest public videos using the server-side YouTube Data API key.",
+    inputSchema: { youtubeChannelId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) },
+  }, async ({ youtubeChannelId }) => {
+    try {
+      const configuredOwner = ownerId();
+      if (!configuredOwner) throw new Error("OWNER_USER_ID is not configured");
+      return result({ source: "public_youtube_api", channel: await syncTrackedMarketChannel({ ownerId: configuredOwner }, youtubeChannelId) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("get_market_snapshot", {
+    title: "Get market snapshot",
+    description: "Summarize tracked public competitor videos by views and engagement snapshot. Never treats public data as private analytics.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      const configuredOwner = ownerId();
+      if (!configuredOwner) throw new Error("OWNER_USER_ID is not configured");
+      return result(await marketSnapshot({ ownerId: configuredOwner }));
+    } catch (error) { return failure(error); }
+  });
   mcp.registerTool("create_content_generation_prompt", {
     title: "Create content generation prompt",
     description: "Summarize stored marketing data and return a copyable prompt for GPT Plus. This tool does not call an AI provider.",
@@ -61,7 +95,7 @@ function server() {
       format: z.enum(["youtube_short"]).default("youtube_short"),
     },
   }, async ({ topic, goal, language, format }) => {
-    try { return result(await contentGenerationPrompt(await ownerContext(), { topic, goal, language, format })); } catch (error) { return failure(error); }
+    try { const context = await ownerContext(); return result(contentGenerationPrompt(context, { topic, goal, language, format }, await marketSnapshot(context))); } catch (error) { return failure(error); }
   });
   mcp.registerTool("create_content_idea", {
     title: "Create content idea",

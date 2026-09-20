@@ -727,6 +727,18 @@ textarea {
 .settings-actions .button {
   margin: 0;
 }
+.prompt-output {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  max-width: 900px;
+}
+.prompt-output textarea {
+  min-height: 320px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
 .settings-notice {
   margin-bottom: 20px;
   padding: 12px 16px;

@@ -136,13 +136,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "14",
+    "16",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "14",
+      "16",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -181,6 +181,13 @@ test("content experiment foreign keys have supporting indexes", () => {
     )`),
     "3",
   );
+});
+test("market snapshots are owner-scoped and client read-only", () => {
+  assert.equal(asRole("authenticated", userA, "select count(*) from public.market_channels"), "1");
+  assert.equal(asRole("authenticated", userA, "select count(*) from public.market_videos"), "1");
+  assert.equal(asRole("authenticated", userA, `select count(*) from public.market_channels where owner_id='${userB}'`), "0");
+  assert.equal(asRole("authenticated", userA, `select count(*) from public.market_videos where market_channel_id='60000000-0000-4000-8000-000000000002'`), "0");
+  asRole("authenticated", userA, `insert into public.market_channels (owner_id,youtube_channel_id,title,channel_url) values ('${userA}','x','x','https://youtube.com')`, "42501");
 });
 
 for (const table of tables) {
