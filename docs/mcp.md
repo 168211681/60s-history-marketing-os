@@ -21,6 +21,7 @@ channel's stored analytics:
 - `get_channel_metrics`
 - `get_top_videos`
 - `get_marketing_insights`
+- `create_content_generation_prompt`
 - `create_content_idea`
 - `save_marketing_hypothesis`
 - `save_script_draft`
@@ -31,6 +32,11 @@ AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or
 publishing adapter. The endpoint returns `503 MCP is not configured` when
 `MCP_SECRET` is missing and `401` when the bearer header does not match.
+
+`create_content_generation_prompt` combines the latest stored analytics,
+evidence-labeled insights, and a requested topic into one copyable prompt. It
+does not call an AI provider; paste its `prompt` field into GPT Plus for review,
+then use `save_script_draft` only after checking the generated content.
 
 Video generation is separate from MCP script drafting. The app accepts a
 production workflow only for an `approved` draft. The current optional provider

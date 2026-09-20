@@ -6,12 +6,39 @@ import { canAdvanceProductionWorkflow } from "../src/lib/data/production-workflo
 import { higgsfieldProvider } from "../src/lib/video/higgsfield";
 import { videoProvider } from "../src/lib/video";
 import { storeVideoArtifact } from "../src/lib/video/artifacts";
+import { summarize } from "../src/lib/analytics";
+import { contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
+import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
 
 test("MCP authorization requires the configured bearer secret", () => {
   assert.equal(isMcpAuthorized("Bearer test-secret", "test-secret"), true);
   assert.equal(isMcpAuthorized("Bearer wrong", "test-secret"), false);
   assert.equal(isMcpAuthorized(null, "test-secret"), false);
   assert.equal(isMcpAuthorized("Bearer test-secret", undefined), false);
+});
+
+test("content generation prompt is copyable and labels analytics as evidence", () => {
+  const context: OwnerContext = {
+    ownerId: "owner-1",
+    channelId: "channel-1",
+    channelTitle: "60s History",
+    period: { from: "2026-08-22", through: "2026-09-18" },
+    workspace: {
+      source: "live",
+      channelTitle: "60s History",
+      period: "Aug 22 – Sep 18, 2026",
+      videos: sampleVideos,
+      summary: summarize(sampleVideos),
+      weeklyViews: sampleWeeklyViews,
+      lastSyncedAt: "2026-09-18T00:00:00.000Z",
+    },
+  };
+  const result = contentGenerationPrompt(context, { topic: "Ancient navigation", language: "th" });
+  assert.equal(result.source, "stored_youtube_analytics");
+  assert.match(result.prompt, /Requested topic: Ancient navigation/);
+  assert.match(result.prompt, /evidence only/);
+  assert.match(result.prompt, /complete spoken script for about 60 seconds/);
+  assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
 });
 
 test("script approval follows the human review sequence", () => {

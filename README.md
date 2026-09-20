@@ -79,7 +79,7 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 Calculations have no AI-vendor dependency. The first optional MCP layer is available
 at `/api/mcp`, protected by the server-only `MCP_SECRET` bearer secret. It exposes
 owner-scoped tools for synced metrics, video rankings, evidence-backed hypotheses,
-content ideas, and structured 60-second script drafts. Drafts remain in `draft`
+content ideas, copyable GPT Plus generation prompts, and structured 60-second script drafts. Drafts remain in `draft`
 status and require human review before any future video generation or publishing.
 No OpenAI API key is required; the dashboard remains functional without MCP.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).

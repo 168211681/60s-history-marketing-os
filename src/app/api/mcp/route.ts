@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { contentGenerationPrompt, createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 
 export const runtime = "nodejs";
@@ -48,6 +48,18 @@ function server() {
     inputSchema: {},
   }, async () => {
     try { return result(insightSnapshot(await ownerContext())); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("create_content_generation_prompt", {
+    title: "Create content generation prompt",
+    description: "Summarize stored marketing data and return a copyable prompt for GPT Plus. This tool does not call an AI provider.",
+    inputSchema: {
+      topic: shortText(500),
+      goal: z.string().trim().max(1000).default("Generate a human-reviewable 60-second YouTube Short"),
+      language: z.enum(["th", "en"]).default("th"),
+      format: z.enum(["youtube_short"]).default("youtube_short"),
+    },
+  }, async ({ topic, goal, language, format }) => {
+    try { return result(await contentGenerationPrompt(await ownerContext(), { topic, goal, language, format })); } catch (error) { return failure(error); }
   });
   mcp.registerTool("create_content_idea", {
     title: "Create content idea",
