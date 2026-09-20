@@ -5,6 +5,8 @@ import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
 import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
+import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
+import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -164,6 +166,21 @@ function server() {
     try {
       const context = await ownerContext();
       return result({ source: "stored_production_workflows", channel: context.channelTitle, workflows: await productionWorkflows(context, limit) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("run_production_worker", {
+    title: "Run production worker",
+    description: "Process one queued owner workflow through rendering or private YouTube upload. Only approved drafts are eligible; this never publishes publicly.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      if (!process.env.CRON_SECRET) throw new Error("WORKER_NOT_CONFIGURED");
+      const request = new NextRequest("https://internal.invalid/api/cron/production-workflow", {
+        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+      const response = await productionWorker(request);
+      const payload = await response.json();
+      return result({ source: "codex_mcp", httpStatus: response.status, ...payload });
     } catch (error) { return failure(error); }
   });
   return mcp;

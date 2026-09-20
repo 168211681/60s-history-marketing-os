@@ -31,6 +31,7 @@ channel's stored analytics:
 - `save_script_draft`
 - `start_production_workflow`
 - `get_production_workflows`
+- `run_production_worker`
 
 AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or
@@ -56,8 +57,8 @@ controlled by Hugging Face; ChatGPT Plus does not cover them.
 An approved draft can be placed in the owner-scoped production workflow. Its
 state moves through `queued`, `rendering`, `rendered`, and `uploaded_private`;
 `published` is a separate human-approved step. MCP can queue a workflow and
-inspect its state, but it cannot publish a video by itself; publishing is only
-available through the signed-in owner Scripts UI.
+run one worker cycle, and inspect its state, but it cannot publish a video by
+itself; publishing is only available through the signed-in owner Scripts UI.
 
 The protected `/api/cron/production-workflow` endpoint claims one queued,
 approved workflow and submits it to the configured provider. The free worker
