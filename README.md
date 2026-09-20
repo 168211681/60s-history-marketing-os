@@ -82,6 +82,7 @@ owner-scoped tools for synced metrics, video rankings, evidence-backed hypothese
 content ideas, copyable GPT Plus generation prompts, and structured 60-second script drafts. Drafts remain in `draft`
 status and require human review before any future video generation or publishing.
 No OpenAI API key is required; the dashboard remains functional without MCP.
+The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification

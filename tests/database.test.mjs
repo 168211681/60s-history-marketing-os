@@ -83,6 +83,7 @@ const tables = [
   "channel_metrics",
   "marketing_insights",
   "content_ideas",
+  "content_experiments",
 ];
 
 before(() => {
@@ -135,13 +136,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "13",
+    "14",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "13",
+      "14",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -450,6 +451,6 @@ test("deleting an auth user cascades their data but preserves the other owner's 
     sql(
       `begin; delete from auth.users where id='${userA}'; ${counts}; select count(*) from private.analytics_sync_jobs; rollback;`,
     ),
-    Array(8).fill("1").join("\n"),
+    Array(9).fill("1").join("\n"),
   );
 });

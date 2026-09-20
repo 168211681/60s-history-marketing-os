@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { contentGenerationPrompt, createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 
 export const runtime = "nodejs";
@@ -67,6 +67,36 @@ function server() {
     inputSchema: { title: shortText(200), angle: z.string().trim().max(2000).default("") },
   }, async ({ title, angle }) => {
     try { return result({ source: "codex_mcp", idea: await saveContentIdea(await ownerContext(), title, angle) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("create_content_experiment", {
+    title: "Create content experiment",
+    description: "Store a measurable content hypothesis linked to owner-scoped ideas or drafts.",
+    inputSchema: { topic: shortText(300), hookFormat: shortText(200), hypothesis: shortText(5000), contentIdeaId: z.string().uuid().optional(), scriptDraftId: z.string().uuid().optional() },
+  }, async ({ topic, hookFormat, hypothesis, contentIdeaId, scriptDraftId }) => {
+    try { return result({ source: "codex_mcp", experiment: await createContentExperiment(await ownerContext(), { topic, hookFormat, hypothesis, contentIdeaId, scriptDraftId }) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("list_content_experiments", {
+    title: "List content experiments",
+    description: "Read the connected owner's content experiment memory.",
+    inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
+  }, async ({ limit }) => {
+    try { return result({ source: "stored_content_experiments", experiments: await contentExperiments(await ownerContext(), limit) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("record_experiment_result", {
+    title: "Record experiment result",
+    description: "Record observed results for an owner-scoped experiment; metrics remain explicit and nullable.",
+    inputSchema: {
+      experimentId: z.string().uuid(), status: z.enum(["running", "completed", "cancelled"]), resultSummary: shortText(10000), recommendation: shortText(5000), videoId: z.string().uuid().optional(), views: z.number().min(0).optional(), minutesWatched: z.number().min(0).optional(), averageViewDurationSeconds: z.number().min(0).optional(), likes: z.number().min(0).optional(), comments: z.number().min(0).optional(),
+    },
+  }, async (input) => {
+    try { return result({ source: "codex_mcp", experiment: await recordContentExperimentResult(await ownerContext(), input.experimentId, input) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("get_next_content_recommendation", {
+    title: "Get next content recommendation",
+    description: "Combine stored marketing insights with experiment memory to suggest the next measurable test.",
+    inputSchema: {},
+  }, async () => {
+    try { return result(await nextContentRecommendation(await ownerContext())); } catch (error) { return failure(error); }
   });
   mcp.registerTool("save_marketing_hypothesis", {
     title: "Save marketing hypothesis",

@@ -184,6 +184,128 @@ export async function productionWorkflows(context: OwnerContext, limit: number) 
   return result.rows;
 }
 
+export type ContentExperiment = {
+  id: string;
+  topic: string;
+  hook_format: string;
+  hypothesis: string;
+  status: "planned" | "running" | "completed" | "cancelled";
+  result_summary: string;
+  recommendation: string;
+  observed_views: number | null;
+  observed_minutes_watched: number | null;
+  observed_average_view_duration_seconds: number | null;
+  observed_likes: number | null;
+  observed_comments: number | null;
+  content_idea_id: string | null;
+  script_draft_id: string | null;
+  video_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+function boundedNumber(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value < 0) throw new Error("Experiment metrics must be finite non-negative numbers");
+  return value;
+}
+
+export async function createContentExperiment(
+  context: OwnerContext,
+  input: { topic: string; hookFormat: string; hypothesis: string; contentIdeaId?: string; scriptDraftId?: string },
+) {
+  const result = await database().query<ContentExperiment>(
+    `insert into public.content_experiments
+       (channel_id, content_idea_id, script_draft_id, topic, hook_format, hypothesis)
+     select $1, i.id, d.id, $2, $3, $4
+       from (select $1::uuid as channel_id) c
+       left join public.content_ideas i on i.id = $5 and i.channel_id = c.channel_id
+       left join public.script_drafts d on d.id = $6 and d.channel_id = c.channel_id
+      where ($5::uuid is null or i.id is not null)
+        and ($6::uuid is null or d.id is not null)
+     returning id, topic, hook_format, hypothesis, status, result_summary, recommendation,
+       observed_views, observed_minutes_watched, observed_average_view_duration_seconds,
+       observed_likes, observed_comments, content_idea_id, script_draft_id, video_id,
+       started_at, completed_at, created_at`,
+    [context.channelId, input.topic.trim(), input.hookFormat.trim(), input.hypothesis.trim(), input.contentIdeaId ?? null, input.scriptDraftId ?? null],
+  );
+  if (!result.rowCount) throw new Error("CONTENT_EXPERIMENT_REFERENCE_NOT_OWNED");
+  return result.rows[0];
+}
+
+export async function contentExperiments(context: OwnerContext, limit: number) {
+  const result = await database().query<ContentExperiment>(
+    `select id, topic, hook_format, hypothesis, status, result_summary, recommendation,
+            observed_views, observed_minutes_watched, observed_average_view_duration_seconds,
+            observed_likes, observed_comments, content_idea_id, script_draft_id, video_id,
+            started_at, completed_at, created_at
+       from public.content_experiments
+      where channel_id = $1
+      order by created_at desc
+      limit $2`,
+    [context.channelId, limit],
+  );
+  return result.rows;
+}
+
+export async function recordContentExperimentResult(
+  context: OwnerContext,
+  experimentId: string,
+  input: {
+    status: "running" | "completed" | "cancelled";
+    resultSummary: string;
+    recommendation: string;
+    videoId?: string;
+    views?: number | null;
+    minutesWatched?: number | null;
+    averageViewDurationSeconds?: number | null;
+    likes?: number | null;
+    comments?: number | null;
+  },
+) {
+  const result = await database().query<ContentExperiment>(
+    `update public.content_experiments e
+        set status = $3,
+            result_summary = $4,
+            recommendation = $5,
+            video_id = coalesce($6::uuid, e.video_id),
+            observed_views = $7,
+            observed_minutes_watched = $8,
+            observed_average_view_duration_seconds = $9,
+            observed_likes = $10,
+            observed_comments = $11,
+            started_at = coalesce(e.started_at, case when $3 = 'running' then now() else e.started_at end),
+            completed_at = case when $3 = 'completed' then now() else null end,
+            updated_at = now()
+      where e.id = $1 and e.channel_id = $2
+        and ($6::uuid is null or exists (select 1 from public.videos v where v.id = $6 and v.channel_id = e.channel_id))
+      returning id, topic, hook_format, hypothesis, status, result_summary, recommendation,
+        observed_views, observed_minutes_watched, observed_average_view_duration_seconds,
+        observed_likes, observed_comments, content_idea_id, script_draft_id, video_id,
+        started_at, completed_at, created_at`,
+    [experimentId, context.channelId, input.status, input.resultSummary.trim(), input.recommendation.trim(), input.videoId ?? null, boundedNumber(input.views), boundedNumber(input.minutesWatched), boundedNumber(input.averageViewDurationSeconds), boundedNumber(input.likes), boundedNumber(input.comments)],
+  );
+  if (!result.rowCount) throw new Error("CONTENT_EXPERIMENT_NOT_OWNED_OR_VIDEO_NOT_OWNED");
+  return result.rows[0];
+}
+
+export async function nextContentRecommendation(context: OwnerContext) {
+  const experiments = await contentExperiments(context, 20);
+  const active = experiments.find((experiment) => experiment.status === "planned" || experiment.status === "running");
+  const snapshot = insightSnapshot(context);
+  const experiment = active ?? experiments.find((item) => item.status === "completed");
+  return {
+    source: "stored_youtube_analytics_and_experiment_memory",
+    channel: context.channelTitle,
+    recommendation: active
+      ? `Finish the ${active.status} experiment for “${active.topic}” before introducing another variable.`
+      : "Plan a new comparable hook experiment using the evidence below, then record its result after the next sync.",
+    evidence: snapshot,
+    relatedExperiment: experiment ?? null,
+  };
+}
+
 export function insightSnapshot(context: OwnerContext) {
   return {
     source: "calculated_from_stored_youtube_analytics",

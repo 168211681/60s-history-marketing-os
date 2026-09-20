@@ -24,6 +24,9 @@ insert into public.marketing_insights (channel_id, kind, origin, content, eviden
 insert into public.content_ideas (id, channel_id, title, updated_at) values
   ('40000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Idea A', '2020-01-01'),
   ('40000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'Idea B', '2020-01-01');
+insert into public.content_experiments (id, channel_id, content_idea_id, topic, hook_format, hypothesis) values
+  ('50000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'Fixture topic A', 'question', 'Fixture hypothesis A'),
+  ('50000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000002', 'Fixture topic B', 'scene', 'Fixture hypothesis B');
 insert into private.analytics_sync_jobs (channel_id, idempotency_key, period_start, period_end) values
   ('20000000-0000-4000-8000-000000000001', 'test-period', '2026-09-01', '2026-09-01'),
   ('20000000-0000-4000-8000-000000000002', 'test-period', '2026-09-01', '2026-09-01');

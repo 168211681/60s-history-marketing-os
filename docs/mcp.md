@@ -23,6 +23,10 @@ channel's stored analytics:
 - `get_marketing_insights`
 - `create_content_generation_prompt`
 - `create_content_idea`
+- `create_content_experiment`
+- `list_content_experiments`
+- `record_experiment_result`
+- `get_next_content_recommendation`
 - `save_marketing_hypothesis`
 - `save_script_draft`
 - `start_production_workflow`
@@ -37,6 +41,11 @@ publishing adapter. The endpoint returns `503 MCP is not configured` when
 evidence-labeled insights, and a requested topic into one copyable prompt. It
 does not call an AI provider; paste its `prompt` field into GPT Plus for review,
 then use `save_script_draft` only after checking the generated content.
+
+Content experiments are stored separately from analytics. Use
+`create_content_experiment` before a test, `record_experiment_result` after the
+next YouTube sync, and `get_next_content_recommendation` to avoid changing
+multiple variables at once.
 
 Video generation is separate from MCP script drafting. The app accepts a
 production workflow only for an `approved` draft. The current optional provider
