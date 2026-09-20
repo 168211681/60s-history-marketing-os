@@ -58,15 +58,14 @@ export function publicDomainProvider(): VideoGenerationProvider {
       const ordered = plannedPaths.length
         ? [...plannedPaths.map((path) => available.find((asset) => asset.path === path)).filter((asset): asset is { path: string; url: string } => Boolean(asset)), ...available]
         : available;
-      const uploaded = ordered.filter((asset, index, assets) => assets.findIndex((candidate) => candidate.path === asset.path) === index).slice(0, IMAGE_COUNT)
+      const uploaded = ordered.filter((asset, index, assets) => assets.findIndex((candidate) => candidate.path === asset.path) === index)
         .map((asset) => ({ url: asset.url, originalUrl: asset.url, title: asset.path, license: "Owner uploaded" }));
       if (!uploaded.length) throw new Error("IMAGE_ASSETS_REQUIRED");
-      const images = Array.from({ length: IMAGE_COUNT }, (_, index) => uploaded[index % uploaded.length]);
       const workdir = await mkdtemp(join(tmpdir(), "marketing-os-images-"));
       try {
         await mkdir(workdir, { recursive: true });
         const downloaded: Array<{ image: WikimediaImage; path: string }> = [];
-        for (const image of images) {
+        for (const image of uploaded) {
           const path = join(workdir, `image-${downloaded.length}.jpg`);
           try {
             await downloadImage(image, path);
@@ -76,8 +75,8 @@ export function publicDomainProvider(): VideoGenerationProvider {
           }
           if (downloaded.length === IMAGE_COUNT) break;
         }
-        if (downloaded.length < IMAGE_COUNT) throw new Error("UPLOADED_IMAGE_DOWNLOAD_FAILED");
-        const paths = downloaded.map((item) => item.path);
+        if (!downloaded.length) throw new Error("UPLOADED_IMAGE_DOWNLOAD_FAILED");
+        const paths = Array.from({ length: IMAGE_COUNT }, (_, index) => downloaded[index % downloaded.length].path);
         const voice = voiceProvider();
         const narration = `${request.scriptBody}\n\n${request.captionText}`.trim();
         let audioPath: string | null = null;
