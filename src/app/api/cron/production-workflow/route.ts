@@ -82,7 +82,10 @@ async function timeoutRenderingWorkflow(channelId: string) {
           limit 1
        )
        update public.production_workflows w
-          set status = 'failed', current_step = 'failed', error_code = 'PROVIDER_TIMEOUT', updated_at = now()
+          set status = case when w.attempts < 10 then 'queued' else 'failed' end,
+              current_step = case when w.attempts < 10 then 'awaiting_render' else 'failed' end,
+              error_code = case when w.attempts < 10 then null else 'PROVIDER_TIMEOUT' end,
+              provider_job_id = null, artifact_url = null, updated_at = now()
          from stale_workflow s
         where w.id = s.id and w.status = 'rendering'
        returning w.id, w.channel_id, w.attempts`,
@@ -162,12 +165,12 @@ export async function GET(request: NextRequest) {
         workflowId: timedOut.id,
         channelId: timedOut.channel_id,
         attempt: timedOut.attempts,
-        eventType: "failed",
-        status: "failed",
-        errorCode: "PROVIDER_TIMEOUT",
+        eventType: timedOut.attempts < 10 ? "retry_queued" : "failed",
+        status: timedOut.attempts < 10 ? "queued" : "failed",
+        errorCode: timedOut.attempts < 10 ? undefined : "PROVIDER_TIMEOUT",
         metadata: { stage: "timeout" },
       });
-      return NextResponse.json({ status: "failed", workflowId: timedOut.id, code: "PROVIDER_TIMEOUT" }, { status: 504 });
+      return NextResponse.json({ status: timedOut.attempts < 10 ? "retry_queued" : "failed", workflowId: timedOut.id, code: "PROVIDER_TIMEOUT" }, { status: timedOut.attempts < 10 ? 202 : 504 });
     }
     const pending = await renderingWorkflow(channelId);
     if (!pending?.provider_job_id) return NextResponse.json({ status: "idle" });
@@ -192,13 +195,16 @@ export async function GET(request: NextRequest) {
       } else if (current.status === "failed") {
         await database().query(
           `update public.production_workflows
-              set status = 'failed', current_step = 'failed', error_code = 'PROVIDER_FAILED', updated_at = now()
+              set status = case when attempts < 10 then 'queued' else 'failed' end,
+                  current_step = case when attempts < 10 then 'awaiting_render' else 'failed' end,
+                  error_code = case when attempts < 10 then null else 'PROVIDER_FAILED' end,
+                  provider_job_id = null, artifact_url = null, updated_at = now()
             where id = $1 and channel_id = $2 and status = 'rendering'`,
           [pending.id, channelId],
         );
-        await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: "failed", status: "failed", errorCode: "PROVIDER_FAILED", metadata: { stage: "poll" } });
+        await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: pending.attempts < 10 ? "retry_queued" : "failed", status: pending.attempts < 10 ? "queued" : "failed", errorCode: pending.attempts < 10 ? undefined : "PROVIDER_FAILED", metadata: { stage: "poll" } });
       }
-      return NextResponse.json({ status: current.status, workflowId: pending.id });
+      return NextResponse.json({ status: current.status === "failed" && pending.attempts < 10 ? "retry_queued" : current.status, workflowId: pending.id });
     } catch (error) {
       await recordWorkflowEvent({ workflowId: pending.id, channelId, attempt: pending.attempts, eventType: "poll_failed", status: "rendering", metadata: { stage: "poll" } });
       return NextResponse.json({ status: "poll-failed", workflowId: pending.id, code: error instanceof Error ? error.message : "POLL_FAILED" }, { status: 502 });
@@ -269,13 +275,16 @@ export async function GET(request: NextRequest) {
       errorName: error instanceof Error ? error.name : typeof error,
       message: message.slice(0, 500),
     });
+    const retryable = ["PROVIDER_TIMEOUT", "PROVIDER_FAILED", "PROVIDER_OUTPUT_ERROR"].includes(code);
+    const shouldRetry = retryable && workflow.attempts < 10;
     await database().query(
       `update public.production_workflows
-          set status = 'failed', current_step = 'failed', error_code = $2, updated_at = now()
-        where id = $1 and channel_id = $3 and status = 'rendering'`,
-      [workflow.id, code, channelId],
+          set status = $2, current_step = $3, error_code = $4,
+              provider_job_id = null, artifact_url = null, updated_at = now()
+        where id = $1 and channel_id = $5 and status = 'rendering'`,
+      [workflow.id, shouldRetry ? "queued" : "failed", shouldRetry ? "awaiting_render" : "failed", shouldRetry ? null : code, channelId],
     );
-    await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "failed", status: "failed", errorCode: code, metadata: { stage: "submit" } });
-    return NextResponse.json({ status: "failed", workflowId: workflow.id, code }, { status: 502 });
+    await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: shouldRetry ? "retry_queued" : "failed", status: shouldRetry ? "queued" : "failed", errorCode: shouldRetry ? undefined : code, metadata: { stage: "submit", retryable } });
+    return NextResponse.json({ status: shouldRetry ? "retry_queued" : "failed", workflowId: workflow.id, code }, { status: shouldRetry ? 202 : 502 });
   }
 }
