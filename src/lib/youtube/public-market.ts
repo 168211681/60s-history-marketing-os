@@ -66,7 +66,12 @@ async function get(path: string, params: Record<string, string>, fetcher: typeof
   const url = new URL(`${api}/${path}`);
   Object.entries({ ...params, key }).forEach(([name, value]) => url.searchParams.set(name, value));
   const response = await fetcher(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error(`YOUTUBE_PUBLIC_API_${response.status}`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { errors?: Array<{ reason?: unknown }>; status?: unknown } } | null;
+    const reason = payload?.error?.errors?.[0]?.reason;
+    if (typeof reason === "string" && /^[A-Za-z][A-Za-z0-9_]{1,80}$/.test(reason)) throw new Error(`YOUTUBE_PUBLIC_API_${response.status}_${reason}`);
+    throw new Error(`YOUTUBE_PUBLIC_API_${response.status}`);
+  }
   return response.json();
 }
 
