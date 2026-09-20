@@ -4,6 +4,7 @@ import { buildMarketingInsights } from "@/lib/insights";
 import { authenticatedAnalyticsReader } from "@/lib/data/postgres-reader";
 import { buildLiveWorkspace, type WorkspaceData } from "@/lib/data/workspace-model";
 import { listImageAssets } from "@/lib/media/assets";
+import { recordWorkflowEvent } from "@/lib/workflows/events";
 import type { EditPlan } from "@/lib/video/provider";
 
 export type OwnerContext = {
@@ -182,6 +183,33 @@ export async function productionWorkflows(context: OwnerContext, limit: number) 
     [context.channelId, limit],
   );
   return result.rows;
+}
+
+export async function retryProductionWorkflow(context: OwnerContext, workflowId: string) {
+  const result = await database().query<{
+    id: string;
+    channel_id: string;
+    attempts: number;
+    status: string;
+    current_step: string;
+  }>(
+    `update public.production_workflows w
+        set status = 'queued', current_step = 'awaiting_render', error_code = null,
+            provider_job_id = null, artifact_url = null, youtube_video_id = null, updated_at = now()
+       where w.id = $1 and w.channel_id = $2
+         and w.status = 'failed' and w.attempts < 10
+       returning w.id, w.channel_id, w.attempts, w.status, w.current_step`,
+    [workflowId, context.channelId],
+  );
+  if (!result.rowCount) throw new Error("Only an owned failed workflow below the retry limit can be retried");
+  await recordWorkflowEvent({
+    workflowId: result.rows[0].id,
+    channelId: result.rows[0].channel_id,
+    attempt: result.rows[0].attempts,
+    eventType: "retry_queued",
+    status: "queued",
+  });
+  return result.rows[0];
 }
 
 export type ContentExperiment = {

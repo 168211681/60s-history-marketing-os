@@ -32,6 +32,7 @@ channel's stored analytics:
 - `start_production_workflow`
 - `get_production_workflows`
 - `run_production_worker`
+- `retry_production_workflow`
 
 AI text is stored with provenance. A script draft always starts with status
 `draft`; human review is required before adding any future video-generation or

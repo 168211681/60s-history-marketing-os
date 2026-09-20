@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 import { NextRequest } from "next/server";
@@ -182,6 +182,13 @@ function server() {
       const payload = await response.json();
       return result({ source: "codex_mcp", httpStatus: response.status, ...payload });
     } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("retry_production_workflow", {
+    title: "Retry production workflow",
+    description: "Requeue one owned failed workflow below the retry limit. It still requires an approved script and never publishes publicly.",
+    inputSchema: { workflowId: z.string().uuid() },
+  }, async ({ workflowId }) => {
+    try { return result({ source: "codex_mcp", workflow: await retryProductionWorkflow(await ownerContext(), workflowId) }); } catch (error) { return failure(error); }
   });
   return mcp;
 }
