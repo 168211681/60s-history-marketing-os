@@ -51,13 +51,17 @@ async function findFreeImages(request: VideoGenerationRequest): Promise<Wikimedi
 
 async function downloadImage(image: WikimediaImage, path: string) {
   let lastError = "PUBLIC_DOMAIN_IMAGE_DOWNLOAD_FAILED";
-  for (const url of [image.url, image.originalUrl]) {
+  const fileName = image.title.replace(/^File:/i, "");
+  const specialFilePath = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=960`;
+  for (const url of [image.url, image.originalUrl, specialFilePath]) {
     try {
       const response = await fetch(url, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(15_000) });
       if (!response.ok) { lastError = `PUBLIC_DOMAIN_IMAGE_HTTP_${response.status}`; continue; }
       const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.startsWith("image/")) { lastError = "PUBLIC_DOMAIN_IMAGE_INVALID_TYPE"; continue; }
-      await writeFile(path, new Uint8Array(await response.arrayBuffer()));
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (!contentType.startsWith("image/") && contentType !== "application/octet-stream") { lastError = "PUBLIC_DOMAIN_IMAGE_INVALID_TYPE"; continue; }
+      if (bytes.byteLength < 100) { lastError = "PUBLIC_DOMAIN_IMAGE_EMPTY"; continue; }
+      await writeFile(path, bytes);
       return;
     } catch (error) {
       lastError = error instanceof Error ? error.message : lastError;
