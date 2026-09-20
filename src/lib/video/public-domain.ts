@@ -6,11 +6,13 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import { storeVideoArtifact } from "./artifacts";
 import type { VideoGenerationProvider, VideoGenerationRequest } from "./provider";
+import { voiceProvider } from "./voice";
 
 const execFileAsync = promisify(execFile);
 const WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php";
 const IMAGE_COUNT = 3;
-const IMAGE_SECONDS = 4;
+const MIN_IMAGE_SECONDS = 4;
+const MAX_IMAGE_SECONDS = 20;
 
 type WikimediaImage = { url: string; originalUrl: string; title: string; license: string };
 
@@ -49,7 +51,7 @@ async function findFreeImages(request: VideoGenerationRequest): Promise<Wikimedi
   throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
 }
 
-async function downloadImage(image: WikimediaImage, path: string) {
+async function downloadImage(image: Pick<WikimediaImage, "url" | "originalUrl" | "title">, path: string) {
   let lastError = "PUBLIC_DOMAIN_IMAGE_DOWNLOAD_FAILED";
   const fileName = image.title.replace(/^File:/i, "");
   const specialFilePath = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=960`;
@@ -70,11 +72,14 @@ async function downloadImage(image: WikimediaImage, path: string) {
   throw new Error(lastError);
 }
 
-async function renderSlideshow(images: string[], outputPath: string) {
+async function renderSlideshow(images: string[], outputPath: string, audioPath: string | null, narration: string) {
   if (!ffmpegPath) throw new Error("PUBLIC_DOMAIN_FFMPEG_UNAVAILABLE");
+  const imageSeconds = Math.min(MAX_IMAGE_SECONDS, Math.max(MIN_IMAGE_SECONDS, Math.ceil(narration.length / 15 / images.length)));
   const filters = images.map((_, index) => `[${index}:v]scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v${index}]`).join(";");
   const concat = `${images.map((_, index) => `[v${index}]`).join("")}concat=n=${images.length}:v=1:a=0[outv]`;
-  const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(IMAGE_SECONDS), "-i", image]), "-filter_complex", `${filters};${concat}`, "-map", "[outv]", "-r", "30", "-c:v", "libx264", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
+  const audioArgs = audioPath ? ["-i", audioPath] : [];
+  const audioMap = audioPath ? ["-map", `${images.length}:a:0`, "-c:a", "aac", "-b:a", "128k", "-shortest"] : [];
+  const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(imageSeconds), "-i", image]), ...audioArgs, "-filter_complex", `${filters};${concat}`, "-map", "[outv]", ...audioMap, "-r", "30", "-c:v", "libx264", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
   await execFileAsync(ffmpegPath, args, { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 });
 }
 
@@ -83,7 +88,15 @@ export function publicDomainProvider(): VideoGenerationProvider {
     name: "public-domain",
     configured: true,
     async submit(request) {
-      const images = await findFreeImages(request);
+      const uploaded = (request.imageAssets ?? []).filter((asset) => /^https:\/\//.test(asset.url)).slice(0, IMAGE_COUNT)
+        .map((asset) => ({ url: asset.url, originalUrl: asset.url, title: asset.path, license: "Owner uploaded" }));
+      const images = [...uploaded];
+      if (images.length < IMAGE_COUNT) {
+        for (const image of await findFreeImages(request)) {
+          if (!images.some((existing) => existing.originalUrl === image.originalUrl)) images.push(image);
+          if (images.length === IMAGE_COUNT) break;
+        }
+      }
       const workdir = await mkdtemp(join(tmpdir(), "marketing-os-images-"));
       try {
         await mkdir(workdir, { recursive: true });
@@ -100,8 +113,17 @@ export function publicDomainProvider(): VideoGenerationProvider {
         }
         if (downloaded.length < IMAGE_COUNT) throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
         const paths = downloaded.map((item) => item.path);
+        const voice = voiceProvider();
+        const narration = `${request.scriptBody}\n\n${request.captionText}`.trim();
+        let audioPath: string | null = null;
+        if (process.env.VIDEO_REQUIRE_VOICE === "true") {
+          if (!voice.configured) throw new Error("VOICE_NOT_CONFIGURED");
+          const audio = await voice.synthesize(narration);
+          audioPath = join(workdir, "narration.wav");
+          await writeFile(audioPath, audio.bytes);
+        }
         const outputPath = join(workdir, "slideshow.mp4");
-        await renderSlideshow(paths, outputPath);
+        await renderSlideshow(paths, outputPath, audioPath, narration);
         const stored = await storeVideoArtifact(await readFile(outputPath), "video/mp4");
         return {
           externalJobId: stored.path,

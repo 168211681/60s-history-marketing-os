@@ -38,3 +38,12 @@ the transition in the backend-only workflow event table and returns HTTP 504.
 The owner can use the retry control in `/scripts`; the existing ten-attempt cap
 prevents an endless retry loop. A timeout does not expose provider payloads or
 credentials.
+
+## Uploaded images and narration
+
+With `VIDEO_PROVIDER=public-domain`, the worker uses up to three owner-uploaded
+images from the Scripts page before searching Wikimedia Commons for any missing
+scenes. To require narration, set `VIDEO_REQUIRE_VOICE=true`, keep `HF_TOKEN`
+server-only, and set `HF_TTS_MODEL` to a supported Hugging Face text-to-speech
+model. If voice settings are missing, the worker leaves narration disabled and
+renders the image-only MVP rather than claiming that audio was generated.

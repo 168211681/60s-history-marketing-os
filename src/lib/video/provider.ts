@@ -1,10 +1,12 @@
 export type VideoGenerationRequest = {
   draftId: string;
+  ownerId?: string;
   title: string;
   hook: string;
   scriptBody: string;
   sceneCues: string;
   captionText: string;
+  imageAssets?: Array<{ path: string; url: string }>;
 };
 
 export type VideoProviderName = "higgsfield" | "huggingface" | "public-domain" | "fal" | "replicate" | "runway";

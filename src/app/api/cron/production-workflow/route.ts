@@ -7,6 +7,7 @@ import { accessTokenForOwner } from "@/lib/youtube/store";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { recordWorkflowEvent } from "@/lib/workflows/events";
 import { storeVideoArtifactFromUrl } from "@/lib/video/artifacts";
+import { listImageAssets } from "@/lib/media/assets";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -211,11 +212,15 @@ export async function GET(request: NextRequest) {
     if (!provider.configured) throw new Error(`${provider.name.toUpperCase()}_NOT_CONFIGURED`);
     const job = await provider.submit({
       draftId: workflow.script_draft_id,
+      ownerId: owner,
       title: workflow.title,
       hook: workflow.hook,
       scriptBody: workflow.script_body,
       sceneCues: workflow.scene_cues,
       captionText: workflow.caption_text,
+      imageAssets: process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? await listImageAssets(owner)
+        : [],
     });
     if (job.artifactUrl) {
       const storedArtifact = await storeVideoArtifactFromUrl(job.artifactUrl);
