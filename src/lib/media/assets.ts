@@ -61,7 +61,8 @@ export async function listImageAssets(ownerId: string, fetcher: typeof fetch = f
   const assets = [];
   for (const entry of entries) {
     if (typeof entry.name !== "string" || !entry.name || entry.name.includes("..")) continue;
-    assets.push({ path: entry.name, createdAt: typeof entry.created_at === "string" ? entry.created_at : null, contentType: typeof entry.metadata?.mimetype === "string" ? entry.metadata.mimetype : null, size: typeof entry.metadata?.size === "number" ? entry.metadata.size : null, url: await signedUrl(entry.name, fetcher, settings) });
+    const path = entry.name.startsWith(`${ownerId}/`) ? entry.name : `${ownerId}/${entry.name}`;
+    assets.push({ path, createdAt: typeof entry.created_at === "string" ? entry.created_at : null, contentType: typeof entry.metadata?.mimetype === "string" ? entry.metadata.mimetype : null, size: typeof entry.metadata?.size === "number" ? entry.metadata.size : null, url: await signedUrl(path, fetcher, settings) });
   }
   return assets;
 }
