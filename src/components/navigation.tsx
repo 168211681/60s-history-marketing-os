@@ -8,7 +8,6 @@ const links = [
   { href: "/videos", label: "Videos", symbol: "▷" },
   { href: "/analytics", label: "Analytics", symbol: "▥" },
   { href: "/insights", label: "Insights", symbol: "✧" },
-  { href: "/market", label: "Market", symbol: "◈" },
   { href: "/prompts", label: "Prompts", symbol: "⌘" },
   { href: "/experiments", label: "Experiments", symbol: "◇" },
   { href: "/scripts", label: "Scripts", symbol: "✎" },

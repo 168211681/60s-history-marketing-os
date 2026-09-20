@@ -27,12 +27,6 @@ insert into public.content_ideas (id, channel_id, title, updated_at) values
 insert into public.content_experiments (id, channel_id, content_idea_id, topic, hook_format, hypothesis) values
   ('50000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'Fixture topic A', 'question', 'Fixture hypothesis A'),
   ('50000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000002', 'Fixture topic B', 'scene', 'Fixture hypothesis B');
-insert into public.market_channels (id, owner_id, youtube_channel_id, title, channel_url) values
-  ('60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'fixture-market-a', 'Market A', 'https://www.youtube.com/channel/fixture-market-a'),
-  ('60000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'fixture-market-b', 'Market B', 'https://www.youtube.com/channel/fixture-market-b');
-insert into public.market_videos (market_channel_id, youtube_video_id, title, published_at, views) values
-  ('60000000-0000-4000-8000-000000000001', 'fixture-market-video-a', 'Market video A', '2026-09-01T00:00:00Z', 300),
-  ('60000000-0000-4000-8000-000000000002', 'fixture-market-video-b', 'Market video B', '2026-09-01T00:00:00Z', 400);
 insert into private.analytics_sync_jobs (channel_id, idempotency_key, period_start, period_end) values
   ('20000000-0000-4000-8000-000000000001', 'test-period', '2026-09-01', '2026-09-01'),
   ('20000000-0000-4000-8000-000000000002', 'test-period', '2026-09-01', '2026-09-01');

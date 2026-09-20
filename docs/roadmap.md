@@ -6,15 +6,14 @@ have a security review before the next phase starts.
 
 ## Current execution goal
 
-**Active goal:** validate the owner-controlled marketing intelligence loop before
+**Active goal:** validate the owner-controlled analytics-to-content loop before
 adding more video automation.
 
 The current order is deliberately narrow:
 
-1. Apply and verify the market intelligence migration in the owner's Supabase
-   project.
-2. Add a small set of public reference channels and sync their latest snapshots.
-3. Generate one market-aware prompt, review it in GPT Plus, and save only a
+1. Run the owner's YouTube analytics sync and verify the reporting window.
+2. Inspect the stored channel insights and experiment history.
+3. Generate one owner-analytics prompt, review it in GPT Plus, and save only a
    human-reviewed draft.
 4. Record the resulting content experiment and compare observed performance
    after the next YouTube sync.
@@ -135,8 +134,7 @@ handoff is implemented and public publishing remains explicit.
 
 ## Phase 6 — closed-loop marketing system
 
-**Status: partially implemented as public market intelligence; closed-loop
-performance linking remains next.**
+**Status: next phase; closed-loop performance linking remains next.**
 
 Acceptance criteria:
 
@@ -147,9 +145,9 @@ Acceptance criteria:
 - Optional MCP tools expose the same owner-scoped capabilities without becoming a
   runtime dependency.
 
-Implemented foundation: `/market`, `/prompts`, the public market migration, the
-YouTube Data API market adapter, and MCP market tools. Remaining work starts
-after the owner completes the manual market-aware prompt and experiment test.
+The current foundation is `/prompts`, owner-scoped analytics, evidence-labeled
+insights, experiments, and MCP handoff tools. Remaining work starts after the
+owner completes the manual analytics-to-prompt and experiment test.
 
 ## Release gates
 

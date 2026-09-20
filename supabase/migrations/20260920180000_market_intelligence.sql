@@ -55,3 +55,5 @@ comment on table public.market_videos is
   'Public YouTube video snapshots collected for market analysis; NULL metrics remain unavailable rather than zero.';
 
 commit;
+-- Legacy migration retained because it has already been applied in production.
+-- The application no longer exposes or reads these tables.

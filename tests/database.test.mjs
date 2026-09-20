@@ -182,14 +182,6 @@ test("content experiment foreign keys have supporting indexes", () => {
     "3",
   );
 });
-test("market snapshots are owner-scoped and client read-only", () => {
-  assert.equal(asRole("authenticated", userA, "select count(*) from public.market_channels"), "1");
-  assert.equal(asRole("authenticated", userA, "select count(*) from public.market_videos"), "1");
-  assert.equal(asRole("authenticated", userA, `select count(*) from public.market_channels where owner_id='${userB}'`), "0");
-  assert.equal(asRole("authenticated", userA, `select count(*) from public.market_videos where market_channel_id='60000000-0000-4000-8000-000000000002'`), "0");
-  asRole("authenticated", userA, `insert into public.market_channels (owner_id,youtube_channel_id,title,channel_url) values ('${userA}','x','x','https://youtube.com')`, "42501");
-});
-
 for (const table of tables) {
   test(`${table}: each owner reads only their own row; missing identity reads none`, () => {
     assert.equal(

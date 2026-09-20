@@ -6,7 +6,6 @@ import { buildLiveWorkspace, type WorkspaceData } from "@/lib/data/workspace-mod
 import { listImageAssets } from "@/lib/media/assets";
 import { recordWorkflowEvent } from "@/lib/workflows/events";
 import type { EditPlan } from "@/lib/video/provider";
-import { marketChannelsForOwner, syncPublicMarketChannel } from "@/lib/data/market";
 
 export type OwnerContext = {
   ownerId: string;
@@ -142,37 +141,6 @@ export async function createProductionWorkflow(context: OwnerContext, scriptDraf
 export async function uploadedImageAssets(context: OwnerContext) {
   const assets = await listImageAssets(context.ownerId);
   return assets.map(({ path, createdAt, contentType, size }) => ({ path, createdAt, contentType, size }));
-}
-
-export async function trackedMarketChannels(context: Pick<OwnerContext, "ownerId">) {
-  return marketChannelsForOwner(context.ownerId);
-}
-
-export async function syncTrackedMarketChannel(context: Pick<OwnerContext, "ownerId">, youtubeChannelId: string) {
-  return syncPublicMarketChannel(context.ownerId, youtubeChannelId);
-}
-
-export async function marketSnapshot(context: Pick<OwnerContext, "ownerId">) {
-  let channels: Awaited<ReturnType<typeof marketChannelsForOwner>>;
-  try {
-    channels = await marketChannelsForOwner(context.ownerId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (!/market_channels|market_videos|42P01/i.test(message)) throw error;
-    return {
-      source: "public_youtube_market_snapshots_unavailable",
-      note: "Apply the market intelligence migration before using public competitor snapshots.",
-      channels: [],
-      topVideos: [],
-    } as const;
-  }
-  const videos = channels.flatMap((channel) => channel.videos).sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
-  return {
-    source: "public_youtube_market_snapshots",
-    note: "Public competitor data only. Views and engagement are snapshots, not private analytics or causal evidence.",
-    channels: channels.map((channel) => ({ id: channel.id, youtubeChannelId: channel.youtubeChannelId, title: channel.title, channelUrl: channel.channelUrl, lastSyncedAt: channel.lastSyncedAt })),
-    topVideos: videos.slice(0, 20),
-  };
 }
 
 export async function saveEditPlan(context: OwnerContext, scriptDraftId: string, plan: EditPlan) {
@@ -391,7 +359,7 @@ function promptText(value: string, max: number) {
   return value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
 }
 
-export function contentGenerationPrompt(context: OwnerContext, options: ContentGenerationPromptOptions, market?: Awaited<ReturnType<typeof marketSnapshot>>) {
+export function contentGenerationPrompt(context: OwnerContext, options: ContentGenerationPromptOptions) {
   const snapshot = insightSnapshot(context);
   const language = options.language ?? "th";
   const evidence = {
@@ -413,12 +381,6 @@ export function contentGenerationPrompt(context: OwnerContext, options: ContentG
       comments: video.comments,
     })),
     insights: snapshot.insights,
-    market: market ? {
-      source: market.source,
-      note: market.note,
-      channels: market.channels,
-      topVideos: market.topVideos.slice(0, 10).map((video) => ({ title: promptText(video.title, 240), channelTitle: promptText(video.channelTitle, 200), publishedAt: video.publishedAt, views: video.views, likes: video.likes, comments: video.comments })),
-    } : null,
   };
   const evidenceJson = JSON.stringify(evidence, null, 2).slice(0, 18000);
   const prompt = [
@@ -449,7 +411,7 @@ export function contentGenerationPrompt(context: OwnerContext, options: ContentG
   ].join("\n");
 
   return {
-    source: market ? "stored_youtube_analytics_and_public_market_snapshots" : "stored_youtube_analytics",
+    source: "stored_youtube_analytics",
     channel: snapshot.channel,
     period: snapshot.period,
     prompt,

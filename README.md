@@ -40,7 +40,6 @@ builder. The local verification command uses this builder in restricted environm
 | `/videos`    | Search titles/topics, sort by recency/views/average duration, empty state              |
 | `/analytics` | Totals, engagement, accessible weekly values and metric definitions                    |
 | `/insights`  | Unavailable AI state and evidence/comparison/hypothesis/experiment analysis        |
-| `/market`    | Owner-scoped public YouTube channels and competitor snapshots                       |
 | `/prompts`   | Copyable evidence package for GPT Plus or another AI app                            |
 | `/settings`  | Owner access, read-only YouTube connection, manual sync and setup status               |
 
@@ -75,7 +74,6 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
 - `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
 - `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
-- `src/lib/data/market.ts` and `src/lib/youtube/public-market.ts`: owner-scoped public market snapshots using the YouTube Data API.
 - `src/lib/ai/provider.ts`: optional provider-agnostic AI adapter with bounded structured output; unavailable by default. See [AI adapter setup](docs/ai.md).
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
 - `docs/connection-setup.md`: Supabase and Google console configuration.
@@ -87,7 +85,7 @@ owner-scoped tools for synced metrics, video rankings, evidence-backed hypothese
 content ideas, copyable GPT Plus generation prompts, and structured 60-second script drafts. Drafts remain in `draft`
 status and require human review before any future video generation or publishing.
 No OpenAI API key is required; the dashboard remains functional without MCP.
-The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test. It also exposes `list_market_channels`, `sync_market_channel` and `get_market_snapshot` for public competitor research. Market data is a snapshot and never represents private competitor analytics.
+The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
@@ -129,8 +127,7 @@ just to demonstrate them.
 ## Security and configuration
 
 There are no required environment variables for sample mode. `.env.example`
-documents optional owner/YouTube connection variables, including the server-only
-`YOUTUBE_DATA_API_KEY` used for public market snapshots. `.env*` files
+documents optional owner/YouTube connection variables. `.env*` files
 are ignored except this example. Never commit tokens, OAuth secrets, private keys,
 or service-role credentials. Use local `.env.local` or encrypted hosting settings
 for later integrations; never put server secrets in `NEXT_PUBLIC_*`.
@@ -164,7 +161,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 9. The Scripts page includes an owner-only image uploader. It stores JPG, PNG, WebP, and GIF files (up to 15 MB) in the private `image-assets` bucket and exposes only short-lived signed URLs. Keep `IMAGE_ASSET_BUCKET` aligned with the bucket name if you customize it.
 10. When the production worker runs with `VIDEO_PROVIDER=public-domain`, it requires at least one owner-uploaded image asset and repeats it as needed for the short slideshow; it never substitutes an unknown image. Codex MCP can list these assets and save an owner-validated `edit_plan` to control scene order. Set `VIDEO_REQUIRE_VOICE=true`, `VOICE_PROVIDER=gemini`, and the server-only `GEMINI_API_KEY` to add Gemini narration. The default model is `gemini-2.5-flash-preview-tts`, voice `Kore`, and request deadline 20 seconds (bounded at 25 seconds). An explicit Gemini selection reports Gemini errors directly instead of hiding them behind an unavailable fallback model. Without a configured provider the MVP intentionally renders image-only video instead of pretending voice generation succeeded. Audio remains private until the human approval step.
 11. Codex MCP also exposes `upload_generated_image`. Pass a base64-encoded JPG, PNG, WebP, or GIF (maximum 15 MB); the server stores it under the connected owner's private image bucket and returns an asset path for `save_edit_plan`.
-12. Market intelligence is public-data-first. Apply `supabase/migrations/20260920180000_market_intelligence.sql` once, set `YOUTUBE_DATA_API_KEY` as a server-only Vercel/local variable, then add Channel IDs from `/market`. Use `/prompts` or the MCP `create_content_generation_prompt` tool to hand evidence to GPT Plus. No AI API billing is required for this handoff.
+12. Use `/prompts` or the MCP `create_content_generation_prompt` tool to hand your own stored channel analytics to GPT Plus. No AI API billing is required for this handoff.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
