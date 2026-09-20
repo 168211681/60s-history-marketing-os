@@ -22,7 +22,11 @@ async function signedUrl(path: string, fetcher: typeof fetch, settings: ReturnTy
     body: JSON.stringify({ expiresIn: 86400 }),
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error("IMAGE_ASSET_SIGN_FAILED");
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    console.error("image asset signing rejected", { status: response.status, detail });
+    throw new Error("IMAGE_ASSET_SIGN_FAILED");
+  }
   const payload = (await response.json()) as { signedURL?: unknown; signedUrl?: unknown };
   const value = typeof payload.signedURL === "string" ? payload.signedURL : typeof payload.signedUrl === "string" ? payload.signedUrl : null;
   if (!value) throw new Error("IMAGE_ASSET_INVALID_SIGNED_URL");
