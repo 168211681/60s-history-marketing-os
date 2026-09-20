@@ -3,6 +3,8 @@ import { ownerId } from "@/lib/auth/config";
 import { buildMarketingInsights } from "@/lib/insights";
 import { authenticatedAnalyticsReader } from "@/lib/data/postgres-reader";
 import { buildLiveWorkspace, type WorkspaceData } from "@/lib/data/workspace-model";
+import { listImageAssets } from "@/lib/media/assets";
+import type { EditPlan } from "@/lib/video/provider";
 
 export type OwnerContext = {
   ownerId: string;
@@ -132,6 +134,27 @@ export async function createProductionWorkflow(context: OwnerContext, scriptDraf
     [scriptDraftId, context.channelId],
   );
   if (!result.rowCount) throw new Error("Only an approved script owned by the connected channel can start a workflow");
+  return result.rows[0];
+}
+
+export async function uploadedImageAssets(context: OwnerContext) {
+  const assets = await listImageAssets(context.ownerId);
+  return assets.map(({ path, createdAt, contentType, size }) => ({ path, createdAt, contentType, size }));
+}
+
+export async function saveEditPlan(context: OwnerContext, scriptDraftId: string, plan: EditPlan) {
+  const assetPaths = new Set((await listImageAssets(context.ownerId)).map((asset) => asset.path));
+  if (!plan.scenes.length || plan.scenes.some((scene) => !assetPaths.has(scene.assetPath))) {
+    throw new Error("EDIT_PLAN_ASSET_NOT_OWNED");
+  }
+  const result = await database().query<{ id: string; title: string; edit_plan: EditPlan }>(
+    `update public.script_drafts d
+        set edit_plan = $3::jsonb, updated_at = now()
+      where d.id = $1 and d.channel_id = $2
+      returning d.id, d.title, d.edit_plan`,
+    [scriptDraftId, context.channelId, JSON.stringify(plan)],
+  );
+  if (!result.rowCount) throw new Error("SCRIPT_DRAFT_NOT_OWNED");
   return result.rows[0];
 }
 

@@ -53,7 +53,12 @@ export function publicDomainProvider(): VideoGenerationProvider {
     name: "public-domain",
     configured: true,
     async submit(request) {
-      const uploaded = (request.imageAssets ?? []).filter((asset) => /^https:\/\//.test(asset.url)).slice(0, IMAGE_COUNT)
+      const available = (request.imageAssets ?? []).filter((asset) => /^https:\/\//.test(asset.url));
+      const plannedPaths = request.editPlan?.scenes.map((scene) => scene.assetPath) ?? [];
+      const ordered = plannedPaths.length
+        ? [...plannedPaths.map((path) => available.find((asset) => asset.path === path)).filter((asset): asset is { path: string; url: string } => Boolean(asset)), ...available]
+        : available;
+      const uploaded = ordered.filter((asset, index, assets) => assets.findIndex((candidate) => candidate.path === asset.path) === index).slice(0, IMAGE_COUNT)
         .map((asset) => ({ url: asset.url, originalUrl: asset.url, title: asset.path, license: "Owner uploaded" }));
       if (!uploaded.length) throw new Error("IMAGE_ASSETS_REQUIRED");
       const images = Array.from({ length: IMAGE_COUNT }, (_, index) => uploaded[index % uploaded.length]);

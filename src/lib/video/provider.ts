@@ -7,6 +7,19 @@ export type VideoGenerationRequest = {
   sceneCues: string;
   captionText: string;
   imageAssets?: Array<{ path: string; url: string }>;
+  editPlan?: EditPlan;
+};
+
+export type EditPlanScene = {
+  scene: number;
+  assetPath: string;
+  durationSeconds: number;
+  caption?: string;
+};
+
+export type EditPlan = {
+  version: 1;
+  scenes: EditPlanScene[];
 };
 
 export type VideoProviderName = "higgsfield" | "huggingface" | "public-domain" | "fal" | "replicate" | "runway";

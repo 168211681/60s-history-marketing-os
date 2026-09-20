@@ -25,6 +25,7 @@ type ClaimedWorkflow = {
   hook: string;
   script_body: string;
   scene_cues: string;
+  edit_plan?: unknown;
   caption_text: string;
   attempts: number;
   provider_job_id?: string;
@@ -47,7 +48,7 @@ async function claimWorkflow(channelId: string) {
          from next_workflow n, public.script_drafts d
         where w.id = n.id and d.id = w.script_draft_id and d.status = 'approved' and w.attempts < 10
        returning w.id, w.script_draft_id, w.channel_id, d.title, d.hook,
-                 d.script_body, d.scene_cues, d.caption_text, w.attempts`,
+                 d.script_body, d.scene_cues, d.caption_text, d.edit_plan, w.attempts`,
       [channelId],
     );
     return result.rows[0] ?? null;
@@ -218,6 +219,7 @@ export async function GET(request: NextRequest) {
       scriptBody: workflow.script_body,
       sceneCues: workflow.scene_cues,
       captionText: workflow.caption_text,
+      editPlan: workflow.edit_plan && typeof workflow.edit_plan === "object" ? workflow.edit_plan as import("@/lib/video/provider").EditPlan : undefined,
       imageAssets: process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
         ? await listImageAssets(owner)
         : [],

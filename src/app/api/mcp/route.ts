@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
-import { createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveScriptDraft } from "@/lib/ai/mcp-data";
+import { createProductionWorkflow, insightSnapshot, ownerContext, productionWorkflows, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import type { EditPlan } from "@/lib/video/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,26 @@ function server() {
     },
   }, async (input) => {
     try { return result({ source: "codex_mcp", approval: "human_required", draft: await saveScriptDraft(await ownerContext(), input) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("list_uploaded_image_assets", {
+    title: "List uploaded image assets",
+    description: "List only images uploaded by the connected owner. Use these paths when planning a video; external image sources are not allowed.",
+    inputSchema: {},
+  }, async () => {
+    try { return result({ source: "owner_uploaded_assets", assets: await uploadedImageAssets(await ownerContext()) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("save_edit_plan", {
+    title: "Save image edit plan",
+    description: "Save a scene timeline for a script draft. Every assetPath must come from list_uploaded_image_assets.",
+    inputSchema: {
+      scriptDraftId: z.string().uuid(),
+      scenes: z.array(z.object({ scene: z.number().int().min(1).max(100), assetPath: shortText(500), durationSeconds: z.number().min(1).max(60), caption: z.string().max(500).optional() })).min(1).max(100),
+    },
+  }, async ({ scriptDraftId, scenes }) => {
+    try {
+      const plan: EditPlan = { version: 1, scenes: scenes.map((scene) => ({ ...scene, caption: scene.caption?.trim() })) };
+      return result({ source: "codex_mcp", approval: "human_required", plan: await saveEditPlan(await ownerContext(), scriptDraftId, plan) });
+    } catch (error) { return failure(error); }
   });
   mcp.registerTool("start_production_workflow", {
     title: "Start production workflow",
