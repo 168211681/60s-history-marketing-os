@@ -201,9 +201,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  let providerName = "unknown";
+  let providerConfigured = false;
   try {
     await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "claimed", status: "rendering" });
     const provider = videoProvider();
+    providerName = provider.name;
+    providerConfigured = provider.configured;
     if (!provider.configured) throw new Error(`${provider.name.toUpperCase()}_NOT_CONFIGURED`);
     const job = await provider.submit({
       draftId: workflow.script_draft_id,
@@ -233,7 +237,15 @@ export async function GET(request: NextRequest) {
     await recordWorkflowEvent({ workflowId: workflow.id, channelId, attempt: workflow.attempts, eventType: "submitted", status: "rendering", metadata: { provider: provider.name } });
     return NextResponse.json({ status: "submitted", workflowId: workflow.id, providerJobId: job.externalJobId });
   } catch (error) {
-    const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "PROVIDER_FAILED";
+    const message = error instanceof Error ? error.message : "";
+    const code = message.match(/[A-Z][A-Z0-9_]{2,}/)?.[0] ?? "PROVIDER_FAILED";
+    console.error("production workflow provider failed", {
+      workflowId: workflow.id,
+      provider: providerName,
+      configured: providerConfigured,
+      code,
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
     await database().query(
       `update public.production_workflows
           set status = 'failed', current_step = 'failed', error_code = $2, updated_at = now()
