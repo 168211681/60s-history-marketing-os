@@ -10,7 +10,7 @@ import { summarize } from "../src/lib/analytics";
 import { contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
 import { nextExperimentMessage, type ContentExperimentRecord } from "../src/lib/data/experiments";
 import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
-import { fetchPublicMarketChannel } from "../src/lib/youtube/public-market";
+import { fetchPublicMarketChannel, normalizeYouTubeChannelId } from "../src/lib/youtube/public-market";
 
 test("MCP authorization requires the configured bearer secret", () => {
   assert.equal(isMcpAuthorized("Bearer test-secret", "test-secret"), true);
@@ -62,6 +62,13 @@ test("public market adapter normalizes YouTube channel and video snapshots", asy
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.YOUTUBE_DATA_API_KEY; else process.env.YOUTUBE_DATA_API_KEY = previousKey;
   }
+});
+
+test("public market input accepts a channel ID or /channel/ URL only", () => {
+  assert.equal(normalizeYouTubeChannelId("UCtest"), "UCtest");
+  assert.equal(normalizeYouTubeChannelId("https://www.youtube.com/channel/UCtest/"), "UCtest");
+  assert.equal(normalizeYouTubeChannelId("https://youtube.com/@creator"), null);
+  assert.equal(normalizeYouTubeChannelId("https://example.com/channel/UCtest"), null);
 });
 
 test("experiment recommendation keeps active tests focused", () => {

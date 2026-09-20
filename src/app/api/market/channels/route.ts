@@ -4,9 +4,10 @@ import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { databaseConfigured } from "@/lib/database";
 import { syncTrackedMarketChannel } from "@/lib/ai/mcp-data";
+import { normalizeYouTubeChannelId } from "@/lib/youtube/public-market";
 
 export const runtime = "nodejs";
-const schema = z.object({ youtubeChannelId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
+const schema = z.object({ youtubeChannelId: z.string().trim().min(1).max(500) });
 
 export async function POST(request: NextRequest) {
   const origin = appOrigin();
@@ -16,8 +17,10 @@ export async function POST(request: NextRequest) {
   if (!databaseConfigured()) return new Response("Database is not configured", { status: 503 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid YouTube channel ID" }, { status: 400 });
+  const youtubeChannelId = normalizeYouTubeChannelId(parsed.data.youtubeChannelId);
+  if (!youtubeChannelId) return NextResponse.json({ error: "Invalid YouTube channel ID or /channel/ URL" }, { status: 400 });
   try {
-    const result = await syncTrackedMarketChannel({ ownerId: owner.id }, parsed.data.youtubeChannelId);
+    const result = await syncTrackedMarketChannel({ ownerId: owner.id }, youtubeChannelId);
     return NextResponse.json({ channel: result }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "MARKET_SYNC_FAILED";

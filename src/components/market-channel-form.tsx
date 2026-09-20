@@ -15,8 +15,8 @@ export function MarketChannelForm() {
     setChannelId(""); setMessage(`ซิงก์ ${payload.channel.title} แล้ว ${payload.channel.syncedVideos} วิดีโอ`); window.location.reload();
   }
   return <form className="settings-actions" onSubmit={submit}>
-    <label htmlFor="market-channel-id">YouTube Channel ID</label>
-    <input id="market-channel-id" className="text-input" value={channelId} onChange={(event) => setChannelId(event.target.value)} placeholder="UC..." pattern="[A-Za-z0-9_-]{1,128}" required />
+    <label htmlFor="market-channel-id">YouTube Channel ID หรือ URL</label>
+    <input id="market-channel-id" className="text-input" value={channelId} onChange={(event) => setChannelId(event.target.value)} placeholder="UC... หรือ https://youtube.com/channel/UC..." required />
     <button className="button" type="submit" disabled={busy}>{busy ? "กำลังซิงก์…" : "เพิ่มและซิงก์ช่อง"}</button>
     {message ? <p className="muted" role="status">{message}</p> : null}
   </form>;

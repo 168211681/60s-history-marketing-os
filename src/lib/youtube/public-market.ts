@@ -45,6 +45,18 @@ export type PublicMarketVideo = {
 
 export type PublicMarketChannel = { youtubeChannelId: string; title: string; channelUrl: string; videos: PublicMarketVideo[] };
 
+export function normalizeYouTubeChannelId(value: string) {
+  const input = value.trim();
+  if (/^[A-Za-z0-9_-]{1,128}$/.test(input)) return input;
+  try {
+    const url = new URL(input);
+    if (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) return null;
+    return /^\/channel\/([A-Za-z0-9_-]{1,128})\/?$/.exec(url.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function get(path: string, params: Record<string, string>, fetcher: typeof fetch) {
   const key = process.env.YOUTUBE_DATA_API_KEY;
   if (!key) throw new Error("YOUTUBE_DATA_API_KEY_NOT_CONFIGURED");
@@ -56,8 +68,9 @@ async function get(path: string, params: Record<string, string>, fetcher: typeof
 }
 
 export async function fetchPublicMarketChannel(channelId: string, fetcher: typeof fetch = fetch): Promise<PublicMarketChannel> {
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(channelId)) throw new Error("YOUTUBE_CHANNEL_ID_INVALID");
-  const channelPayload = await get("channels", { part: "snippet,contentDetails", id: channelId }, fetcher);
+  const normalizedChannelId = normalizeYouTubeChannelId(channelId);
+  if (!normalizedChannelId) throw new Error("YOUTUBE_CHANNEL_ID_INVALID");
+  const channelPayload = await get("channels", { part: "snippet,contentDetails", id: normalizedChannelId }, fetcher);
   const channel = items(channelPayload)[0];
   if (!channel) throw new Error("YOUTUBE_CHANNEL_NOT_FOUND");
   const snippet = object(channel.snippet);
@@ -68,9 +81,9 @@ export async function fetchPublicMarketChannel(channelId: string, fetcher: typeo
   const ids = items(playlistPayload).map((item) => stringValue(object(item.contentDetails).videoId, "YOUTUBE_VIDEO_ID_INVALID"));
   const videos = ids.length ? items(await get("videos", { part: "snippet,contentDetails,statistics", id: ids.join(",") }, fetcher)) : [];
   return {
-    youtubeChannelId: channelId,
+    youtubeChannelId: normalizedChannelId,
     title: stringValue(snippet.title, "YOUTUBE_CHANNEL_TITLE_INVALID"),
-    channelUrl: `https://www.youtube.com/channel/${channelId}`,
+    channelUrl: `https://www.youtube.com/channel/${normalizedChannelId}`,
     videos: videos.flatMap((video) => {
       const videoSnippet = object(video.snippet);
       const publishedAt = stringValue(videoSnippet.publishedAt, "YOUTUBE_VIDEO_DATE_INVALID");
