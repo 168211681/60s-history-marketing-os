@@ -50,19 +50,30 @@ export async function uploadImageAsset(ownerId: string, bytes: Uint8Array, conte
 
 export async function listImageAssets(ownerId: string, fetcher: typeof fetch = fetch) {
   const settings = config();
-  const response = await fetcher(`${settings.url}/storage/v1/object/list/${settings.bucket}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${settings.key}`, apikey: settings.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ prefix: `${ownerId}/`, limit: 50, offset: 0, sortBy: { column: "created_at", order: "desc" } }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error("IMAGE_ASSET_LIST_FAILED");
-  const entries = (await response.json()) as Array<{ name?: unknown; id?: unknown; created_at?: unknown; metadata?: { mimetype?: unknown; size?: unknown } }>;
+  type Entry = { name?: unknown; id?: unknown; created_at?: unknown; metadata?: { mimetype?: unknown; size?: unknown } };
+  async function listEntries(prefix: string, depth = 0): Promise<Array<Entry & { path: string }>> {
+    if (depth > 3) return [];
+    const response = await fetcher(`${settings.url}/storage/v1/object/list/${settings.bucket}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${settings.key}`, apikey: settings.key, "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix, limit: 100, offset: 0, sortBy: { column: "created_at", order: "desc" } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error("IMAGE_ASSET_LIST_FAILED");
+    const entries = (await response.json()) as Entry[];
+    const files: Array<Entry & { path: string }> = [];
+    for (const entry of entries) {
+      if (typeof entry.name !== "string" || !entry.name || entry.name.includes("..")) continue;
+      const path = `${prefix}${entry.name}`;
+      if (entry.id || entry.metadata?.mimetype) files.push({ ...entry, path });
+      else files.push(...await listEntries(`${path}/`, depth + 1));
+    }
+    return files;
+  }
+  const entries = await listEntries(`${ownerId}/`);
   const assets = [];
   for (const entry of entries) {
-    if (typeof entry.name !== "string" || !entry.name || entry.name.includes("..")) continue;
-    const path = entry.name.startsWith(`${ownerId}/`) ? entry.name : `${ownerId}/${entry.name}`;
-    console.info("image asset listed", { name: entry.name, path });
+    const path = entry.path;
     assets.push({ path, createdAt: typeof entry.created_at === "string" ? entry.created_at : null, contentType: typeof entry.metadata?.mimetype === "string" ? entry.metadata.mimetype : null, size: typeof entry.metadata?.size === "number" ? entry.metadata.size : null, url: await signedUrl(path, fetcher, settings) });
   }
   return assets;
