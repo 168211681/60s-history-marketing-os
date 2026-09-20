@@ -29,10 +29,11 @@ function geminiVoiceProvider(): VoiceProvider {
       if (!apiKey || !model || !voice) throw new Error("VOICE_NOT_CONFIGURED");
       const value = text.trim().slice(0, 12000);
       if (!value) throw new Error("VOICE_TEXT_REQUIRED");
+      const timeoutMs = Math.max(5_000, Math.min(25_000, Number(process.env.GEMINI_TTS_TIMEOUT_MS ?? 20_000)));
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ contents: [{ parts: [{ text: value }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
-        signal: AbortSignal.timeout(57_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) throw new Error(`GEMINI_TTS_HTTP_${response.status}`);
       const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }> };

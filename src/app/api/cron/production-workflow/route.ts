@@ -11,7 +11,9 @@ import { listImageAssets } from "@/lib/media/assets";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const RENDER_TIMEOUT_MINUTES = 60;
+// A Vercel function has a bounded request lifetime. Reclaim synchronous renders
+// promptly when the function is killed before it can persist a result.
+const RENDER_TIMEOUT_MINUTES = 3;
 
 function authorized(request: NextRequest) {
   return isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET);
