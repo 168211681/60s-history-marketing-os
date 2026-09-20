@@ -87,7 +87,7 @@ export default async function ScriptsPage() {
           {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
           {workflow.status === "uploaded_private" && workflow.youtubeVideoId ? <PublishWorkflowButton id={workflow.id} /> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
-          {workflow.status === "failed" && workflow.attempts < 10 ? <RetryWorkflowButton id={workflow.id} /> : workflow.status === "failed" ? <span className="error-text">Retry limit reached</span> : null}
+          {workflow.status === "failed" && workflow.errorCode === "PROVIDER_CREDITS_DEPLETED" ? <span className="error-text">Provider credits depleted. Add credits or switch provider.</span> : workflow.status === "failed" && workflow.attempts < 10 ? <RetryWorkflowButton id={workflow.id} /> : workflow.status === "failed" ? <span className="error-text">Retry limit reached</span> : null}
           <WorkflowEvents id={workflow.id} />
         </div>)}</div>
       </Panel> : null}
