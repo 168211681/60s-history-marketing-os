@@ -67,7 +67,7 @@ test("public market adapter normalizes YouTube channel and video snapshots", asy
 test("public market input accepts a channel ID or /channel/ URL only", () => {
   assert.equal(normalizeYouTubeChannelId("UCtest"), "UCtest");
   assert.equal(normalizeYouTubeChannelId("https://www.youtube.com/channel/UCtest/"), "UCtest");
-  assert.equal(normalizeYouTubeChannelId("https://youtube.com/@creator"), null);
+  assert.equal(normalizeYouTubeChannelId("https://youtube.com/@creator"), "@creator");
   assert.equal(normalizeYouTubeChannelId("https://example.com/channel/UCtest"), null);
 });
 

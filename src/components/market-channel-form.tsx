@@ -16,7 +16,7 @@ export function MarketChannelForm() {
   }
   return <form className="settings-actions" onSubmit={submit}>
     <label htmlFor="market-channel-id">YouTube Channel ID หรือ URL</label>
-    <input id="market-channel-id" className="text-input" value={channelId} onChange={(event) => setChannelId(event.target.value)} placeholder="UC... หรือ https://youtube.com/channel/UC..." required />
+    <input id="market-channel-id" className="text-input" value={channelId} onChange={(event) => setChannelId(event.target.value)} placeholder="UC..., https://youtube.com/channel/... หรือ /@handle" required />
     <button className="button" type="submit" disabled={busy}>{busy ? "กำลังซิงก์…" : "เพิ่มและซิงก์ช่อง"}</button>
     {message ? <p className="muted" role="status">{message}</p> : null}
   </form>;
