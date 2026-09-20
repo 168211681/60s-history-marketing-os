@@ -10,13 +10,32 @@ import { WorkflowEvents } from "@/components/workflow-events";
 
 export const metadata = { title: "Script drafts" };
 
+function LoadError({ section }: { section: string }) {
+  return (
+    <div className="error-text" role="alert">
+      <p>We couldn&apos;t load {section} right now.</p>
+      <a className="text-link" href="/scripts">Try again →</a>
+    </div>
+  );
+}
+
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
 }
 
 export default async function ScriptsPage() {
-  const drafts = await scriptDraftsForOwner();
-  const workflows = await productionWorkflowsForOwner();
+  const [draftsResult, workflowsResult] = await Promise.allSettled([
+    scriptDraftsForOwner(),
+    productionWorkflowsForOwner(),
+  ]);
+  const drafts = draftsResult.status === "fulfilled" ? draftsResult.value : [];
+  const workflows = workflowsResult.status === "fulfilled" ? workflowsResult.value : [];
+  if (draftsResult.status === "rejected") {
+    console.error("scripts drafts load failed", draftsResult.reason instanceof Error ? draftsResult.reason.message : "unknown error");
+  }
+  if (workflowsResult.status === "rejected") {
+    console.error("scripts workflows load failed", workflowsResult.reason instanceof Error ? workflowsResult.reason.message : "unknown error");
+  }
   const hasApprovedDraft = drafts.some((draft) => draft.status === "approved");
   return (
     <>
@@ -28,7 +47,8 @@ export default async function ScriptsPage() {
       <Panel title="Generate with AI provider" description="Optional server-side AI integration. Every result stays a draft until you review it.">
         <AiScriptDraftForm />
       </Panel>
-      {!drafts.length ? (
+      {draftsResult.status === "rejected" ? <Panel title="Drafts unavailable"><LoadError section="your drafts" /></Panel> : null}
+      {draftsResult.status === "fulfilled" && !drafts.length ? (
         <Panel title="No drafts yet">
           <EmptyState title="Your review queue is empty">
             <ScriptDraftForm />
@@ -57,6 +77,7 @@ export default async function ScriptsPage() {
           ))}
         </div>
       )}
+      {workflowsResult.status === "rejected" ? <Panel title="Production status unavailable"><LoadError section="production status" /></Panel> : null}
       {workflows.length || hasApprovedDraft ? <Panel title="Production workflows" description="Private rendering and upload status">
         {!workflows.length ? <p className="muted">An approved draft is ready. Run the worker to process the queued workflow.</p> : null}
         <div className="script-actions"><RunWorkerButton /></div>
