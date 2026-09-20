@@ -79,6 +79,26 @@ h3 {
   border-top: 1px solid var(--line);
   padding-top: 12px;
 }
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+.asset-grid a {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+}
+.asset-grid img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #e8eee8;
+}
 .script-panel-actions,
 .script-actions {
   display: flex;

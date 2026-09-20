@@ -7,6 +7,7 @@ import { RunWorkerButton } from "@/components/run-worker-button";
 import { RetryWorkflowButton } from "@/components/retry-workflow-button";
 import { PublishWorkflowButton } from "@/components/publish-workflow-button";
 import { WorkflowEvents } from "@/components/workflow-events";
+import { ImageAssetUploader } from "@/components/image-asset-uploader";
 
 export const metadata = { title: "Script drafts" };
 
@@ -44,6 +45,9 @@ export default async function ScriptsPage() {
         title="Script drafts"
         description="Review structured 60-second drafts before any production or publishing step."
       />
+      <Panel title="Image assets" description="Upload images generated in ChatGPT or downloaded from a free licensed source for future scenes.">
+        <ImageAssetUploader />
+      </Panel>
       <Panel title="Generate with AI provider" description="Optional server-side AI integration. Every result stays a draft until you review it.">
         <AiScriptDraftForm />
       </Panel>

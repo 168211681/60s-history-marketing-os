@@ -148,6 +148,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 6. Add an optional video provider adapter after human-approved script drafts. The implemented provider boundary supports `huggingface`; other providers must remain unavailable until their contracts are verified.
 7. Configure a private Supabase Storage bucket named `video-artifacts` before enabling a provider that returns raw video bytes. The server-only `SUPABASE_SERVICE_ROLE_KEY` is used only to upload artifacts and create short-lived signed URLs for the private YouTube upload worker.
 8. For a no-billing MVP, set `VIDEO_PROVIDER=public-domain`. The worker searches Wikimedia Commons for public-domain or Creative Commons images, renders a short vertical slideshow with the bundled `ffmpeg-static` binary, and stores the result in the private `video-artifacts` bucket. Source titles and license labels are recorded in workflow events. Set `VIDEO_PROVIDER=huggingface` or `higgsfield` only when that provider is configured and funded. The free GitHub Actions worker is documented in [production worker setup](docs/production-worker.md).
+9. The Scripts page includes an owner-only image uploader. It stores JPG, PNG, WebP, and GIF files (up to 15 MB) in the private `image-assets` bucket and exposes only short-lived signed URLs. Keep `IMAGE_ASSET_BUCKET` aligned with the bucket name if you customize it.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
