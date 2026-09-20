@@ -12,7 +12,7 @@ const WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php";
 const IMAGE_COUNT = 3;
 const IMAGE_SECONDS = 4;
 
-type WikimediaImage = { url: string; title: string; license: string };
+type WikimediaImage = { url: string; originalUrl: string; title: string; license: string };
 
 function searchTerms(request: VideoGenerationRequest) {
   return `${request.title} ${request.sceneCues}`.replace(/[\n\r]+/g, " ").trim().slice(0, 180) || "history";
@@ -32,7 +32,7 @@ async function searchFreeImages(query: string): Promise<WikimediaImage[]> {
     const url = info?.thumburl ?? info?.url;
     const license = info?.extmetadata?.LicenseShortName?.value?.trim() ?? "";
     if (!url || !/^https:\/\//.test(url) || !info?.mime?.startsWith("image/") || !/(public domain|cc0|cc by|cc-by|cc by-sa|cc-by-sa)/i.test(license)) return [];
-    return [{ url, title: page.title ?? "Wikimedia Commons image", license }];
+    return [{ url, originalUrl: info.url ?? url, title: page.title ?? "Wikimedia Commons image", license }];
   });
 }
 
@@ -42,19 +42,28 @@ async function findFreeImages(request: VideoGenerationRequest): Promise<Wikimedi
   for (const query of queries) {
     const results = await searchFreeImages(query);
     for (const image of results) {
-      if (!images.some((existing) => existing.url === image.url)) images.push(image);
+      if (!images.some((existing) => existing.originalUrl === image.originalUrl)) images.push(image);
       if (images.length === IMAGE_COUNT) return images;
     }
   }
   throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
 }
 
-async function downloadImage(url: string, path: string) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error("PUBLIC_DOMAIN_IMAGE_DOWNLOAD_FAILED");
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.startsWith("image/")) throw new Error("PUBLIC_DOMAIN_IMAGE_INVALID_TYPE");
-  await writeFile(path, new Uint8Array(await response.arrayBuffer()));
+async function downloadImage(image: WikimediaImage, path: string) {
+  let lastError = "PUBLIC_DOMAIN_IMAGE_DOWNLOAD_FAILED";
+  for (const url of [image.url, image.originalUrl]) {
+    try {
+      const response = await fetch(url, { headers: { "user-agent": "60s-history-marketing-os/1.0" }, signal: AbortSignal.timeout(15_000) });
+      if (!response.ok) { lastError = `PUBLIC_DOMAIN_IMAGE_HTTP_${response.status}`; continue; }
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.startsWith("image/")) { lastError = "PUBLIC_DOMAIN_IMAGE_INVALID_TYPE"; continue; }
+      await writeFile(path, new Uint8Array(await response.arrayBuffer()));
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError;
+    }
+  }
+  throw new Error(lastError);
 }
 
 async function renderSlideshow(images: string[], outputPath: string) {
@@ -74,15 +83,26 @@ export function publicDomainProvider(): VideoGenerationProvider {
       const workdir = await mkdtemp(join(tmpdir(), "marketing-os-images-"));
       try {
         await mkdir(workdir, { recursive: true });
-        const paths = await Promise.all(images.map((_, index) => join(workdir, `image-${index}.jpg`)));
-        await Promise.all(images.map((image, index) => downloadImage(image.url, paths[index])));
+        const downloaded: Array<{ image: WikimediaImage; path: string }> = [];
+        for (const image of images) {
+          const path = join(workdir, `image-${downloaded.length}.jpg`);
+          try {
+            await downloadImage(image, path);
+            downloaded.push({ image, path });
+          } catch (error) {
+            console.warn("public-domain image skipped", { title: image.title, error: error instanceof Error ? error.message : "unknown" });
+          }
+          if (downloaded.length === IMAGE_COUNT) break;
+        }
+        if (downloaded.length < IMAGE_COUNT) throw new Error("PUBLIC_DOMAIN_IMAGES_UNAVAILABLE");
+        const paths = downloaded.map((item) => item.path);
         const outputPath = join(workdir, "slideshow.mp4");
         await renderSlideshow(paths, outputPath);
         const stored = await storeVideoArtifact(await readFile(outputPath), "video/mp4");
         return {
           externalJobId: stored.path,
           artifactUrl: stored.artifactUrl,
-          sourceAttribution: images.map((image) => `${image.title} (${image.license})`).join("; "),
+          sourceAttribution: downloaded.map(({ image }) => `${image.title} (${image.license})`).join("; "),
         };
       } finally {
         await rm(workdir, { recursive: true, force: true });
