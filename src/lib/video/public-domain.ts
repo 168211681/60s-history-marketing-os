@@ -45,7 +45,18 @@ async function renderSlideshow(images: string[], outputPath: string, audioPath: 
   const audioArgs = audioPath ? ["-i", audioPath] : [];
   const audioMap = audioPath ? ["-map", `${images.length}:a:0`, "-c:a", "aac", "-b:a", "128k", "-shortest"] : [];
   const args = ["-y", ...images.flatMap((image) => ["-loop", "1", "-t", String(imageSeconds), "-i", image]), ...audioArgs, "-filter_complex", `${filters};${concat}`, "-map", "[outv]", ...audioMap, "-r", "30", "-c:v", "libx264", "-movflags", "+faststart", "-pix_fmt", "yuv420p", outputPath];
-  await execFileAsync(ffmpegPath, args, { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 });
+  try {
+    await execFileAsync(ffmpegPath, args, { timeout: 45_000, maxBuffer: 2 * 1024 * 1024 });
+  } catch (error) {
+    const failure = error as { code?: unknown; signal?: unknown; stderr?: unknown; stdout?: unknown };
+    console.error("slideshow render failed", {
+      code: failure.code ?? null,
+      signal: failure.signal ?? null,
+      stderr: typeof failure.stderr === "string" ? failure.stderr.slice(-4000) : "",
+      stdout: typeof failure.stdout === "string" ? failure.stdout.slice(-1000) : "",
+    });
+    throw new Error("VIDEO_RENDER_FAILED");
+  }
 }
 
 export function publicDomainProvider(): VideoGenerationProvider {
