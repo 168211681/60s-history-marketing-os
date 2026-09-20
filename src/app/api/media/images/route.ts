@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentOwner } from "@/lib/auth/server";
-import { listImageAssets, uploadImageAsset } from "@/lib/media/assets";
+import { deleteImageAsset, listImageAssets, uploadImageAsset } from "@/lib/media/assets";
 
 export const runtime = "nodejs";
 
@@ -28,5 +28,26 @@ export async function POST(request: Request) {
     const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "IMAGE_ASSET_UPLOAD_FAILED";
     console.error("image asset upload failed", { code });
     return NextResponse.json({ error: code }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const owner = await currentOwner();
+  if (!owner) return new Response("Unauthorized", { status: 401 });
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: "IMAGE_PATH_REQUIRED" }, { status: 400 });
+  }
+  const path = typeof payload === "object" && payload !== null && "path" in payload && typeof payload.path === "string" ? payload.path : null;
+  if (!path) return NextResponse.json({ error: "IMAGE_PATH_REQUIRED" }, { status: 400 });
+  try {
+    await deleteImageAsset(owner.id, path);
+    return NextResponse.json({ deleted: path }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "IMAGE_ASSET_DELETE_FAILED";
+    console.error("image asset delete failed", { code });
+    return NextResponse.json({ error: code }, { status: code === "IMAGE_ASSET_INVALID_PATH" ? 400 : 502 });
   }
 }

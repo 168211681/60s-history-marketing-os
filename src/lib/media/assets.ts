@@ -48,6 +48,19 @@ export async function uploadImageAsset(ownerId: string, bytes: Uint8Array, conte
   return { path, url: await signedUrl(path, fetcher, settings) };
 }
 
+export async function deleteImageAsset(ownerId: string, path: string, fetcher: typeof fetch = fetch) {
+  if (!path.startsWith(`${ownerId}/`) || path.includes("..") || path.includes("\\") || path.endsWith("/")) {
+    throw new Error("IMAGE_ASSET_INVALID_PATH");
+  }
+  const settings = config();
+  const response = await fetcher(`${settings.url}/storage/v1/object/${settings.bucket}/${path}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${settings.key}`, apikey: settings.key },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error("IMAGE_ASSET_DELETE_FAILED");
+}
+
 export async function listImageAssets(ownerId: string, fetcher: typeof fetch = fetch) {
   const settings = config();
   type Entry = { name?: unknown; id?: unknown; created_at?: unknown; metadata?: { mimetype?: unknown; size?: unknown } };

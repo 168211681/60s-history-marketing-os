@@ -91,6 +91,16 @@ h3 {
   font-size: 11px;
   overflow: hidden;
 }
+.asset-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.asset-delete {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+}
 .asset-grid img {
   width: 100%;
   aspect-ratio: 1 / 1;
