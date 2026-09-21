@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { channelSummaryPrompt, contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { channelSummaryPrompt, contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets, videoTranscriptPrompt } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 import { NextRequest } from "next/server";
@@ -96,6 +96,18 @@ function server() {
       const transcript = await videoTranscriptForOwner(context.ownerId, youtubeVideoId);
       if (!transcript) throw new Error("VIDEO_TRANSCRIPT_NOT_FOUND");
       return result({ source: "stored_video_transcript", transcript, analysis: analyzeTranscript(transcript.transcript) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("create_video_analysis_prompt", {
+    title: "Create video analysis prompt",
+    description: "Combine an owner-scoped transcript, its deterministic structure analysis, and available video metrics into a copyable prompt for GPT Plus.",
+    inputSchema: { youtubeVideoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), language: z.enum(["th", "en"]).default("th") },
+  }, async ({ youtubeVideoId, language }) => {
+    try {
+      const context = await ownerContext();
+      const transcript = await videoTranscriptForOwner(context.ownerId, youtubeVideoId);
+      if (!transcript) throw new Error("VIDEO_TRANSCRIPT_NOT_FOUND");
+      return result(videoTranscriptPrompt(context, transcript, analyzeTranscript(transcript.transcript), language));
     } catch (error) { return failure(error); }
   });
   mcp.registerTool("get_marketing_insights", {

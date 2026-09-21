@@ -7,7 +7,7 @@ import { higgsfieldProvider } from "../src/lib/video/higgsfield";
 import { videoProvider } from "../src/lib/video";
 import { storeVideoArtifact } from "../src/lib/video/artifacts";
 import { summarize } from "../src/lib/analytics";
-import { channelSummaryPrompt, contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
+import { channelSummaryPrompt, contentGenerationPrompt, type OwnerContext, videoTranscriptPrompt } from "../src/lib/ai/mcp-data";
 import { nextExperimentMessage, type ContentExperimentRecord } from "../src/lib/data/experiments";
 import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
 
@@ -63,6 +63,44 @@ test("channel summary prompt excludes content generation instructions", () => {
   assert.match(result.prompt, /Do not write a script/);
   assert.doesNotMatch(result.prompt, /complete spoken script/);
   assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
+});
+
+test("video analysis prompt combines transcript evidence with available metrics", () => {
+  const context: OwnerContext = {
+    ownerId: "owner-1",
+    channelId: "channel-1",
+    channelTitle: "60s History",
+    period: { from: "2026-08-22", through: "2026-09-18" },
+    workspace: {
+      source: "live",
+      channelTitle: "60s History",
+      period: "Aug 22 – Sep 18, 2026",
+      videos: sampleVideos,
+      summary: summarize(sampleVideos),
+      weeklyViews: sampleWeeklyViews,
+      lastSyncedAt: "2026-09-18T00:00:00.000Z",
+    },
+  };
+  const result = videoTranscriptPrompt(context, {
+    youtubeVideoId: "abc12345678",
+    title: sampleVideos[0].title,
+    languageCode: "en",
+    source: "youtube_captions",
+    transcript: "How did Rome build this road? Rome built it for trade.",
+  }, {
+    characterCount: 57,
+    tokenCount: 11,
+    sentenceCount: 2,
+    questionCount: 1,
+    exclamationCount: 0,
+    estimatedDurationSeconds: 4,
+    opening: "How did Rome build this road?",
+    repeatedTerms: [{ term: "rome", count: 2 }],
+  });
+  assert.match(result.prompt, /VIDEO AND TRANSCRIPT EVIDENCE/);
+  assert.match(result.prompt, /Separate observations from hypotheses/);
+  assert.equal(result.evidence.video.analytics?.views, sampleVideos[0].views);
+  assert.equal(result.evidence.transcript, "How did Rome build this road? Rome built it for trade.");
 });
 
 test("experiment recommendation keeps active tests focused", () => {
