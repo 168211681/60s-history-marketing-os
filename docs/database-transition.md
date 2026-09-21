@@ -72,6 +72,17 @@ Required values are supplied only at execution time:
 The restore rehearsal is evidence that the backup is usable. It is not a
 production restore and must not target a Supabase or Vercel hostname.
 
+### Local restore limitations
+
+The local PostgreSQL rehearsal cannot provide Supabase-managed components. The
+rehearsal therefore excludes the `vault` schema, the `supabase_vault`
+extension, its `vault.secrets` data, and the `pg_stat_statements` extension.
+It creates disposable placeholders for hosted roles such as `anon`,
+`authenticated`, and `service_role`. This verifies application tables and
+historical rows, but it does not verify Vault contents, hosted extension
+behavior, Supabase-managed roles, or JWT/Data API behavior. A genuinely
+isolated Supabase staging project is required for those checks.
+
 ## Staging migration
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
@@ -100,6 +111,16 @@ The scripts verify `current_database()` and `inet_server_addr()` against the
 operator-supplied expected identity. They do not rely on URL string matching to
 decide whether a target is staging or production, and they reject missing or
 ambiguous identity values.
+
+## Pending workflow disposition
+
+The read-only Production inventory currently reports one queued
+`production_workflows` row and no queued `video_generation_jobs`. Preserve that
+row and its audit history. Do not retry, delete, update, or execute it while the
+retired worker is disabled. Record its identifier and timestamps in the change
+record, then have the owner or DBA approve an explicit archival disposition
+before the Production migration. The retirement migration must not be used as a
+cleanup operation.
 
 ## Production application
 
@@ -139,4 +160,7 @@ The migration has no destructive down migration. If verification fails:
 
 The disposable PostgreSQL migration audit passed in this repository. Production
 backup, production migration, live pending-job inventory, and authenticated
-owner smoke tests still require a human with Supabase production access.
+owner smoke tests still require a human with Supabase production access. The
+verification SQL regression test covers the `pg_policies.tablename` catalog
+column; hosted grant and RLS checks remain pending until isolated Supabase
+staging is available.

@@ -15,7 +15,7 @@ where n.nspname = 'public'
   and c.relname in ('production_workflows', 'video_generation_jobs', 'script_drafts', 'channel_metrics')
 order by c.relname;
 
-select table_name, policyname, roles, cmd
+select tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
   and tablename in ('production_workflows', 'video_generation_jobs', 'script_drafts', 'channel_metrics')
