@@ -3,9 +3,6 @@ import { ScriptStatusActions } from "@/components/script-status-actions";
 import { productionWorkflowsForOwner, scriptDraftsForOwner } from "@/lib/data/script-drafts";
 import { ScriptDraftForm } from "@/components/script-draft-form";
 import { AiScriptDraftForm } from "@/components/ai-script-draft-form";
-import { RunWorkerButton } from "@/components/run-worker-button";
-import { RetryWorkflowButton } from "@/components/retry-workflow-button";
-import { PublishWorkflowButton } from "@/components/publish-workflow-button";
 import { WorkflowEvents } from "@/components/workflow-events";
 
 export const metadata = { title: "Script drafts" };
@@ -36,13 +33,12 @@ export default async function ScriptsPage() {
   if (workflowsResult.status === "rejected") {
     console.error("scripts workflows load failed", workflowsResult.reason instanceof Error ? workflowsResult.reason.message : "unknown error");
   }
-  const hasApprovedDraft = drafts.some((draft) => draft.status === "approved");
   return (
     <>
       <PageHeading
         eyebrow="HUMAN REVIEW QUEUE"
         title="Script drafts"
-        description="Review structured 60-second drafts before any production or publishing step."
+        description="Review evidence-backed drafts and prepare briefs for external editing tools."
       />
       <Panel title="Generate with AI provider" description="Optional server-side AI integration. Every result stays a draft until you review it.">
         <AiScriptDraftForm />
@@ -77,17 +73,12 @@ export default async function ScriptsPage() {
           ))}
         </div>
       )}
-      {workflowsResult.status === "rejected" ? <Panel title="Production status unavailable"><LoadError section="production status" /></Panel> : null}
-      {workflows.length || hasApprovedDraft ? <Panel title="Production workflows" description="Private rendering and upload status">
-        {!workflows.length ? <p className="muted">An approved draft is ready. Run the worker to process the queued workflow.</p> : null}
-        <div className="script-actions"><RunWorkerButton /></div>
+      {workflowsResult.status === "rejected" ? <Panel title="Archived production records unavailable"><LoadError section="archived production records" /></Panel> : null}
+      {workflows.length ? <Panel title="Archived production records" description="Historical records are read-only. Internal rendering, upload, and publishing are retired.">
         <div className="stack-md">{workflows.map((workflow) => <div className="workflow-row" key={workflow.id}>
           <div><strong>{workflow.title}</strong><p className="muted">{workflow.currentStep} · attempt {workflow.attempts}/10</p></div>
           <span className={`badge ${workflow.status === "failed" ? "danger" : "neutral"}`}>{workflow.status}</span>
-          {workflow.youtubeVideoId ? <a className="text-link" href={`https://youtu.be/${workflow.youtubeVideoId}`} target="_blank" rel="noreferrer">Open private video →</a> : null}
-          {workflow.status === "uploaded_private" && workflow.youtubeVideoId ? <PublishWorkflowButton id={workflow.id} /> : null}
           {workflow.errorCode ? <span className="error-text">{workflow.errorCode}</span> : null}
-          {workflow.status === "failed" && workflow.errorCode === "PROVIDER_CREDITS_DEPLETED" ? <span className="error-text">Provider credits depleted. Add credits or switch provider.</span> : workflow.status === "failed" && workflow.attempts < 10 ? <RetryWorkflowButton id={workflow.id} /> : workflow.status === "failed" ? <span className="error-text">Retry limit reached</span> : null}
           <WorkflowEvents id={workflow.id} />
         </div>)}</div>
       </Panel> : null}

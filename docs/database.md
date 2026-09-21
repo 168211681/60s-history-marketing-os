@@ -23,7 +23,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
 | `private.youtube_connections` | Encrypted refresh token and owner/channel binding | No access |
-| `private.production_workflow_events` | Sanitized production workflow transition telemetry and error codes | No access |
+| `private.production_workflow_events` | Sanitized archived production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
 
@@ -46,8 +46,9 @@ the migration does not depend on old or new Supabase default privileges. See the
 [Supabase grant change](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)
 and [RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security).
 
-`service_role` can perform server-side CRUD and bypasses RLS. Future backend code
-must derive ownership from a verified session and verified Google authorization;
+`service_role` can perform server-side CRUD and bypasses RLS, except the explicit
+write revokes on archived production tables in the retirement migration. Future
+backend code must derive ownership from a verified session and verified Google authorization;
 never accept a caller-supplied owner ID as authorization. Do not expose this key
 to browser code. Keep `private` out of the Data API exposed-schema list. A worker
 would need a secure server database connection to access private jobs.

@@ -4,7 +4,6 @@ import { appOrigin } from "@/lib/auth/config";
 export const youtubeScopes = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/yt-analytics.readonly",
-  "https://www.googleapis.com/auth/youtube.upload",
 ] as const;
 
 export function googleConfig() {
@@ -104,68 +103,4 @@ export async function ownerChannel(accessToken: string, fetcher: typeof fetch = 
     throw new Error("YouTube channel response is invalid");
   }
   return { id, title: title.trim() };
-}
-
-export async function uploadVideoPrivate(
-  accessToken: string,
-  artifactUrl: string,
-  metadata: { title: string; description: string },
-  fetcher: typeof fetch = fetch,
-) {
-  if (!/^https:\/\//.test(artifactUrl) || artifactUrl.length > 2000) throw new Error("YOUTUBE_INVALID_ARTIFACT_URL");
-  const source = await fetcher(artifactUrl, { cache: "no-store", signal: AbortSignal.timeout(30000) });
-  if (!source.ok) throw new Error("YOUTUBE_ARTIFACT_FETCH_FAILED");
-  const declaredLength = Number(source.headers.get("content-length") ?? "0");
-  if (declaredLength > 256 * 1024 * 1024) throw new Error("YOUTUBE_ARTIFACT_TOO_LARGE");
-  const bytes = new Uint8Array(await source.arrayBuffer());
-  if (!bytes.byteLength || bytes.byteLength > 256 * 1024 * 1024) throw new Error("YOUTUBE_ARTIFACT_TOO_LARGE");
-
-  const init = await fetcher("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json; charset=UTF-8",
-      "X-Upload-Content-Type": "video/mp4",
-      "X-Upload-Content-Length": String(bytes.byteLength),
-    },
-    body: JSON.stringify({
-      snippet: { title: metadata.title.trim().slice(0, 100), description: metadata.description.trim().slice(0, 5000), categoryId: "22" },
-      status: { privacyStatus: "private", selfDeclaredMadeForKids: false },
-    }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!init.ok) throw new Error("YOUTUBE_UPLOAD_INIT_FAILED");
-  const location = init.headers.get("location");
-  if (!location || !/^https:\/\//.test(location)) throw new Error("YOUTUBE_UPLOAD_SESSION_INVALID");
-  const uploaded = await fetcher(location, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4", "Content-Length": String(bytes.byteLength) },
-    body: bytes,
-    signal: AbortSignal.timeout(120000),
-  });
-  if (!uploaded.ok) throw new Error("YOUTUBE_UPLOAD_FAILED");
-  const payload = (await uploaded.json()) as { id?: unknown };
-  if (typeof payload.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(payload.id)) throw new Error("YOUTUBE_UPLOAD_RESPONSE_INVALID");
-  return { youtubeVideoId: payload.id };
-}
-
-export async function publishVideo(
-  accessToken: string,
-  youtubeVideoId: string,
-  fetcher: typeof fetch = fetch,
-) {
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(youtubeVideoId)) throw new Error("YOUTUBE_VIDEO_ID_INVALID");
-  const response = await fetcher("https://www.googleapis.com/youtube/v3/videos?part=status", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify({ id: youtubeVideoId, status: { privacyStatus: "public" } }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) throw new Error("YOUTUBE_PUBLISH_FAILED");
-  const payload = (await response.json()) as { id?: unknown };
-  if (payload.id !== youtubeVideoId) throw new Error("YOUTUBE_PUBLISH_RESPONSE_INVALID");
-  return { youtubeVideoId };
 }

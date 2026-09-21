@@ -11,8 +11,8 @@ set search_path = ''
 as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
--- Minimal test-only Supabase Storage contract used by the private artifact
--- migration. The real `storage` schema is supplied by Supabase.
+-- Minimal test-only Supabase Storage contract used by archived artifact
+-- migrations. The real `storage` schema is supplied by Supabase.
 create schema storage;
 create table storage.buckets (
   id text primary key,

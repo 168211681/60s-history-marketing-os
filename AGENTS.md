@@ -7,7 +7,9 @@
 - Treat sample data as fictional and label it clearly. Preserve `NULL` for metrics the API does not provide.
 - Keep AI output separated into observed data, calculated comparison, hypothesis, and experiment. Do not invent causal claims or promise virality.
 - AI, MCP, and video providers are optional adapters. The dashboard must remain useful without them.
-- Generated scripts and videos remain drafts until a human approves them. Do not enable unattended publishing.
+- Generated scripts remain drafts until a human approves them. Internal video rendering,
+  upload, and publishing are retired; do not reintroduce provider calls through UI,
+  API, cron, or MCP without a new architecture decision.
 - Run targeted lint, typecheck, tests, and build checks appropriate to the change before committing. Review `git diff --check` and the final diff.
 
 ## Efficient Codex workflow
@@ -21,6 +23,7 @@
 ## Current product direction
 
 The production app is a private owner workspace for 60s History. YouTube OAuth,
-Supabase Auth, PostgreSQL analytics, and daily Vercel sync are live. The next
-product layer is Codex/MCP-assisted evidence-based insights and 60-second script
-drafts, followed by an optional Higgsfield video adapter.
+Supabase Auth, PostgreSQL analytics, and daily Vercel sync are live. The active
+product is Codex/MCP-assisted evidence-based intelligence, research, experiments,
+and reviewed script drafts for external editing tools. Internal video production is
+retired; see `docs/adr/0001-analysis-first-scope.md`.
