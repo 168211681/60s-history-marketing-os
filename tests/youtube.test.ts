@@ -5,6 +5,7 @@ import { appOrigin, ownerId } from "../src/lib/auth/config";
 import { decryptToken, encryptToken, sameSecret, tokenEncryptionConfigured } from "../src/lib/youtube/crypto";
 import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, publishVideo, refreshAccessToken, revokeToken, uploadVideoPrivate, youtubeScopes } from "../src/lib/youtube/google";
 import { fetchBestCaption, listCaptionTracks } from "../src/lib/youtube/captions";
+import { analyzeTranscript } from "../src/lib/youtube/transcript-analysis";
 import {
   defaultSyncPeriod,
   durationSeconds,
@@ -140,6 +141,16 @@ test("caption sync selects a standard track and normalizes VTT into transcript t
   const result = await fetchBestCaption("access", id, fetcher);
   assert.equal(result.track.trackKind, "standard");
   assert.equal(result.transcript, "Hello world");
+});
+
+test("transcript analysis returns structure signals without inventing causes", () => {
+  const analysis = analyzeTranscript("How did Rome build this road? Rome built it for trade! The road connected cities.");
+  assert.equal(analysis.sentenceCount, 3);
+  assert.equal(analysis.questionCount, 1);
+  assert.equal(analysis.exclamationCount, 1);
+  assert.equal(analysis.opening, "How did Rome build this road?");
+  assert.deepEqual(analysis.repeatedTerms[0], { term: "road", count: 2 });
+  assert.ok(analysis.estimatedDurationSeconds > 0);
 });
 
 test("refresh and revocation send tokens in POST bodies", async () => {

@@ -9,6 +9,7 @@ import { GET as productionWorker } from "@/app/api/cron/production-workflow/rout
 import { NextRequest } from "next/server";
 import { fetchBestCaption, YouTubeCaptionError } from "@/lib/youtube/captions";
 import { accessTokenForOwner, upsertVideoTranscript, videoTranscriptForOwner, videoTranscriptsForOwner } from "@/lib/youtube/store";
+import { analyzeTranscript } from "@/lib/youtube/transcript-analysis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,6 +84,18 @@ function server() {
     try {
       const context = await ownerContext();
       return result({ source: "stored_video_transcripts", transcripts: await videoTranscriptsForOwner(context.ownerId, limit) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("analyze_video_transcript", {
+    title: "Analyze video transcript",
+    description: "Return deterministic structure signals for an owner-scoped transcript so Codex can analyze it without an AI API call.",
+    inputSchema: { youtubeVideoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) },
+  }, async ({ youtubeVideoId }) => {
+    try {
+      const context = await ownerContext();
+      const transcript = await videoTranscriptForOwner(context.ownerId, youtubeVideoId);
+      if (!transcript) throw new Error("VIDEO_TRANSCRIPT_NOT_FOUND");
+      return result({ source: "stored_video_transcript", transcript, analysis: analyzeTranscript(transcript.transcript) });
     } catch (error) { return failure(error); }
   });
   mcp.registerTool("get_marketing_insights", {
