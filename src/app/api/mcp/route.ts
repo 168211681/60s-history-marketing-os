@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
 import { decodeImageBase64, uploadImageAsset } from "@/lib/media/assets";
-import { contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
+import { channelSummaryPrompt, contentExperiments, contentGenerationPrompt, createContentExperiment, createProductionWorkflow, insightSnapshot, nextContentRecommendation, ownerContext, productionWorkflows, recordContentExperimentResult, retryProductionWorkflow, saveAiInsight, saveContentIdea, saveEditPlan, saveScriptDraft, uploadedImageAssets } from "@/lib/ai/mcp-data";
 import type { EditPlan } from "@/lib/video/provider";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 import { NextRequest } from "next/server";
@@ -62,6 +62,13 @@ function server() {
     },
   }, async ({ topic, goal, language, format }) => {
     try { const context = await ownerContext(); return result(contentGenerationPrompt(context, { topic, goal, language, format })); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("create_channel_summary_prompt", {
+    title: "Create channel summary prompt",
+    description: "Summarize the connected owner's stored YouTube analytics for GPT Plus without generating a script or video plan.",
+    inputSchema: { language: z.enum(["th", "en"]).default("th") },
+  }, async ({ language }) => {
+    try { return result(channelSummaryPrompt(await ownerContext(), language)); } catch (error) { return failure(error); }
   });
   mcp.registerTool("create_content_idea", {
     title: "Create content idea",

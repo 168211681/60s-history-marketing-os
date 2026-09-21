@@ -7,7 +7,7 @@ import { higgsfieldProvider } from "../src/lib/video/higgsfield";
 import { videoProvider } from "../src/lib/video";
 import { storeVideoArtifact } from "../src/lib/video/artifacts";
 import { summarize } from "../src/lib/analytics";
-import { contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
+import { channelSummaryPrompt, contentGenerationPrompt, type OwnerContext } from "../src/lib/ai/mcp-data";
 import { nextExperimentMessage, type ContentExperimentRecord } from "../src/lib/data/experiments";
 import { sampleVideos, sampleWeeklyViews } from "../src/lib/sample-data";
 
@@ -39,6 +39,29 @@ test("content generation prompt is copyable and labels analytics as evidence", (
   assert.match(result.prompt, /Requested topic: Ancient navigation/);
   assert.match(result.prompt, /evidence only/);
   assert.match(result.prompt, /complete spoken script for about 60 seconds/);
+  assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
+});
+
+test("channel summary prompt excludes content generation instructions", () => {
+  const context: OwnerContext = {
+    ownerId: "owner-1",
+    channelId: "channel-1",
+    channelTitle: "60s History",
+    period: { from: "2026-08-22", through: "2026-09-18" },
+    workspace: {
+      source: "live",
+      channelTitle: "60s History",
+      period: "Aug 22 – Sep 18, 2026",
+      videos: sampleVideos,
+      summary: summarize(sampleVideos),
+      weeklyViews: sampleWeeklyViews,
+      lastSyncedAt: "2026-09-18T00:00:00.000Z",
+    },
+  };
+  const result = channelSummaryPrompt(context, "th");
+  assert.match(result.prompt, /Summarize the channel/);
+  assert.match(result.prompt, /Do not write a script/);
+  assert.doesNotMatch(result.prompt, /complete spoken script/);
   assert.equal(result.evidence.topVideos[0].title, "One day inside a Roman legion");
 });
 

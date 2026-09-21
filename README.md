@@ -85,7 +85,7 @@ owner-scoped tools for synced metrics, video rankings, evidence-backed hypothese
 content ideas, copyable GPT Plus generation prompts, and structured 60-second script drafts. Drafts remain in `draft`
 status and require human review before any future video generation or publishing.
 No OpenAI API key is required; the dashboard remains functional without MCP.
-The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test.
+The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test. It exposes a separate channel-summary prompt for sending only the measured channel report to GPT Plus, without requesting a script or video plan.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
@@ -161,7 +161,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 9. The Scripts page includes an owner-only image uploader. It stores JPG, PNG, WebP, and GIF files (up to 15 MB) in the private `image-assets` bucket and exposes only short-lived signed URLs. Keep `IMAGE_ASSET_BUCKET` aligned with the bucket name if you customize it.
 10. When the production worker runs with `VIDEO_PROVIDER=public-domain`, it requires at least one owner-uploaded image asset and repeats it as needed for the short slideshow; it never substitutes an unknown image. Codex MCP can list these assets and save an owner-validated `edit_plan` to control scene order. Set `VIDEO_REQUIRE_VOICE=true`, `VOICE_PROVIDER=gemini`, and the server-only `GEMINI_API_KEY` to add Gemini narration. The default model is `gemini-2.5-flash-preview-tts`, voice `Kore`, and request deadline 20 seconds (bounded at 25 seconds). An explicit Gemini selection reports Gemini errors directly instead of hiding them behind an unavailable fallback model. Without a configured provider the MVP intentionally renders image-only video instead of pretending voice generation succeeded. Audio remains private until the human approval step.
 11. Codex MCP also exposes `upload_generated_image`. Pass a base64-encoded JPG, PNG, WebP, or GIF (maximum 15 MB); the server stores it under the connected owner's private image bucket and returns an asset path for `save_edit_plan`.
-12. Use `/prompts` or the MCP `create_content_generation_prompt` tool to hand your own stored channel analytics to GPT Plus. No AI API billing is required for this handoff.
+12. Use `/prompts` or the MCP `create_channel_summary_prompt` tool to hand only a channel summary to GPT Plus. Use `/prompts` or `create_content_generation_prompt` when you want a topic brief and script package. No AI API billing is required for this handoff.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.
