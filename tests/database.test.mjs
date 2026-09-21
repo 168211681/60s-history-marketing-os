@@ -83,6 +83,7 @@ const tables = [
   "channel_metrics",
   "marketing_insights",
   "content_ideas",
+  "content_experiments",
 ];
 
 before(() => {
@@ -130,19 +131,21 @@ after(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("migration creates all eight tables with forced RLS and safe grants", () => {
+test("migrations create protected tables with forced RLS and safe grants", () => {
   assert.equal(
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "8",
+    "16",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-    "8",
+      "16",
   );
+  assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
+  assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
   assert.equal(
     sql(
       "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef",
@@ -167,6 +170,17 @@ test("migration creates all eight tables with forced RLS and safe grants", () =>
       "f",
     );
   }
+});
+
+test("content experiment foreign keys have supporting indexes", () => {
+  assert.equal(
+    sql(`select count(*) from pg_indexes where schemaname = 'public' and indexname in (
+      'content_experiments_content_idea_idx',
+      'content_experiments_script_draft_idx',
+      'content_experiments_video_idx'
+    )`),
+    "3",
+  );
 });
 for (const table of tables) {
   test(`${table}: each owner reads only their own row; missing identity reads none`, () => {
@@ -325,6 +339,27 @@ test("private jobs are inaccessible to both client roles but available to servic
     "2",
   );
 });
+test("encrypted YouTube connections are private and bound to channel ownership", () => {
+  for (const role of ["anon", "authenticated"]) {
+    asRole(role, userA, "select * from private.youtube_connections", "42501");
+    asRole(role, userA, "delete from private.youtube_connections", "42501");
+  }
+  const encrypted = "v1." + "x".repeat(60);
+  asRole(
+    "service_role",
+    "",
+    `insert into private.youtube_connections (owner_id,channel_id,encrypted_refresh_token,scopes) values ('${userB}','${channelA}','${encrypted}','youtube.readonly')`,
+    "23503",
+  );
+  assert.equal(
+    asRole(
+      "service_role",
+      "",
+      `insert into private.youtube_connections (owner_id,channel_id,encrypted_refresh_token,scopes) values ('${userA}','${channelA}','${encrypted}','youtube.readonly'); select count(*) from private.youtube_connections`,
+    ),
+    "1",
+  );
+});
 test("foreign keys prevent metrics from attaching a video to a different channel", () => {
   asRole(
     "service_role",
@@ -356,6 +391,15 @@ test("natural metric keys support idempotent upserts without duplicate rows", ()
     `insert into private.analytics_sync_jobs (channel_id,idempotency_key,period_start,period_end) values ('${channelA}','test-period','2026-09-01','2026-09-01')`,
     "23505",
   );
+});
+test("server sync storage claims one job and atomically upserts imported data", () => {
+  const databaseUrl = `postgresql://postgres@localhost/postgres?host=${encodeURIComponent(root)}&port=5432`;
+  const result = spawnSync(join("node_modules", ".bin", "tsx"), ["tests/database-store-check.ts"], {
+    env: { ...pgEnv, DATABASE_URL: databaseUrl },
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 test("unsupported metrics stay NULL; negative and non-finite metric values are rejected", () => {
   assert.equal(
@@ -418,6 +462,6 @@ test("deleting an auth user cascades their data but preserves the other owner's 
     sql(
       `begin; delete from auth.users where id='${userA}'; ${counts}; select count(*) from private.analytics_sync_jobs; rollback;`,
     ),
-    Array(8).fill("1").join("\n"),
+    Array(9).fill("1").join("\n"),
   );
 });

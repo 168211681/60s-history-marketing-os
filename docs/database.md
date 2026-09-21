@@ -1,14 +1,16 @@
 # Database foundation
 
-The migration prepares storage for later authenticated YouTube analytics. It does
-not connect the application, provision cloud resources, authenticate an owner,
-run synchronization or add real data. The existing five pages remain sample-only.
+The migrations prepare storage for authenticated YouTube analytics and encrypted
+refresh tokens. The application includes an owner-only manual sync, but it does not
+provision cloud resources or add real data without explicit configuration. Anonymous
+analytics pages remain sample-only; verified owner sessions can read synced data.
 
 The [analytics contract](../src/lib/data/analytics-contract.ts) describes the
-read-only server boundary a later authenticated adapter must implement. Counts
+read-only server boundary implemented by `postgres-reader.ts`. Counts
 are `bigint` and decimal values are exact strings so future adapters do not
-silently lose precision; missing metrics remain `null`. There is no adapter or
-client integration yet. Browser-facing JSON will need an explicit conversion.
+silently lose precision; missing metrics remain `null`. The importer writes this
+shape. `workspace.ts` performs a checked conversion for UI calculations and rejects
+values outside JavaScript's safe numeric range instead of silently losing precision.
 
 ## Schema and ownership
 
@@ -19,9 +21,12 @@ client integration yet. Browser-facing JSON will need an explicit conversion.
 | `public.videos` | Video identity, title, topic, duration and channel FK | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
-| `private.analytics_sync_jobs` | Reporting window, status, attempts, sanitized error code; unique `(channel_id, idempotency_key)` | No access |
+| `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
+| `private.youtube_connections` | Encrypted refresh token and owner/channel binding | No access |
+| `private.production_workflow_events` | Sanitized production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
+| `public.content_experiments` | Owner-scoped hypothesis, draft/video links, observed metrics and result recommendation | Read owned channel experiments |
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
 `updated_at` is maintained by a security-invoker trigger in `private`; no
@@ -32,8 +37,10 @@ from changing idea IDs, channel IDs or timestamps. Every update policy has both
 All channel rows ultimately belong to `channels.owner_id`. A composite FK on
 `video_metrics(video_id, channel_id)` prevents attaching one channel's video to
 another channel's metrics, even from a privileged writer. Owner/channel lookup
-columns and date/order queries have indexes. Daily metric primary keys and job
-unique keys support idempotent writes; no actual sync worker is implemented.
+columns, experiment reference columns, and date/order queries have indexes. Daily
+metric primary keys and job unique keys support idempotent writes. The manual
+server sync claims, retries and completes these jobs without exposing them to
+clients.
 
 `anon` has no table privileges. `authenticated` has only the operations in the
 table above; all backend-owned rows are read-only. Grants are explicitly reset so
@@ -51,17 +58,17 @@ would need a secure server database connection to access private jobs.
 
 - Missing/unsupported metrics are `NULL`, never synthesized as zero. Negative
   counts and non-finite numeric durations/watch times are rejected.
-- `metric_date` preserves the API-provided daily reporting date. Future sync code
-  must respect the selected API's timezone and report semantics instead of
-  deriving this value blindly from a UTC timestamp.
+- `metric_date` preserves the API-provided daily reporting date. The importer validates
+  that each row falls inside the requested report window.
 - Channel totals need not equal a locally stored subset of videos.
 - An AI-origin insight must be a hypothesis or experiment with a model identifier.
   It cannot be labeled an observation/comparison. Content and evidence are untrusted
   plain text; the schema does not prove factual correctness or causality.
 - No retention curve, CTR or revenue column is invented. API coverage must be
   checked before adding new metrics.
-- Jobs store only constrained error codes, not provider response bodies. No token
-  storage exists here; encrypted OAuth storage requires a separate reviewed design.
+- Jobs store only constrained error codes, not provider response bodies. Refresh
+  tokens are encrypted by the application before entering `private.youtube_connections`;
+  the encryption key remains outside PostgreSQL.
 
 Deleting an `auth.users` record cascades through its application identity,
 channels and dependent rows. Backend account deletion must revoke sessions/tokens
@@ -90,11 +97,12 @@ The test-only bootstrap supplies minimal `auth.users` and `auth.uid()` contracts
 files simulate the role/identity boundary for database tests, not JWT verification
 or the Supabase Auth service. SQL tests do not certify PostgREST/GraphQL behavior.
 
-Coverage includes fresh migration application, eight RLS-protected tables,
+Coverage includes fresh migration application, fourteen RLS-protected tables,
 legacy-grant removal, two-owner isolation, missing identity, anonymous denial,
 read-only analytics, owner idea CRUD, cross-owner mutation denial, private jobs,
-cross-channel FK integrity, idempotent upserts, nullable metrics, invalid values,
-insight provenance and account deletion isolation.
+cross-channel FK integrity, sync job acquisition/transactional upserts, nullable metrics, invalid values,
+insight provenance, content experiment ownership/indexes, workflow telemetry
+grants and account deletion isolation.
 
 ## Applying to Supabase later
 

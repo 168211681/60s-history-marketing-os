@@ -9,3 +9,4 @@ test-results/
 .DS_Store
 supabase/.temp/
 supabase/.branches/
+.vercel/

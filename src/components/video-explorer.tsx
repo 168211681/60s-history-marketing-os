@@ -8,7 +8,7 @@ import {
 } from "@/lib/analytics";
 import { VideoList } from "./video-list";
 
-export function VideoExplorer({ videos }: { videos: readonly VideoMetrics[] }) {
+export function VideoExplorer({ videos, source }: { videos: readonly VideoMetrics[]; source: "sample" | "live" }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<VideoSort>("recent");
   const filtered = selectVideos(videos, query, sort);
@@ -45,7 +45,7 @@ export function VideoExplorer({ videos }: { videos: readonly VideoMetrics[] }) {
         </label>
       </div>
       <p className="muted text-sm result-count" role="status">
-        {filtered.length} of {videos.length} sample videos
+        {filtered.length} of {videos.length} {source === "sample" ? "sample" : "synced"} videos
       </p>
       <VideoList videos={filtered} />
     </>

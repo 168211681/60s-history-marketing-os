@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
-import { formatDuration, summarize } from "@/lib/analytics";
-import { sampleVideos } from "@/lib/sample-data";
+import { AiAnalysisPanel } from "@/components/ai-analysis-panel";
+import { workspaceData } from "@/lib/data/workspace";
+import { buildMarketingInsights, type InsightKind } from "@/lib/insights";
 export const metadata = { title: "Insights" };
-export default function InsightsPage() {
-  const warfare = summarize(
-    sampleVideos.filter((video) => video.topic === "Warfare"),
-  );
-  const baseline = summarize(sampleVideos);
+const labels: Record<InsightKind, string> = {
+  observation: "OBSERVED DATA",
+  comparison: "CALCULATED COMPARISON",
+  hypothesis: "HYPOTHESIS · NOT CAUSAL",
+  experiment: "SUGGESTED EXPERIMENT",
+};
+
+export default async function InsightsPage() {
+  const data = await workspaceData();
+  const insights = buildMarketingInsights(data.videos);
   return (
     <>
       <PageHeading
@@ -15,74 +21,28 @@ export default function InsightsPage() {
         title="Marketing insights"
         description="Separate what happened from what might explain it."
       />
-      <Panel
-        title="AI marketing analysis"
-        action={<span className="badge neutral">Unavailable</span>}
-      >
-        <EmptyState title="No AI report generated">
-          <p>Real analytics and an AI provider are not connected in Phase 1.</p>
-          <p>Adding an API key alone will not enable this feature.</p>
-          <Link className="text-link" href="/settings">
-            View connection status →
-          </Link>
+      <AiAnalysisPanel />
+      <Panel title="Provider setup" description="AI is optional and remains unavailable until a server-side provider is configured.">
+        <EmptyState title="No provider? Deterministic insights still work">
+          <p>Stored analytics are not sent to an AI service unless you explicitly configure one.</p>
+          <Link className="text-link" href="/settings">View connection status →</Link>
         </EmptyState>
       </Panel>
       <Panel
-        title="An example of evidence-led thinking"
-        description="Illustrative example using fictional data. Handwritten copy, not an AI-generated report."
+        title="Evidence-led analysis"
+        description={`${data.source === "sample" ? "Fictional sample data" : "Private synced analytics"}. Deterministic calculations only; no AI provider is configured.`}
       >
         <ol className="insight-steps">
-          <li>
-            <span className="step-number">01</span>
-            <div>
-              <p className="eyebrow">SAMPLE OBSERVATION</p>
-              <h3>Two sample videos explore warfare.</h3>
-              <p className="muted">
-                This is a topic label in the fixture dataset, not a finding
-                about your channel.
-              </p>
-            </div>
-          </li>
-          <li>
-            <span className="step-number">02</span>
-            <div>
-              <p className="eyebrow">CALCULATED COMPARISON</p>
-              <h3>
-                {formatDuration(warfare.averageViewSeconds)} average duration
-                vs. {formatDuration(baseline.averageViewSeconds)} overall.
-              </h3>
-              <p className="muted">
-                Both values are weighted by views. Two videos are too few to
-                establish a reliable topic pattern.
-              </p>
-            </div>
-          </li>
-          <li>
-            <span className="step-number">03</span>
-            <div>
-              <p className="eyebrow">
-                ILLUSTRATIVE HYPOTHESIS · NOT AI-GENERATED
-              </p>
-              <h3>Could the opening question matter?</h3>
-              <p className="muted">
-                Hook style could be one explanation. Topic, audience, timing,
-                and other factors may also matter; this comparison establishes
-                no cause.
-              </p>
-            </div>
-          </li>
-          <li>
-            <span className="step-number">04</span>
-            <div>
-              <p className="eyebrow">SUGGESTED EXPERIMENT</p>
-              <h3>Compare two opening formats.</h3>
-              <p className="muted">
-                Try a question-led and a scene-led hook on comparable future
-                topics. Record duration and viewing context before drawing
-                conclusions.
-              </p>
-            </div>
-          </li>
+          {insights.map((insight, index) => (
+            <li key={`${insight.kind}-${insight.title}`}>
+              <span className="step-number">{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <p className="eyebrow">{labels[insight.kind]}</p>
+                <h3>{insight.title}</h3>
+                <p className="muted">{insight.detail}</p>
+              </div>
+            </li>
+          ))}
         </ol>
       </Panel>
     </>

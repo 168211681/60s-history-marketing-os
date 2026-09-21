@@ -32,8 +32,22 @@ test("duration is weighted by views and minutes convert to hours", () => {
 test("empty and zero-view datasets have no invented duration", () => {
   assert.equal(summarize([]).averageViewSeconds, null);
   assert.equal(summarize([video({})]).averageViewSeconds, null);
-  assert.equal(summarize([]).views, 0);
+  assert.equal(summarize([]).views, null);
   assert.deepEqual(topVideos([]), []);
+});
+test("missing metrics remain unavailable instead of becoming zero", () => {
+  const totals = summarize([video({
+    views: null,
+    estimatedMinutesWatched: null,
+    subscribersGained: null,
+    subscribersLost: null,
+    likes: null,
+    comments: null,
+  })]);
+  assert.equal(totals.views, null);
+  assert.equal(totals.watchHours, null);
+  assert.equal(totals.netSubscribers, null);
+  assert.equal(summarize([video({ views: 10 }), video({ views: null })]).views, null);
 });
 test("subscriber growth includes net declines", () => {
   assert.equal(

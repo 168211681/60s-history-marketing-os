@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 export default function ErrorPage({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -12,6 +13,7 @@ export default function ErrorPage({
       <p className="muted">
         Try again. If the issue continues, return to the dashboard.
       </p>
+      {error.digest ? <p className="muted text-xs">Error reference: {error.digest}</p> : null}
       <button className="button" onClick={reset}>
         Try again
       </button>

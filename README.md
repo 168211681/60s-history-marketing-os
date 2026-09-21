@@ -3,12 +3,15 @@
 Phase 1: a responsive, sample-data analytics dashboard for a history Shorts channel.
 Phase 2 foundation: a Supabase-compatible migration and locally verified ownership/RLS
 rules, ready for a later authenticated integration. See [database setup](docs/database.md).
-**Every metric and video title is fictional. No YouTube, database, authentication,
-or AI service is connected.** This milestone does not generate or publish content.
+The phased delivery status and acceptance gates are tracked in [the roadmap](docs/roadmap.md).
+The owner-only flow can connect YouTube, manually import supported analytics, and
+render the latest successful reporting window. Anonymous sessions retain the clearly
+labeled fictional workspace. This milestone does not generate or publish content.
 
 ## Run locally
 
-Requires Node.js 20.9+ (Node.js 22 recommended) and npm.
+Requires Node.js 22+ and npm. The current Supabase client requires Node.js 22.
+If nvm is installed, run `nvm use` from the repository root.
 
 ```sh
 npm ci
@@ -16,7 +19,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. The environment file is optional; no keys are needed.
+Open http://localhost:3000. The environment file is optional for sample mode; no keys are needed.
 In Codespaces, open the forwarded port 3000 in the Ports tab. The layout supports
 small mobile screens, including iPhone sizes. Production mode:
 
@@ -36,8 +39,9 @@ builder. The local verification command uses this builder in restricted environm
 | `/`          | Channel overview, totals, recent/top videos, weekly trend, insight status              |
 | `/videos`    | Search titles/topics, sort by recency/views/average duration, empty state              |
 | `/analytics` | Totals, engagement, accessible weekly values and metric definitions                    |
-| `/insights`  | Unavailable AI state and handwritten evidence/comparison/hypothesis/experiment example |
-| `/settings`  | Read-only connection status and future integration requirements                        |
+| `/insights`  | Unavailable AI state and evidence/comparison/hypothesis/experiment analysis        |
+| `/prompts`   | Copyable evidence package for GPT Plus or another AI app                            |
+| `/settings`  | Owner access, read-only YouTube connection, manual sync and setup status               |
 
 The reporting window is fixed at Aug 22–Sep 18, 2026; this is not live data.
 Video metrics cover the reporting window, not lifetime totals. Subscriber growth
@@ -58,27 +62,53 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/analytics.ts`: pure, tested metric calculations, filtering and sorting.
 - `tests/`: unit tests and browser acceptance tests.
 - `npm run verify:local`: lint, types, unit, database, build and browser checks.
+- `npm run verify:deployment`: smoke-check a deployed URL's pages, API response
+  and security headers (`DEPLOYMENT_URL=...`).
 - `supabase/migrations/`: database schema, explicit grants and owner-scoped RLS.
 - `tests/database.test.mjs`: isolated PostgreSQL integration tests (no cloud credentials).
-- `src/lib/data/analytics-contract.ts`: types for a future session-scoped reader;
-  no database connection or credentials are used in Phase 2 foundation.
+- `src/lib/data/analytics-contract.ts` and `postgres-reader.ts`: owner-bound read
+  contract and PostgreSQL implementation for private dashboard data.
+- `src/lib/data/workspace.ts`: selects private synced analytics for the verified
+  owner and safely falls back to labeled samples for other sessions or failures.
+- `src/lib/auth/`: cookie-based Supabase owner session utilities.
+- `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
+- `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
+- `src/lib/youtube/captions.ts`: owner-authorized caption listing/download and conservative VTT-to-transcript normalization.
+- `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
+- `src/lib/ai/provider.ts`: optional provider-agnostic AI adapter with bounded structured output; unavailable by default. See [AI adapter setup](docs/ai.md).
+- `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
+- `docs/connection-setup.md`: Supabase and Google console configuration.
+- `docs/mcp.md`: Optional Codex/MCP endpoint setup and tool contract.
 
-Calculations have no AI-vendor dependency. A future provider adapter and optional
-MCP layer can be added when real-data analysis is implemented. Neither is required
-to operate this dashboard. No integration stubs claim success.
+Calculations have no AI-vendor dependency. The first optional MCP layer is available
+at `/api/mcp`, protected by the server-only `MCP_SECRET` bearer secret. It exposes
+owner-scoped tools for synced metrics, video rankings, evidence-backed hypotheses,
+content ideas, copyable GPT Plus generation prompts, and structured 60-second script drafts. Drafts remain in `draft`
+status and require human review before any future video generation or publishing.
+No OpenAI API key is required; the dashboard remains functional without MCP.
+The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test. It exposes a separate channel-summary prompt for sending only the measured channel report to GPT Plus, without requesting a script or video plan.
+The MCP layer can also sync, read, structurally analyze, and package owner-scoped video transcripts through `sync_video_transcript`, `get_video_transcript`, `list_video_transcripts`, `analyze_video_transcript`, and `create_video_analysis_prompt`; Codex receives transcript text, not an unprocessed MP4.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
 
-GitHub Actions could not start jobs for this repository because the account is
-locked by a billing issue. The workflow has been removed; verification runs
-locally before commit/push with no CI service or paid account. Install browser
+GitHub Actions may be unavailable for this repository while the account is
+locked by a billing issue. The production worker workflow is included in
+`.github/workflows/production-worker.yml` and can be triggered manually or every
+five minutes when Actions is available. Verification still runs locally before
+commit/push. Install browser
 dependencies and native PostgreSQL 15+ tools first. On Ubuntu:
 
 ```sh
 sudo apt-get install postgresql postgresql-contrib
 npx playwright install --with-deps chromium webkit
 npm run verify:local
+```
+
+After a deployment, verify the hosted commit separately:
+
+```sh
+DEPLOYMENT_URL=https://your-deployment.example npm run verify:deployment
 ```
 
 Run as a regular user, not root. You can also run each `lint`, `typecheck`,
@@ -98,32 +128,49 @@ just to demonstrate them.
 
 ## Security and configuration
 
-There are no required environment variables in Phase 1. `.env.example` documents
-that contract; adding credentials does not activate any integration. `.env*` files
+There are no required environment variables for sample mode. `.env.example`
+documents optional owner/YouTube connection variables. `.env*` files
 are ignored except this example. Never commit tokens, OAuth secrets, private keys,
 or service-role credentials. Use local `.env.local` or encrypted hosting settings
 for later integrations; never put server secrets in `NEXT_PUBLIC_*`.
 
-All current routes are public and contain fictional data only. **Do not replace
-fixtures with private analytics.** Before introducing real data, implement owner
-authentication and server-side authorization, channel ownership, PostgreSQL RLS,
-encrypted token storage, and authenticated sync endpoints. Do not log tokens.
+When the owner connection is configured on Vercel, set `CRON_SECRET` to a long
+random server-only value. The Vercel Cron job calls `/api/cron/youtube-sync` daily
+at 03:00 UTC and imports the latest complete 28-day window. The endpoint rejects
+requests without the matching `Authorization: Bearer` secret and reuses the
+database idempotency key, so a successful window is not imported twice.
+
+Anonymous analytics routes contain fictional data only. A verified owner session can
+render private stored analytics; every reader query also constrains `owner_id`, and
+matched routes send `private, no-store`. PostgreSQL RLS protects stored analytics and
+refresh tokens are encrypted before database storage. Do not log tokens.
 Search input is local state rendered by React, never executed as code/HTML/SQL.
 
 ## Next milestones
 
-1. **Foundation prepared:** database migration, ownership model and RLS isolation
-   tests. Cloud deployment, Supabase Auth/Data API verification and application
-   database integration remain unimplemented.
-2. Owner sign-in and Google OAuth: verified state, least-privilege scopes, secure
-   refresh-token storage, refresh/revocation and disconnect handling.
-3. YouTube Data/Analytics sync with quota management, backoff and idempotency.
-4. Analysis over stored analytics, replaceable AI adapters and evidence labels.
-5. Future production tools and optional MCP, explicit human publishing approval.
+1. **Implemented locally:** database ownership/RLS, owner sign-in, read-only Google
+   OAuth, encrypted refresh-token storage and disconnect/revocation.
+2. **Implemented locally:** manual YouTube Data/Analytics import with pagination,
+   batching, retry/backoff, daily upserts and idempotent reporting-window jobs.
+3. **Implemented locally:** authenticated PostgreSQL reader and owner-only Dashboard,
+   Videos and Analytics views with explicit sample/live/error states.
+4. **Implemented locally:** deterministic topic analysis and evidence-labeled
+   recommendations over stored or sample analytics.
+5. Add a replaceable hosted AI adapter for hypotheses and experiments with evidence labels.
+6. Add an optional video provider adapter after human-approved script drafts. The implemented provider boundary supports `huggingface`; other providers must remain unavailable until their contracts are verified.
+7. Configure a private Supabase Storage bucket named `video-artifacts` before enabling a provider that returns raw video bytes. The server-only `SUPABASE_SERVICE_ROLE_KEY` is used only to upload artifacts and create short-lived signed URLs for the private YouTube upload worker.
+8. For a no-billing MVP, set `VIDEO_PROVIDER=public-domain`. The worker requires owner-uploaded images, renders a short vertical slideshow with the bundled `ffmpeg-static` binary, and stores the result in the private `video-artifacts` bucket. Uploaded asset paths are recorded in workflow events. Set `VIDEO_PROVIDER=huggingface` or `higgsfield` only when that provider is configured and funded. The free GitHub Actions worker is documented in [production worker setup](docs/production-worker.md).
+9. The Scripts page includes an owner-only image uploader. It stores JPG, PNG, WebP, and GIF files (up to 15 MB) in the private `image-assets` bucket and exposes only short-lived signed URLs. Keep `IMAGE_ASSET_BUCKET` aligned with the bucket name if you customize it.
+10. When the production worker runs with `VIDEO_PROVIDER=public-domain`, it requires at least one owner-uploaded image asset and repeats it as needed for the short slideshow; it never substitutes an unknown image. Codex MCP can list these assets and save an owner-validated `edit_plan` to control scene order. Set `VIDEO_REQUIRE_VOICE=true`, `VOICE_PROVIDER=gemini`, and the server-only `GEMINI_API_KEY` to add Gemini narration. The default model is `gemini-2.5-flash-preview-tts`, voice `Kore`, and request deadline 20 seconds (bounded at 25 seconds). An explicit Gemini selection reports Gemini errors directly instead of hiding them behind an unavailable fallback model. Without a configured provider the MVP intentionally renders image-only video instead of pretending voice generation succeeded. Audio remains private until the human approval step.
+11. Codex MCP also exposes `upload_generated_image`. Pass a base64-encoded JPG, PNG, WebP, or GIF (maximum 15 MB); the server stores it under the connected owner's private image bucket and returns an asset path for `save_edit_plan`.
+12. Use `/prompts` or the MCP `create_channel_summary_prompt` tool to hand only a channel summary to GPT Plus. Use `/prompts` or `create_content_generation_prompt` when you want a topic brief and script package. No AI API billing is required for this handoff.
+13. Transcript analysis is available for videos with owner-authorized YouTube caption tracks. The OAuth flow now requests `youtube.force-ssl`, so the owner must reconnect the channel after deploying this change to grant the new caption permission. Run `sync_video_transcript` for a synced video, then `get_video_transcript` so Codex can analyze the spoken content. Videos without captions remain unavailable until a separate local transcription workflow is added.
 
-Google setup and variable names will be documented alongside the actual OAuth
-implementation; no OAuth callback or connection exists in Phase 1. Do not enter
-credentials into this sample workspace. ChatGPT Plus is not API billing.
+Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
+enter credentials into tracked files. ChatGPT Plus is not API billing.
 
 Vercel deployment is separate. Local verification does not mean this project has
-been deployed, and GitHub will not show a CI pass for this branch.
+been deployed, and GitHub will not show a CI pass for this branch. A sample-data
+preview is available at [60s-history-marketing-os.vercel.app](https://60s-history-marketing-os.vercel.app).
+Configure the owner flow only after following [connection setup](docs/connection-setup.md);
+never place its server secrets in the repository or `NEXT_PUBLIC_*` variables.

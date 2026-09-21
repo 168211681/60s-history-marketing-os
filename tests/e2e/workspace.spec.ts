@@ -5,6 +5,8 @@ const routes = [
   ["/videos", "Video performance"],
   ["/analytics", "Channel analytics"],
   ["/insights", "Marketing insights"],
+  ["/experiments", "Content experiments"],
+  ["/scripts", "Script drafts"],
   ["/settings", "Settings & connections"],
 ] as const;
 for (const [route, heading] of routes) {
@@ -63,7 +65,7 @@ test("navigation, filtering, empty recovery and sorting work", async ({
   await expect(page.locator(".video-list li").first()).toContainText(
     "One day inside a Roman legion",
   );
-  for (const name of ["Analytics", "Insights", "Settings", "Dashboard"]) {
+  for (const name of ["Analytics", "Insights", "Experiments", "Scripts", "Settings", "Dashboard"]) {
     await page
       .getByRole("navigation")
       .getByRole("link", { name, exact: true })
@@ -73,7 +75,7 @@ test("navigation, filtering, empty recovery and sorting work", async ({
     ).toHaveAttribute("aria-current", "page");
   }
 });
-test("chart has exact values and AI report is unavailable", async ({
+test("chart has exact values and AI analysis remains optional", async ({
   page,
 }) => {
   await page.goto("/analytics");
@@ -84,8 +86,36 @@ test("chart has exact values and AI report is unavailable", async ({
   ).toBeVisible();
   await page.goto("/insights");
   await expect(
-    page.getByRole("heading", { name: "No AI report generated" }),
+    page.getByRole("heading", { name: "AI marketing analysis" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate AI analysis" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No provider? Deterministic insights still work" }),
+  ).toBeVisible();
+});
+test("connection controls fail closed when credentials are absent", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("heading", { name: "Authentication is not configured" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect YouTube channel" }),
+  ).toHaveCount(0);
+  const connect = await request.post("/api/youtube/connect", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(connect.status()).toBe(403);
+  const sync = await request.post("/api/youtube/sync", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(sync.status()).toBe(403);
+  const callback = await request.get("/auth/callback?code=untrusted");
+  expect(callback.status()).toBe(503);
 });
 test("unknown route has a 404 and recovery link", async ({ page }) => {
   const response = await page.goto("/does-not-exist");

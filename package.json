@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
@@ -11,21 +11,30 @@
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "tsx --test tests/analytics.test.ts",
+    "test": "tsx --test tests/analytics.test.ts tests/workspace.test.ts tests/insights.test.ts tests/youtube.test.ts tests/mcp.test.ts tests/cron.test.ts tests/ai-provider.test.ts tests/video-artifacts.test.ts tests/video-provider.test.ts tests/media-assets.test.ts tests/voice.test.ts",
     "test:e2e": "playwright test",
     "test:db": "node --test tests/database.test.mjs",
+    "verify:deployment": "node scripts/verify-deployment.mjs",
     "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"
   },
   "dependencies": {
+    "@huggingface/inference": "4.13.30",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "ffmpeg-static": "5.2.0",
     "next": "16.3.5",
+    "pg": "8.16.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.58.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^22.0.0",
+    "@types/pg": "8.15.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
