@@ -10,3 +10,6 @@ test-results/
 supabase/.temp/
 supabase/.branches/
 .vercel/
+.private-db-backups/
+*.dump
+*.dump.manifest
