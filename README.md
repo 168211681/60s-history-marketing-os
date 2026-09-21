@@ -73,6 +73,7 @@ recovery. No UI/chart library, external fonts, or third-party tracking is used.
 - `src/lib/auth/`: cookie-based Supabase owner session utilities.
 - `src/lib/youtube/`: read-only OAuth, token encryption and server-side storage.
 - `src/lib/youtube/sync.ts`: validated Data/Analytics API pagination, batching and retry logic.
+- `src/lib/youtube/captions.ts`: owner-authorized caption listing/download and conservative VTT-to-transcript normalization.
 - `src/lib/insights.ts`: deterministic topic comparisons and evidence-labeled recommendations over the active workspace.
 - `src/lib/ai/provider.ts`: optional provider-agnostic AI adapter with bounded structured output; unavailable by default. See [AI adapter setup](docs/ai.md).
 - `src/app/api/youtube/sync`: owner-only manual sync for the latest 28 complete UTC days.
@@ -86,6 +87,7 @@ content ideas, copyable GPT Plus generation prompts, and structured 60-second sc
 status and require human review before any future video generation or publishing.
 No OpenAI API key is required; the dashboard remains functional without MCP.
 The MCP layer also stores owner-scoped content experiments so the next recommendation can use recorded results instead of repeating the same test. It exposes a separate channel-summary prompt for sending only the measured channel report to GPT Plus, without requesting a script or video plan.
+The MCP layer can also sync and read owner-scoped video transcripts through `sync_video_transcript`, `get_video_transcript`, and `list_video_transcripts`; Codex receives transcript text, not an unprocessed MP4.
 The project follows the [Next.js installation guidance](https://nextjs.org/docs/app/getting-started/installation).
 
 ## Verification
@@ -162,6 +164,7 @@ Search input is local state rendered by React, never executed as code/HTML/SQL.
 10. When the production worker runs with `VIDEO_PROVIDER=public-domain`, it requires at least one owner-uploaded image asset and repeats it as needed for the short slideshow; it never substitutes an unknown image. Codex MCP can list these assets and save an owner-validated `edit_plan` to control scene order. Set `VIDEO_REQUIRE_VOICE=true`, `VOICE_PROVIDER=gemini`, and the server-only `GEMINI_API_KEY` to add Gemini narration. The default model is `gemini-2.5-flash-preview-tts`, voice `Kore`, and request deadline 20 seconds (bounded at 25 seconds). An explicit Gemini selection reports Gemini errors directly instead of hiding them behind an unavailable fallback model. Without a configured provider the MVP intentionally renders image-only video instead of pretending voice generation succeeded. Audio remains private until the human approval step.
 11. Codex MCP also exposes `upload_generated_image`. Pass a base64-encoded JPG, PNG, WebP, or GIF (maximum 15 MB); the server stores it under the connected owner's private image bucket and returns an asset path for `save_edit_plan`.
 12. Use `/prompts` or the MCP `create_channel_summary_prompt` tool to hand only a channel summary to GPT Plus. Use `/prompts` or `create_content_generation_prompt` when you want a topic brief and script package. No AI API billing is required for this handoff.
+13. Transcript analysis is available for videos with owner-authorized YouTube caption tracks. The OAuth flow now requests `youtube.force-ssl`, so the owner must reconnect the channel after deploying this change to grant the new caption permission. Run `sync_video_transcript` for a synced video, then `get_video_transcript` so Codex can analyze the spoken content. Videos without captions remain unavailable until a separate local transcription workflow is added.
 
 Google and Supabase setup is in [connection setup](docs/connection-setup.md). Do not
 enter credentials into tracked files. ChatGPT Plus is not API billing.

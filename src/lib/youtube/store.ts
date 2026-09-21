@@ -66,6 +66,79 @@ export async function accessTokenForOwner(ownerId: string) {
   return refreshAccessToken(config, refreshToken);
 }
 
+export type VideoTranscript = {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  languageCode: string;
+  trackKind: string;
+  source: string;
+  transcript: string;
+  fetchedAt: string;
+};
+
+export async function upsertVideoTranscript(
+  ownerId: string,
+  youtubeVideoId: string,
+  input: { languageCode: string; trackKind: string; source: "youtube_captions" | "owner_upload" | "local_transcription"; transcript: string },
+) {
+  const result = await database().query<VideoTranscript>(
+    `insert into public.video_transcripts
+       (channel_id, video_id, youtube_video_id, language_code, track_kind, source, transcript, fetched_at)
+     select c.id, v.id, v.youtube_video_id, $3, $4, $5, $6, now()
+       from public.channels c
+       join public.videos v on v.channel_id = c.id and v.youtube_video_id = $2
+      where c.owner_id = $1
+     on conflict (video_id, language_code, source) do update set
+       track_kind = excluded.track_kind, transcript = excluded.transcript,
+       fetched_at = now(), updated_at = now()
+     returning id, youtube_video_id as "youtubeVideoId", '' as title,
+       language_code as "languageCode", track_kind as "trackKind", source,
+       transcript, fetched_at as "fetchedAt"`,
+    [ownerId, youtubeVideoId, input.languageCode.trim(), input.trackKind, input.source, input.transcript.trim()],
+  );
+  if (!result.rows[0]) throw new Error("VIDEO_NOT_OWNED_OR_NOT_SYNCED");
+  const title = await database().query<{ title: string }>(
+    `select v.title from public.videos v join public.channels c on c.id = v.channel_id
+      where c.owner_id = $1 and v.youtube_video_id = $2`,
+    [ownerId, youtubeVideoId],
+  );
+  return { ...result.rows[0], title: title.rows[0]?.title ?? "" };
+}
+
+export async function videoTranscriptForOwner(ownerId: string, youtubeVideoId: string) {
+  const result = await database().query<VideoTranscript>(
+    `select t.id, t.youtube_video_id as "youtubeVideoId", v.title,
+            t.language_code as "languageCode", t.track_kind as "trackKind",
+            t.source, t.transcript, t.fetched_at as "fetchedAt"
+       from public.video_transcripts t
+       join public.videos v on v.id = t.video_id
+       join public.channels c on c.id = t.channel_id and c.id = v.channel_id
+      where c.owner_id = $1 and t.youtube_video_id = $2
+      order by t.fetched_at desc, t.created_at desc
+      limit 1`,
+    [ownerId, youtubeVideoId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function videoTranscriptsForOwner(ownerId: string, limit = 20) {
+  const result = await database().query<VideoTranscript>(
+    `select distinct on (t.youtube_video_id)
+            t.id, t.youtube_video_id as "youtubeVideoId", v.title,
+            t.language_code as "languageCode", t.track_kind as "trackKind",
+            t.source, t.transcript, t.fetched_at as "fetchedAt"
+       from public.video_transcripts t
+       join public.videos v on v.id = t.video_id
+       join public.channels c on c.id = t.channel_id and c.id = v.channel_id
+      where c.owner_id = $1
+      order by t.youtube_video_id, t.fetched_at desc
+      limit $2`,
+    [ownerId, Math.min(Math.max(limit, 1), 50)],
+  );
+  return result.rows;
+}
+
 export async function removeConnection(ownerId: string) {
   return transaction(async (client) => {
     const deleted = await client.query<{ encrypted_refresh_token: string; channel_id: string }>(

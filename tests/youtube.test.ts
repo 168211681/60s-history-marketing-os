@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { appOrigin, ownerId } from "../src/lib/auth/config";
 import { decryptToken, encryptToken, sameSecret, tokenEncryptionConfigured } from "../src/lib/youtube/crypto";
 import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, publishVideo, refreshAccessToken, revokeToken, uploadVideoPrivate, youtubeScopes } from "../src/lib/youtube/google";
+import { fetchBestCaption, listCaptionTracks } from "../src/lib/youtube/captions";
 import {
   defaultSyncPeriod,
   durationSeconds,
@@ -125,6 +126,20 @@ test("channel lookup validates the authenticated channel response", async () => 
   assert.deepEqual(await ownerChannel("access", fetcher), { id: channel.id, title: "60s History" });
   await assert.rejects(ownerChannel("access", (async () => Response.json({ items: [] })) as typeof fetch));
   await assert.rejects(ownerChannel("access", (async () => Response.json({ items: [channel, channel] })) as typeof fetch));
+});
+
+test("caption sync selects a standard track and normalizes VTT into transcript text", async () => {
+  const id = "abc12345678";
+  const fetcher = (async (url: URL | RequestInfo) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/captions")) return Response.json({ items: [{ id: "track-1", snippet: { language: "en", trackKind: "ASR" } }, { id: "track-2", snippet: { language: "en", trackKind: "standard" } }] });
+    assert.equal(parsed.pathname, "/youtube/v3/captions/track-2");
+    return new Response("WEBVTT\n\n00:00.000 --> 00:01.000\nHello <b>world</b>\n\n00:01.000 --> 00:02.000\nHello <b>world</b>\n", { status: 200 });
+  }) as typeof fetch;
+  assert.equal((await listCaptionTracks("access", id, fetcher)).length, 2);
+  const result = await fetchBestCaption("access", id, fetcher);
+  assert.equal(result.track.trackKind, "standard");
+  assert.equal(result.transcript, "Hello world");
 });
 
 test("refresh and revocation send tokens in POST bodies", async () => {

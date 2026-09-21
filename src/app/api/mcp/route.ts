@@ -7,6 +7,8 @@ import { channelSummaryPrompt, contentExperiments, contentGenerationPrompt, crea
 import type { EditPlan } from "@/lib/video/provider";
 import { GET as productionWorker } from "@/app/api/cron/production-workflow/route";
 import { NextRequest } from "next/server";
+import { fetchBestCaption, YouTubeCaptionError } from "@/lib/youtube/captions";
+import { accessTokenForOwner, upsertVideoTranscript, videoTranscriptForOwner, videoTranscriptsForOwner } from "@/lib/youtube/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +44,45 @@ function server() {
     try {
       const context = await ownerContext();
       return result({ source: "stored_youtube_analytics", channel: context.channelTitle, period: context.period, videos: [...context.workspace.videos].sort((a, b) => (b.views ?? -1) - (a.views ?? -1)).slice(0, limit) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("sync_video_transcript", {
+    title: "Sync video transcript",
+    description: "Fetch the best available owner-authorized YouTube caption track for a synced video and store it privately for analysis.",
+    inputSchema: { youtubeVideoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) },
+  }, async ({ youtubeVideoId }) => {
+    try {
+      const context = await ownerContext();
+      const accessToken = await accessTokenForOwner(context.ownerId);
+      if (!accessToken) throw new Error("YOUTUBE_CONNECTION_MISSING");
+      const caption = await fetchBestCaption(accessToken, youtubeVideoId);
+      const transcript = await upsertVideoTranscript(context.ownerId, youtubeVideoId, {
+        languageCode: caption.track.languageCode,
+        trackKind: caption.track.trackKind,
+        source: "youtube_captions",
+        transcript: caption.transcript,
+      });
+      return result({ source: "youtube_captions", transcript });
+    } catch (error) { return failure(error instanceof YouTubeCaptionError ? new Error(`YOUTUBE_CAPTIONS_${error.code}`) : error); }
+  });
+  mcp.registerTool("get_video_transcript", {
+    title: "Get video transcript",
+    description: "Read the latest owner-scoped transcript stored for a synced YouTube video so Codex can analyze its spoken content.",
+    inputSchema: { youtubeVideoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) },
+  }, async ({ youtubeVideoId }) => {
+    try {
+      const context = await ownerContext();
+      return result({ source: "stored_video_transcript", transcript: await videoTranscriptForOwner(context.ownerId, youtubeVideoId) });
+    } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("list_video_transcripts", {
+    title: "List video transcripts",
+    description: "List owner-scoped transcripts available to Codex for channel analysis without exposing other owners' data.",
+    inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
+  }, async ({ limit }) => {
+    try {
+      const context = await ownerContext();
+      return result({ source: "stored_video_transcripts", transcripts: await videoTranscriptsForOwner(context.ownerId, limit) });
     } catch (error) { return failure(error); }
   });
   mcp.registerTool("get_marketing_insights", {
