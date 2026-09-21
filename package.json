@@ -11,13 +11,12 @@
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "tsx --test tests/analytics.test.ts tests/workspace.test.ts tests/insights.test.ts tests/youtube.test.ts tests/mcp.test.ts tests/cron.test.ts tests/ai-provider.test.ts tests/video-artifacts.test.ts",
+    "test": "tsx --test tests/analytics.test.ts tests/workspace.test.ts tests/insights.test.ts tests/youtube.test.ts tests/mcp.test.ts tests/cron.test.ts tests/ai-provider.test.ts tests/production-retired.test.ts",
     "test:e2e": "playwright test",
     "test:db": "node --test tests/database.test.mjs",
     "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"
   },
   "dependencies": {
-    "@huggingface/inference": "4.13.30",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.116.0",

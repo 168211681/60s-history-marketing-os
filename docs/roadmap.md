@@ -1,121 +1,60 @@
 # Delivery roadmap
 
-This roadmap is the source of truth for the phased delivery of the Marketing OS.
-Each phase must meet its acceptance criteria, pass the listed verification, and
-have a security review before the next phase starts.
+This roadmap is the source of truth for the analysis-first Marketing OS. Each phase
+must meet its acceptance criteria and pass the relevant verification before the next
+phase starts.
+
+## Current execution goal
+
+Validate the owner-controlled analytics-to-content loop: sync YouTube data, inspect
+evidence-backed insights, hand a measured prompt to GPT Plus, and save a human-reviewed
+script draft. Internal rendering and publishing remain retired.
 
 ## Phase 0 — repository and security baseline
 
-**Status: complete for the current branch.**
-
-Acceptance criteria:
-
-- Repository, branch, dependencies, routes, migrations, tests, and deployment
-  configuration are inventoried.
-- Secrets are excluded from Git and documented through `.env.example`.
-- The app has a reproducible local verification command.
-- Known external blockers, including unavailable hosted CI or missing provider
-  credentials, are documented rather than hidden.
-
-Evidence: `README.md`, `AGENTS.md`, `.env.example`, `docs/verification.md`, and
-the latest local `npm run verify:local` checks.
+**Status: complete.** Repository rules, environment templates, ownership boundaries,
+RLS, local verification, and known external blockers are documented.
 
 ## Phase 1 — dashboard MVP
 
-**Status: complete.**
-
-Acceptance criteria:
-
-- `/`, `/videos`, `/analytics`, `/insights`, and `/settings` render on desktop
-  and mobile layouts.
-- Sample data is visibly labeled and never presented as live analytics.
-- Loading, error, empty, navigation, keyboard, and not-found states exist.
-- Lint, typecheck, unit tests, production build, and browser checks pass.
+**Status: complete.** Dashboard, videos, analytics, insights, settings, sample labels,
+loading/error states, mobile layout, and browser checks are implemented.
 
 ## Phase 2 — owner data foundation
 
-**Status: implemented locally; deployment verification remains ongoing.**
+**Status: implemented locally; deployment verification remains ongoing.** Google OAuth,
+encrypted refresh tokens, owner checks, YouTube Data/Analytics sync, retry/backoff,
+pagination, idempotent reporting windows, and private PostgreSQL readers are retained.
 
-Acceptance criteria:
+## Phase 3 — intelligence and reviewed drafts
 
-- Supabase migrations provide ownership columns, foreign keys, indexes, and RLS.
-- Google sign-in and owner checks protect private analytics routes.
-- YouTube OAuth uses state validation, encrypted refresh-token storage, refresh,
-  disconnect/revocation, and server-only credentials.
-- YouTube Data/Analytics sync validates responses, retries transient errors,
-  paginates, and is idempotent for a reporting window.
-- The owner sees live, sample, error, or unavailable status explicitly.
+**Status: implemented locally.** Deterministic insights, experiments, optional MCP
+analytics tools, copyable GPT Plus prompts, script drafting, and human review are
+available without a paid AI API.
 
-Verification: database fixtures/tests, YouTube unit tests, route checks, and a
-manual Vercel owner-flow check after the PR is merged or deployed.
+## Phase 4 — analysis-first refactor
 
-## Phase 3 — insights and reviewed script drafts
+**Status: active.** Internal video providers, rendering, artifact storage, production
+workers, upload, and publishing are retired. Their database records and sanitized
+audit events remain read-only for history. Retired API routes return `410 Gone`, and
+the production schedule is removed so no provider call can start accidentally.
 
-**Status: implemented locally; provider-backed AI remains opt-in.**
+## Phase 5 — external production package
 
-Acceptance criteria:
-
-- Deterministic analysis distinguishes observations, comparisons, hypotheses, and
-  experiments.
-- The optional MCP endpoint is authenticated and owner-scoped.
-- An owner can create, edit, review, and approve a script draft.
-- Approval is required before a production workflow can start.
-- No AI key produces an honest unavailable state and never fake AI output.
-- The optional provider-agnostic adapter validates structured analysis and script
-  output before any future persistence or UI use.
-
-## Phase 4 — production workflow and private artifacts
-
-**Status: partially implemented.**
-
-Acceptance criteria:
-
-- Approved drafts create an idempotent, owner-scoped production workflow.
-- Provider adapters have explicit unavailable/error states and do not expose keys.
-- Artifacts are stored in a private bucket and accessed with short-lived URLs.
-- A worker can retry safely and records each step and failure.
-- The owner can run the worker manually from `/scripts` when hosted scheduling is
-  unavailable; scheduled execution remains optional.
-- The owner can inspect sanitized workflow events from `/scripts` without exposing
-  the private telemetry table to the browser.
-
-Remaining work: verify the configured provider with a real low-cost/free run
-and verify the end-to-end artifact path on the deployed environment. Worker
-state transitions now write sanitized backend-only telemetry; retry limits and
-failure codes remain enforced, including a 60-minute stale-render timeout.
-Use `docs/workflow-live-test.md` to capture the required deployed evidence.
-
-## Phase 5 — private YouTube upload and human publish gate
-
-**Status: partially implemented.**
-
-Acceptance criteria:
-
-- A completed artifact uploads as `private` through the owner’s YouTube token.
-- Upload retries are idempotent and quota-aware, with clear error states.
-- No unattended public publishing exists.
-- The owner can review the private artifact and explicitly publish it in YouTube
-  through the owner-only `/api/workflows/[id]/publish` route and Scripts UI.
-
-Remaining work: production verification with a real artifact and upload failure
-recovery. The owner-only UI review/publish handoff is implemented.
+**Status: next milestone.** Export an approved draft into a structured package for an
+external editor. Include only supported content: brief, script, storyboard, voiceover
+text, caption text without fabricated timing, metadata, research references, and fact-
+check status. Exporting a package does not generate a video.
 
 ## Phase 6 — closed-loop marketing system
 
-**Status: not started.**
-
-Acceptance criteria:
-
-- Performance sync links published videos to experiments and content ideas.
-- The next recommendations cite the observed reporting window.
-- AI providers remain replaceable through an adapter and all generated claims are
-  evidence-labeled.
-- Optional MCP tools expose the same owner-scoped capabilities without becoming a
-  runtime dependency.
+**Status: planned.** Link published-video performance to experiments and content ideas,
+compare equivalent reporting windows, and improve recommendations while preserving
+clear observation, comparison, hypothesis, and experiment labels.
 
 ## Release gates
 
-Before merging or promoting a phase, run the checks appropriate to the change:
+Run the checks appropriate to each change:
 
 ```sh
 npm run lint
@@ -126,7 +65,6 @@ npm run build -- --webpack
 npm run test:e2e
 ```
 
-Then inspect `git diff --check`, review the security surface, verify the relevant
-deployed route, and record any skipped check and its reason. A green local build
-does not prove that Vercel, Supabase, Google OAuth, or a video provider is
-configured in production.
+Then inspect `git diff --check`, the security surface, and the relevant deployed route.
+A green local build does not prove that Vercel, Supabase, or Google OAuth is configured
+in production.

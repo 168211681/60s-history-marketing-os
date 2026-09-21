@@ -35,4 +35,4 @@ When the adapter is configured, the signed-in owner can call:
 
 Both routes require the owner session and an exact `Origin` matching
 `APP_ORIGIN`. Script output is explicitly marked `ai_provider` and remains
-subject to human review before any production workflow or YouTube upload.
+subject to human review before export to an external editing tool.

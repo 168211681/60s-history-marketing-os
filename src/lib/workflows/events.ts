@@ -31,7 +31,7 @@ function safeMetadata(metadata: WorkflowEvent["metadata"]) {
   );
 }
 
-/** Telemetry must never change the outcome of the production worker. */
+/** Historical telemetry is best-effort and never affects the intelligence core. */
 export async function recordWorkflowEvent(event: WorkflowEvent) {
   try {
     await database().query(
@@ -49,6 +49,6 @@ export async function recordWorkflowEvent(event: WorkflowEvent) {
       ],
     );
   } catch {
-    // A telemetry outage must not stop rendering, upload, or retry processing.
+    // A telemetry outage must not affect analytics or draft review.
   }
 }

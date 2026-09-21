@@ -114,28 +114,7 @@ export async function saveScriptDraft(
   return result.rows[0];
 }
 
-export async function createProductionWorkflow(context: OwnerContext, scriptDraftId: string) {
-  const result = await database().query<{
-    id: string;
-    script_draft_id: string;
-    status: string;
-    current_step: string;
-    created_at: string;
-  }>(
-    `insert into public.production_workflows (channel_id, script_draft_id)
-     select d.channel_id, d.id
-       from public.script_drafts d
-      where d.id = $1 and d.channel_id = $2 and d.status = 'approved'
-     on conflict (script_draft_id, workflow_type) do update
-       set updated_at = now()
-     returning id, script_draft_id, status, current_step, created_at`,
-    [scriptDraftId, context.channelId],
-  );
-  if (!result.rowCount) throw new Error("Only an approved script owned by the connected channel can start a workflow");
-  return result.rows[0];
-}
-
-export async function productionWorkflows(context: OwnerContext, limit: number) {
+export async function archivedProductionRecords(context: OwnerContext, limit: number) {
   const result = await database().query<{
     id: string;
     script_draft_id: string;
