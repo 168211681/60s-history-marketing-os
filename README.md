@@ -95,3 +95,10 @@ that a finished video was generated.
 Google and Supabase setup is documented in [docs/connection-setup.md](docs/connection-setup.md).
 ChatGPT Plus is not API billing, and deployment verification is separate from local
 tests.
+
+Database transition work is intentionally manual. Review the
+[production transition runbook](docs/database-transition.md) before taking a backup
+or applying the retirement migration. The [owner smoke-test checklist](docs/owner-smoke-test.md)
+must be completed after a production migration. The repository includes guarded
+backup, disposable restore, staging migration, permissions, and pending-job scripts
+under `scripts/db/`; they refuse to run without explicit safety gates.
