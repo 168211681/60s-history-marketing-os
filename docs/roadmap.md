@@ -41,10 +41,11 @@ the production schedule is removed so no provider call can start accidentally.
 
 ## Phase 5 — external production package
 
-**Status: next milestone.** Export an approved draft into a structured package for an
+**Status: implemented on feature branch.** Export an approved draft into a structured package for an
 external editor. Include only supported content: brief, script, storyboard, voiceover
 text, caption text without fabricated timing, metadata, research references, and fact-
-check status. Exporting a package does not generate a video.
+check status. Exporting a package does not generate a video. Production migration and
+off-host backup remain blocked until their separate release gates pass.
 
 ## Phase 6 — closed-loop marketing system
 

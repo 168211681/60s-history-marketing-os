@@ -4,6 +4,7 @@ import { productionWorkflowsForOwner, scriptDraftsForOwner } from "@/lib/data/sc
 import { ScriptDraftForm } from "@/components/script-draft-form";
 import { AiScriptDraftForm } from "@/components/ai-script-draft-form";
 import { WorkflowEvents } from "@/components/workflow-events";
+import { BriefExportAction } from "@/components/brief-export-action";
 
 export const metadata = { title: "Script drafts" };
 
@@ -59,7 +60,7 @@ export default async function ScriptsPage() {
               key={draft.id}
               title={draft.title}
               description={`${draft.source === "codex_mcp" ? "Codex/MCP draft" : draft.source === "ai_provider" ? "AI provider draft" : "Human draft"} · ${dateLabel(draft.createdAt)}`}
-              action={<div className="script-panel-actions"><span className="badge neutral">{draft.status}</span><ScriptStatusActions id={draft.id} status={draft.status} /></div>}
+              action={<div className="script-panel-actions"><span className="badge neutral">{draft.status}</span><ScriptStatusActions id={draft.id} status={draft.status} />{draft.status === "approved" ? <BriefExportAction id={draft.id} /> : null}</div>}
             >
               <div className="draft-grid">
                 <div><p className="eyebrow">HOOK</p><p>{draft.hook}</p></div>
