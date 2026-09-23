@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { scheduleObjectUrlCleanup } from "../lib/object-url";
 
 export function BriefExportAction({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
@@ -19,8 +20,12 @@ export function BriefExportAction({ id }: { id: string }) {
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `creative-brief-${id}.zip`;
+      anchor.rel = "noopener";
+      anchor.style.display = "none";
+      document.body.append(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      anchor.remove();
+      scheduleObjectUrlCleanup(url, (callback, delayMs) => window.setTimeout(callback, delayMs), (candidate) => URL.revokeObjectURL(candidate));
     } catch (value) {
       setError(value instanceof Error ? value.message : "Could not export this brief");
     } finally {

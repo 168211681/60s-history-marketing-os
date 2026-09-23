@@ -29,7 +29,11 @@ export function exportAccessDecision(input: ExportAccessInput) {
 }
 
 function clean(value: string) {
-  return value.trim().replace(/(?:postgres(?:ql)?:\/\/|(?:DATABASE_URL|SUPABASE_[A-Z_]*KEY|GOOGLE_CLIENT_SECRET)\s*[=:]|Bearer\s+)[^\s\n]+/gi, "[REDACTED]");
+  return value.trim()
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/gi, "[REDACTED PRIVATE KEY]")
+    .replace(/(?:DATABASE_URL|SUPABASE_[A-Z_]*KEY|GOOGLE_CLIENT_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|HF_TOKEN|HUGGINGFACE_TOKEN|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|TOKEN_ENCRYPTION_KEY|MCP_SECRET|CRON_SECRET)\s*[=:]\s*[^\s\n]+/gi, "[REDACTED CREDENTIAL]")
+    .replace(/(?:postgres(?:ql)?:\/\/|Bearer\s+)[^\s\n]+/gi, "[REDACTED CREDENTIAL]")
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|hf_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{16,})\b/g, "[REDACTED TOKEN]");
 }
 
 export function buildBriefPackage(draft: ExportDraft): BriefPackageFile[] {
@@ -52,7 +56,7 @@ export function buildBriefPackage(draft: ExportDraft): BriefPackageFile[] {
   return [
     {
       name: "content-brief.md",
-      content: `# Content Brief\n\n## Working title\n${title}\n\n## Target audience\nViewers interested in concise, evidence-backed history stories.\n\n## Hook\n${hook}\n\n## Evidence and limitations\n${research || "No research notes were supplied. Claims require fact-checking before publication."}\n\n## Hypotheses\nThe hook and visual structure are creative hypotheses, not causal conclusions. Compare performance against a similar experiment after publication.\n\n## Production boundary\nThis package is for external editing tools. It does not contain a rendered video, upload action, or publication instruction.\n`,
+      content: `# Content Brief\n\n## Working title\n${title}\n\n## Target audience\nViewers interested in concise, evidence-backed history stories.\n\n## Hook\n${hook}\n\n## Evidence and limitations\n${research || "No research notes were supplied. Claims require fact-checking before publication."}\n\n## Hypotheses\nThe hook and visual structure are creative hypotheses, not causal conclusions. Compare performance against a similar experiment after publication.\n\n## Production boundary\nThis package is for external editing tools. It does not contain a rendered video, upload action, or publication instruction.\n\n## Security review\nExported content is sanitized with heuristic patterns only. Review it before sharing externally; this is not full DLP protection.\n`,
     },
     {
       name: "script.md",
@@ -94,13 +98,27 @@ function crc32(input: Buffer) {
 }
 
 export function zipBriefPackage(files: BriefPackageFile[]) {
-  const local: Buffer[] = [];
-  const central: Buffer[] = [];
+  const entries = files.map((file) => {
+    if (!/^[a-z0-9.-]+$/.test(file.name)) throw new RangeError("Export package contains an unsafe filename");
+    return {
+      file,
+      nameLength: Buffer.byteLength(file.name, "utf8"),
+      dataLength: Buffer.byteLength(file.content, "utf8"),
+    };
+  });
+  const localSize = entries.reduce((total, entry) => total + 30 + entry.nameLength + entry.dataLength, 0);
+  const centralSize = entries.reduce((total, entry) => total + 46 + entry.nameLength, 0);
+  const totalSize = localSize + centralSize + 22;
+  if (totalSize > MAX_EXPORT_BYTES) throw new RangeError("Export package is too large");
+
+  const output = Buffer.allocUnsafe(totalSize);
+  const centralOffset = localSize;
   let offset = 0;
-  for (const file of files) {
-    const name = Buffer.from(file.name, "utf8");
-    const data = Buffer.from(file.content, "utf8");
-    if (offset + 30 + name.length + data.length > MAX_EXPORT_BYTES) throw new RangeError("Export package is too large");
+  const centralEntries: Array<{ name: Buffer; dataLength: number; checksum: number; localOffset: number }> = [];
+  for (const entry of entries) {
+    const name = Buffer.from(entry.file.name, "utf8");
+    const data = Buffer.from(entry.file.content, "utf8");
+    const checksum = crc32(data);
     const header = Buffer.alloc(30 + name.length);
     header.writeUInt32LE(0x04034b50, 0);
     header.writeUInt16LE(20, 4);
@@ -108,35 +126,37 @@ export function zipBriefPackage(files: BriefPackageFile[]) {
     header.writeUInt16LE(0, 8);
     header.writeUInt16LE(0, 10);
     header.writeUInt16LE(0, 12);
-    header.writeUInt32LE(crc32(data), 14);
+    header.writeUInt32LE(checksum, 14);
     header.writeUInt32LE(data.length, 18);
     header.writeUInt32LE(data.length, 22);
     header.writeUInt16LE(name.length, 26);
     name.copy(header, 30);
-    local.push(header, data);
-    const entry = Buffer.alloc(46 + name.length);
-    entry.writeUInt32LE(0x02014b50, 0);
-    entry.writeUInt16LE(20, 4);
-    entry.writeUInt16LE(20, 6);
-    entry.writeUInt16LE(0x800, 8);
-    entry.writeUInt16LE(0, 10);
-    entry.writeUInt16LE(0, 12);
-    entry.writeUInt16LE(0, 14);
-    entry.writeUInt32LE(crc32(data), 16);
-    entry.writeUInt32LE(data.length, 20);
-    entry.writeUInt32LE(data.length, 24);
-    entry.writeUInt16LE(name.length, 28);
-    entry.writeUInt32LE(offset, 42);
-    name.copy(entry, 46);
-    central.push(entry);
+    header.copy(output, offset);
+    data.copy(output, offset + header.length);
+    centralEntries.push({ name, dataLength: data.length, checksum, localOffset: offset });
     offset += header.length + data.length;
   }
-  const centralData = Buffer.concat(central);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(centralData.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...local, centralData, end]);
+  let centralCursor = centralOffset;
+  for (const entry of centralEntries) {
+    const record = Buffer.alloc(46 + entry.name.length);
+    record.writeUInt32LE(0x02014b50, 0);
+    record.writeUInt16LE(20, 4);
+    record.writeUInt16LE(20, 6);
+    record.writeUInt16LE(0x800, 8);
+    record.writeUInt32LE(entry.checksum, 16);
+    record.writeUInt32LE(entry.dataLength, 20);
+    record.writeUInt32LE(entry.dataLength, 24);
+    record.writeUInt16LE(entry.name.length, 28);
+    record.writeUInt32LE(entry.localOffset, 42);
+    entry.name.copy(record, 46);
+    record.copy(output, centralCursor);
+    centralCursor += record.length;
+  }
+  output.writeUInt32LE(0x06054b50, centralCursor);
+  output.writeUInt16LE(files.length, centralCursor + 8);
+  output.writeUInt16LE(files.length, centralCursor + 10);
+  output.writeUInt32LE(centralSize, centralCursor + 12);
+  output.writeUInt32LE(localSize, centralCursor + 16);
+  if (output.length > MAX_EXPORT_BYTES) throw new RangeError("Export package is too large");
+  return output;
 }
