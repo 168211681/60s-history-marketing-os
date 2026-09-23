@@ -309,6 +309,51 @@ test("experiments require a linked video for running or completed status", () =>
   assert.equal(asRole("authenticated", userA, "select count(*) from public.content_experiments"), "1");
   assert.equal(asRole("authenticated", userB, "select count(*) from public.content_experiments"), "1");
 });
+test("reconciliation preserves a legacy experiment and leaves its window unknown", () => {
+  sql("alter table public.content_experiments rename to content_experiments_phase6_fixture");
+  sql(`
+    create table public.content_experiments (
+      id uuid primary key,
+      channel_id uuid not null references public.channels (id),
+      content_idea_id uuid references public.content_ideas (id),
+      script_draft_id uuid references public.script_drafts (id),
+      video_id uuid,
+      topic text,
+      hook_format text,
+      hypothesis text,
+      status text,
+      result_summary text,
+      recommendation text,
+      observed_views bigint,
+      observed_minutes_watched numeric,
+      observed_average_view_duration_seconds numeric,
+      observed_likes bigint,
+      observed_comments bigint,
+      started_at timestamptz,
+      completed_at timestamptz,
+      created_at timestamptz not null,
+      updated_at timestamptz not null
+    );
+    create trigger set_updated_at before update on public.content_experiments
+      for each row execute function private.set_updated_at();
+    insert into public.content_experiments
+      (id, channel_id, topic, hook_format, hypothesis, status, result_summary,
+       observed_views, created_at, updated_at)
+    values
+      ('50000000-0000-4000-8000-000000000099', '${channelA}', 'Legacy topic',
+       'question', 'Legacy hypothesis', 'completed', 'Historical result',
+       42, '2024-01-01 00:00:00+00', '2024-01-02 00:00:00+00');
+  `);
+  sql(readFileSync("supabase/migrations/20260923231944_reconcile_content_experiments_schema.sql", "utf8"));
+  assert.equal(
+    sql("select title || '|' || coalesce(reporting_window_days::text, 'NULL') || '|' || observed_views || '|' || created_at::date || '|' || updated_at::date from public.content_experiments"),
+    "Legacy topic|NULL|42|2024-01-01|2024-01-02",
+  );
+  assert.equal(sql("select count(*) from pg_constraint where conrelid='public.content_experiments'::regclass and conname='content_experiments_reporting_window_compatibility_check'"), "1");
+  sql("drop table public.content_experiments; alter table public.content_experiments_phase6_fixture rename to content_experiments");
+  sql(readFileSync("supabase/migrations/20260923231944_reconcile_content_experiments_schema.sql", "utf8"));
+  assert.equal(sql("select count(*) from information_schema.columns where table_schema='public' and table_name='content_experiments' and column_name in ('title','reporting_window_days')"), "2");
+});
 test("private jobs are inaccessible to both client roles but available to service role", () => {
   for (const role of ["anon", "authenticated"]) {
     for (const query of ["select *", "delete"])

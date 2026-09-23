@@ -44,8 +44,8 @@ export default async function InsightsPage() {
               <article className="experiment-card" key={experiment.id}>
                 <div className="experiment-card-heading">
                   <div>
-                    <p className="eyebrow">{experiment.status.toUpperCase()} · {experiment.reportingWindowDays}-DAY WINDOW</p>
-                    <h3>{experiment.title}</h3>
+                    <p className="eyebrow">{experiment.status.toUpperCase()} · {experiment.reportingWindowDays ? `${experiment.reportingWindowDays}-DAY WINDOW` : "WINDOW UNKNOWN · INSUFFICIENT EVIDENCE"}</p>
+                    <h3>{experiment.title ?? "Untitled legacy experiment"}</h3>
                   </div>
                   <span className="status-badge">{experiment.evaluation.evidence}</span>
                 </div>

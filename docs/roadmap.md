@@ -44,15 +44,15 @@ the production schedule is removed so no provider call can start accidentally.
 **Status: complete.** Export an approved draft into a structured package for an
 external editor. Include only supported content: brief, script, storyboard, voiceover
 text, caption text without fabricated timing, metadata, research references, and fact-
-check status. Exporting a package does not generate a video. Production migration and
-off-host backup remain blocked until their separate release gates pass.
+check status. Exporting a package does not generate a video. Future Production
+changes and off-host backup remain separate release gates.
 
 ## Phase 6 — closed-loop marketing system
 
-**Status: implemented on feature branch.** Link published-video performance to owner-scoped
-experiments and content ideas, compare equivalent reporting windows, and expose a
-human-reviewable result in `/insights`. The new `content_experiments` migration is
-staging-only until its PR is reviewed; it must not be applied to Production automatically.
+**Status: complete.** Link published-video performance to owner-scoped experiments and
+content ideas, compare equivalent reporting windows, and expose a human-reviewable
+result in `/insights`. Production schema reconciliation remains a separate,
+human-approved migration gate.
 
 Phase 6 rules:
 

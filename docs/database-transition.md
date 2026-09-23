@@ -189,11 +189,32 @@ is intentionally not normalized to the local timestamp.
 
 ## Migration-history policy
 
-**Staging CI** requires the 13 local migration versions and Staging remote
-history to match exactly. A mismatch blocks the staging validation workflow.
+**Staging CI** discovers every local migration filename and requires that complete
+set to match Staging remote history exactly. The count is not hardcoded; the
+baseline `main` repository and Staging project contain 14 versions, while this
+reconciliation branch adds a 15th forward-only migration for rehearsal. A
+mismatch blocks the staging validation workflow.
 
 **Production** has historical divergence and is validated by the known remote
 retirement record plus effective schema, privilege, RLS, and preserved-row
 checks. Production history must not be repaired, reset, replayed, or cosmetically
 normalized. No automated workflow may apply a Production migration; every future
 Production change requires a separate human-approved gate.
+
+## Content experiments schema reconciliation
+
+Production already contained a legacy `public.content_experiments` table before
+Phase 6. The original Phase 6 create-table migration is therefore not a valid
+Production operation. The follow-up reconciliation migration adds `title` and
+`reporting_window_days` without dropping the table or deleting rows. It backfills
+`title` only from an existing non-empty `topic`; when no defensible reporting
+window exists, `reporting_window_days` remains `NULL` and the application reports
+insufficient evidence. Legacy observed fields, keys, timestamps, RLS and audit
+rows remain preserved.
+
+The reconciliation migration is rehearsed on Staging first. Applying it to
+Production requires separate human approval after backup, staging verification,
+and a read-only inventory. No migration repair, reset, replay, or cosmetic
+timestamp normalization is part of this process. The migration has no automatic
+down migration; rollback requires a reviewed forward SQL change or restoration in
+a disposable environment.
