@@ -63,23 +63,48 @@ jobs:
           npx --yes supabase@2.117.0 projects list --output-format json > "$RUNNER_TEMP/staging-projects.json"
           node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-project.mjs" "$RUNNER_TEMP/staging-projects.json" "$STAGING_PROJECT_REF"
 
+      - name: Prove read-only PostgreSQL connectivity
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          run_read_only_query() {
+            local label="$1"
+            local query="$2"
+            local output_file="$RUNNER_TEMP/${label}.out"
+            local error_file="$RUNNER_TEMP/${label}.err"
+            if ! psql "$STAGING_DATABASE_URL" \
+              --no-psqlrc \
+              --set=ON_ERROR_STOP=1 \
+              --tuples-only \
+              --no-align \
+              --command="$query" >"$output_file" 2>"$error_file"; then
+              node "$GITHUB_WORKSPACE/scripts/ci/sanitize-cli-diagnostic.mjs" \
+                "$error_file" "$STAGING_DATABASE_URL"
+              exit 1
+            fi
+            cat "$output_file"
+          }
+          run_read_only_query identity 'select current_database(), current_user;'
+          run_read_only_query migration-access 'select count(*) from supabase_migrations.schema_migrations;'
+
       - name: Compare local migrations with staging
         shell: bash
         env:
           STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
         run: |
           set -euo pipefail
-          migration_stderr="$RUNNER_TEMP/staging-migrations.stderr"
-          if ! npx --yes supabase@2.117.0 migration list \
-            --db-url "$STAGING_DATABASE_URL" \
-            --output-format json > "$RUNNER_TEMP/staging-migrations.json" \
-            2> "$migration_stderr"; then
-            node "$GITHUB_WORKSPACE/scripts/ci/sanitize-cli-diagnostic.mjs" \
-              "$migration_stderr" "$STAGING_DATABASE_URL"
-            exit 1
-          fi
-          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migrations.mjs" \
-            "$RUNNER_TEMP/staging-migrations.json" \
+          psql "$STAGING_DATABASE_URL" \
+            --no-psqlrc \
+            --set=ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/staging-migration-versions.txt"
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migration-versions.mjs" \
+            "$RUNNER_TEMP/staging-migration-versions.txt" \
             "$GITHUB_WORKSPACE/supabase/migrations"
 
       - name: Install dependencies
