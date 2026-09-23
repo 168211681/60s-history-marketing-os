@@ -83,6 +83,7 @@ const tables = [
   "channel_metrics",
   "marketing_insights",
   "content_ideas",
+  "content_experiments",
 ];
 
 before(() => {
@@ -135,13 +136,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "13",
+    "14",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "13",
+      "14",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -301,6 +302,13 @@ test("cross-owner idea insert is denied; cross-owner updates/deletes affect no r
     "42501",
   );
 });
+test("experiments require a linked video for running or completed status", () => {
+  asRole("service_role", "", `insert into public.content_experiments (channel_id,title,hypothesis,reporting_window_days,status) values ('${channelA}','Planned','Test a hook',1,'planned')`);
+  asRole("service_role", "", `insert into public.content_experiments (channel_id,title,hypothesis,reporting_window_days,status) values ('${channelA}','Running','Test a hook',1,'running')`, "23514");
+  asRole("service_role", "", `insert into public.content_experiments (channel_id,title,hypothesis,reporting_window_days,status,video_id,completed_at) values ('${channelA}','Complete','Test a hook',1,'completed','${videoA}',now())`);
+  assert.equal(asRole("authenticated", userA, "select count(*) from public.content_experiments"), "1");
+  assert.equal(asRole("authenticated", userB, "select count(*) from public.content_experiments"), "1");
+});
 test("private jobs are inaccessible to both client roles but available to service role", () => {
   for (const role of ["anon", "authenticated"]) {
     for (const query of ["select *", "delete"])
@@ -450,6 +458,6 @@ test("deleting an auth user cascades their data but preserves the other owner's 
     sql(
       `begin; delete from auth.users where id='${userA}'; ${counts}; select count(*) from private.analytics_sync_jobs; rollback;`,
     ),
-    Array(8).fill("1").join("\n"),
+    Array(9).fill("1").join("\n"),
   );
 });
