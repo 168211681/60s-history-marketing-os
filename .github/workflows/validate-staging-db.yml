@@ -44,25 +44,8 @@ jobs:
           }
           test "$STAGING_PROJECT_REF" = "haqpqifxlqpihkmhkwdu"
           test "$STAGING_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
-          node <<'NODE'
-          const url = new URL(process.env.STAGING_DATABASE_URL);
-          const stagingRef = process.env.STAGING_PROJECT_REF;
-          const productionRef = process.env.PRODUCTION_PROJECT_REF;
-          const expectedHost = `db.${stagingRef}.supabase.co`;
-          if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
-            throw new Error("STAGING_DATABASE_URL must use PostgreSQL.");
-          }
-          if (url.hostname === productionRef || url.hostname.includes(productionRef)) {
-            throw new Error("Production project reference found in staging database target.");
-          }
-          if (url.hostname !== expectedHost) {
-            throw new Error("Staging database host is not the independently verified direct host.");
-          }
-          if (url.pathname !== "/postgres") {
-            throw new Error("Staging database target must be the postgres database.");
-          }
-          console.log("Staging database target identity passed without printing credentials.");
-          NODE
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-database-url.mjs" \
+            "$STAGING_DATABASE_URL" "$STAGING_PROJECT_REF" "$PRODUCTION_PROJECT_REF"
 
       - name: Install pinned Supabase CLI
         run: npx --yes supabase@2.117.0 --version
