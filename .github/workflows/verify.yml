@@ -1,0 +1,33 @@
+name: Verify application
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'feat/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: history-ci-runner
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, history-ci]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build -- --webpack
+
+      # Database and browser E2E suites require isolated local/staging services
+      # and are intentionally kept out of pull_request CI.
