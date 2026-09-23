@@ -69,10 +69,15 @@ jobs:
           STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
         run: |
           set -euo pipefail
-          npx --yes supabase@2.117.0 migration list \
+          migration_stderr="$RUNNER_TEMP/staging-migrations.stderr"
+          if ! npx --yes supabase@2.117.0 migration list \
             --db-url "$STAGING_DATABASE_URL" \
-            --project-ref "$STAGING_PROJECT_REF" \
-            --output-format json > "$RUNNER_TEMP/staging-migrations.json"
+            --output-format json > "$RUNNER_TEMP/staging-migrations.json" \
+            2> "$migration_stderr"; then
+            node "$GITHUB_WORKSPACE/scripts/ci/sanitize-cli-diagnostic.mjs" \
+              "$migration_stderr" "$STAGING_DATABASE_URL"
+            exit 1
+          fi
           node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migrations.mjs" \
             "$RUNNER_TEMP/staging-migrations.json" \
             "$GITHUB_WORKSPACE/supabase/migrations"

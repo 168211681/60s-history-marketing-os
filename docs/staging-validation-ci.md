@@ -7,7 +7,13 @@ and uses the protected `history-ci` self-hosted runner.
 The workflow never runs `db push`, migration repair, reset, seed, or schema-write
 commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
-verification query.
+verification query. Because `--db-url` supplies the database target directly,
+the migration check intentionally does not pass `--project-ref` to
+`supabase migration list`; the project identity is already guarded by the
+Staging URL, Pooler username and separate Supabase API project check.
+
+If the CLI cannot connect, only sanitized diagnostics are surfaced. The database
+URL, password and access token are never printed.
 
 ## Required GitHub secrets
 
