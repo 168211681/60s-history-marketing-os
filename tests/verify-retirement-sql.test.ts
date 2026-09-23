@@ -16,4 +16,7 @@ test("retirement verification uses the pg_policies catalog column and stays read
   assert.match(sql, /video_generation_jobs/);
   assert.match(sql, /script_drafts/);
   assert.match(sql, /channel_metrics/);
+  assert.match(sql, /where name = 'retire_internal_production'/i);
+  assert.match(sql, /archived_writes_revoked/);
+  assert.match(sql, /preserved_row_count/);
 });

@@ -1,5 +1,12 @@
--- Read-only verification. Run as a privileged database operator on staging only.
+-- Read-only verification. Run as a privileged database operator on an explicitly
+-- identified Staging or Production target only.
 -- Do not paste credentials or query results containing tokens into tickets/chat.
+
+select version, name
+from supabase_migrations.schema_migrations
+where name = 'retire_internal_production'
+order by version;
+
 select table_name, privilege_type, grantee
 from information_schema.role_table_grants
 where table_schema = 'public'
@@ -27,6 +34,21 @@ select table_name,
        has_table_privilege('service_role', format('public.%I', table_name), 'UPDATE') as service_can_update,
        has_table_privilege('service_role', format('public.%I', table_name), 'DELETE') as service_can_delete
 from (values ('production_workflows'), ('video_generation_jobs'), ('script_drafts'), ('channel_metrics')) as tables(table_name)
+order by table_name;
+
+select table_name,
+       has_table_privilege('service_role', format('public.%I', table_name), 'SELECT') as readable,
+       not has_table_privilege('service_role', format('public.%I', table_name), 'INSERT')
+         and not has_table_privilege('service_role', format('public.%I', table_name), 'UPDATE')
+         and not has_table_privilege('service_role', format('public.%I', table_name), 'DELETE') as archived_writes_revoked
+from (values ('production_workflows'), ('video_generation_jobs')) as archived(table_name)
+order by table_name;
+
+select 'production_workflows' as table_name, count(*) as preserved_row_count
+from public.production_workflows
+union all
+select 'video_generation_jobs' as table_name, count(*) as preserved_row_count
+from public.video_generation_jobs
 order by table_name;
 
 -- Expected after the retirement migration:
