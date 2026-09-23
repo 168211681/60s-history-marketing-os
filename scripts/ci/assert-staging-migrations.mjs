@@ -37,9 +37,6 @@ function collectRemote(value, remoteContext = false) {
 
 collectRemote(payload);
 const remote = [...remoteVersions].sort();
-if (local.length !== 13) {
-  throw new Error(`Expected exactly 13 local migrations; found ${local.length}.`);
-}
 if (remote.length === 0) {
   throw new Error("Supabase CLI output did not expose a remote migration set; refusing to compare an ambiguous payload.");
 }

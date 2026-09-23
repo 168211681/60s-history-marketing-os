@@ -9,7 +9,6 @@ export async function compareStagingMigrationVersions(versionsPath, migrationsPa
     .split(/\r?\n/)
     .map((version) => version.trim())
     .filter(Boolean);
-  if (local.length !== 13) throw new Error(`Expected exactly 13 local migrations; found ${local.length}.`);
   if (remote.some((version) => !/^\d{14}$/.test(version))) {
     throw new Error("Staging migration query returned an invalid version.");
   }

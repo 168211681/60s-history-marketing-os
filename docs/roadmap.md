@@ -34,14 +34,14 @@ available without a paid AI API.
 
 ## Phase 4 — analysis-first refactor
 
-**Status: active.** Internal video providers, rendering, artifact storage, production
+**Status: complete.** Internal video providers, rendering, artifact storage, production
 workers, upload, and publishing are retired. Their database records and sanitized
 audit events remain read-only for history. Retired API routes return `410 Gone`, and
 the production schedule is removed so no provider call can start accidentally.
 
 ## Phase 5 — external production package
 
-**Status: implemented on feature branch.** Export an approved draft into a structured package for an
+**Status: complete.** Export an approved draft into a structured package for an
 external editor. Include only supported content: brief, script, storyboard, voiceover
 text, caption text without fabricated timing, metadata, research references, and fact-
 check status. Exporting a package does not generate a video. Production migration and
@@ -49,9 +49,17 @@ off-host backup remain blocked until their separate release gates pass.
 
 ## Phase 6 — closed-loop marketing system
 
-**Status: planned.** Link published-video performance to experiments and content ideas,
-compare equivalent reporting windows, and improve recommendations while preserving
-clear observation, comparison, hypothesis, and experiment labels.
+**Status: implemented on feature branch.** Link published-video performance to owner-scoped
+experiments and content ideas, compare equivalent reporting windows, and expose a
+human-reviewable result in `/insights`. The new `content_experiments` migration is
+staging-only until its PR is reviewed; it must not be applied to Production automatically.
+
+Phase 6 rules:
+
+- Compare equivalent inclusive windows only (for example, first 24 hours with first 24 hours, or first 7 days with first 7 days). Different window lengths are insufficient evidence.
+- Preserve `NULL` metrics as unavailable. Never treat missing metrics as zero, and return insufficient evidence when required values are missing or a baseline is empty.
+- Separate measured observations and deterministic comparisons from hypotheses and next-test recommendations. The evaluator never claims causation, virality, or guaranteed performance.
+- A `running` experiment requires a linked published video. A `completed` experiment additionally requires comparable measured evidence; otherwise it remains open for human review.
 
 ## Release gates
 
