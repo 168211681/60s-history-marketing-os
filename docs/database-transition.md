@@ -15,6 +15,26 @@ The application routes are already retired and return `410`. The database
 change is a second safety boundary against an old privileged worker creating or
 mutating production jobs.
 
+## Production state after application
+
+The local migration source remains:
+
+`supabase/migrations/20260921130000_retire_internal_production.sql`
+
+The verified Production deployment recorded the equivalent retirement SQL under
+the remote migration version `20260923205655` with name
+`retire_internal_production`. The differing timestamp is deployment history,
+not a schema difference: the SQL effect is already applied. Do not rename the
+local file, create a duplicate migration, insert a synthetic history row, or
+run `supabase migration repair`, reset, or replay merely to make timestamps
+match.
+
+Production verification therefore checks effective privileges, readable
+archived tables, preserved row counts, and the observed remote retirement
+record. It does not require the Production timestamp to equal the local source
+timestamp. Any future Production migration remains an explicit human-approved
+operation.
+
 ## Required access and credentials
 
 The operator needs a Supabase project owner/database connection with permission
@@ -131,11 +151,13 @@ staging gates pass:
 2. Run the read-only inventory in `scripts/db/pending-production-jobs.sql` and
    save the result in the change record.
 3. Confirm the backup checksum and restore rehearsal evidence.
-4. Use the Supabase migration mechanism against the explicitly linked
-   production project. Review `db push --dry-run` output first.
-5. Apply only the reviewed migration. Do not run test bootstrap SQL in Supabase.
-6. Re-run `scripts/db/verify-retirement.sql` and the pending-job inventory.
-7. Run the owner smoke-test checklist in `docs/owner-smoke-test.md`.
+4. No migration apply is required for the already verified retirement state.
+   If a future Production migration is separately approved, review
+   `db push --dry-run` against the explicitly linked project first.
+5. Run `scripts/db/verify-retirement.sql` and the pending-job inventory in
+   read-only mode. Confirm the recorded remote retirement version and the
+   effective privilege checks; do not repair history to match the local name.
+6. Run the owner smoke-test checklist in `docs/owner-smoke-test.md`.
 
 No cleanup or deletion is part of this migration. Existing rows remain read-only
 for their owner and are retained for audit.
@@ -158,9 +180,20 @@ The migration has no destructive down migration. If verification fails:
 
 ## Current status
 
-The disposable PostgreSQL migration audit passed in this repository. Production
-backup, production migration, live pending-job inventory, and authenticated
-owner smoke tests still require a human with Supabase production access. The
-verification SQL regression test covers the `pg_policies.tablename` catalog
-column; hosted grant and RLS checks remain pending until isolated Supabase
-staging is available.
+The disposable PostgreSQL migration audit passed in this repository. The
+retirement SQL is verified as applied in Production under remote version
+`20260923205655`; the legacy `production_workflows` row remains preserved and
+`video_generation_jobs` remains empty. The owner smoke test and any future
+Production migration still require explicit human approval. Production history
+is intentionally not normalized to the local timestamp.
+
+## Migration-history policy
+
+**Staging CI** requires the 13 local migration versions and Staging remote
+history to match exactly. A mismatch blocks the staging validation workflow.
+
+**Production** has historical divergence and is validated by the known remote
+retirement record plus effective schema, privilege, RLS, and preserved-row
+checks. Production history must not be repaired, reset, replayed, or cosmetically
+normalized. No automated workflow may apply a Production migration; every future
+Production change requires a separate human-approved gate.
