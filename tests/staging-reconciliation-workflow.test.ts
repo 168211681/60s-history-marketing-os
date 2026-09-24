@@ -16,6 +16,14 @@ test("staging reconciliation workflow is manual and isolated", async () => {
   assert.match(workflow, /--migration-set \"\$EXPECTED_MIGRATION_VERSION\"/);
   assert.match(workflow, /--dry-run \"\$dry_run\" \"\$EXPECTED_MIGRATION_VERSION\"/);
   assert.match(workflow, /pre-apply-migration-versions\.txt/);
+  assert.match(workflow, /path: reconciliation-source/);
+  assert.match(workflow, /git -C reconciliation-source rev-parse HEAD/);
+  assert.match(workflow, /staging-reconciliation-worktree-path/);
+  assert.match(workflow, /trusted_helper=.*assert-staging-reconciliation-plan\.mjs/);
+  assert.match(workflow, /node "\$trusted_helper" --migration-set/);
+  assert.match(workflow, /test \"\$\(wc -l < \"\$RUNNER_TEMP\/local-migration-versions\.txt\"\)\" = \"15\"/);
+  assert.match(workflow, /cd \"\$staging_worktree\" && npx --yes supabase@2\.117\.0 db push/);
+  assert.match(workflow, /GITHUB_WORKSPACE\/scripts\/ci\/assert-staging-reconciliation-plan\.mjs/);
   assert.match(workflow, /--yes --skip-vault/);
   assert.equal(workflow.match(/--field-separator=\$'\\t'/g)?.length, 2);
   assert.equal(workflow.match(/IFS=\$'\\t' read/g)?.length, 2);
