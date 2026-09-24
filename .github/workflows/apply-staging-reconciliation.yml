@@ -94,6 +94,16 @@ jobs:
           test "$table_count" = "1"
           test "$rls_enabled" = "t"
           printf '%s\n' "$row_count" > "$RUNNER_TEMP/pre-apply-row-count"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/pre-apply-migration-versions.txt"
+          find supabase/migrations -maxdepth 1 -type f -printf '%f\n' \
+            | sed -nE 's/^([0-9]{14})_[A-Za-z0-9_]+\.sql$/\1/p' \
+            | sort -u > "$RUNNER_TEMP/local-migration-versions.txt"
+          node scripts/ci/assert-staging-reconciliation-plan.mjs \
+            --migration-set "$EXPECTED_MIGRATION_VERSION" \
+            "$RUNNER_TEMP/local-migration-versions.txt" \
+            "$RUNNER_TEMP/pre-apply-migration-versions.txt"
           echo "Staging pre-apply state verified: 14 migrations, previous content_experiments migration present, RLS enabled."
 
       - name: Dry-run exact reconciliation migration
@@ -109,7 +119,7 @@ jobs:
             exit 1
           fi
           node scripts/ci/assert-staging-reconciliation-plan.mjs \
-            "$dry_run" "$EXPECTED_MIGRATION_VERSION"
+            --dry-run "$dry_run" "$EXPECTED_MIGRATION_VERSION"
 
       - name: Apply exact reconciliation migration
         shell: bash
