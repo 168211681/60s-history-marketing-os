@@ -139,7 +139,7 @@ The read-only Production inventory currently reports one queued
 row and its audit history. Do not retry, delete, update, or execute it while the
 retired worker is disabled. Record its identifier and timestamps in the change
 record, then have the owner or DBA approve an explicit archival disposition
-before the Production migration. The retirement migration must not be used as a
+before any separately approved workflow disposition. The retirement migration was not a
 cleanup operation.
 
 ## Production application
@@ -212,9 +212,15 @@ window exists, `reporting_window_days` remains `NULL` and the application report
 insufficient evidence. Legacy observed fields, keys, timestamps, RLS and audit
 rows remain preserved.
 
-The reconciliation migration is rehearsed on Staging first. Applying it to
-Production requires separate human approval after backup, staging verification,
-and a read-only inventory. No migration repair, reset, replay, or cosmetic
-timestamp normalization is part of this process. The migration has no automatic
-down migration; rollback requires a reviewed forward SQL change or restoration in
-a disposable environment.
+The reconciliation migration was rehearsed on Staging and applied and verified on
+Production under remote migration version
+`20260924040511_reconcile_content_experiments_schema`. The repository source
+remains `20260923231944_reconcile_content_experiments_schema.sql`. This history
+divergence is intentional: do not repair, reset, replay or cosmetically normalize
+Production. Effective columns, grants, RLS and preserved rows are the verification
+criteria. The migration has no automatic down migration; recovery needs a reviewed
+forward SQL change or restoration in a disposable environment.
+
+The Phase 7 research migration is a separate pending change. Its local SQL and
+disposable database test do not show that Staging or Production has applied it.
+No encrypted off-host backup is claimed by this runbook.

@@ -4,6 +4,7 @@ import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { database, databaseConfigured } from "@/lib/database";
 import { buildBriefPackage, exportAccessDecision, zipBriefPackage, type ExportDraft } from "@/lib/creative-brief-export";
+import { researchForScript } from "@/lib/research/data";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (decision.status !== 200) return NextResponse.json({ error: decision.error }, { status: decision.status });
   let zip: Buffer;
   try {
-    zip = zipBriefPackage(buildBriefPackage({ ...draft!, createdAt: new Date(draft!.createdAt).toISOString() }));
+    const researchProject = await researchForScript(id, owner.id);
+    zip = zipBriefPackage(buildBriefPackage({ ...draft!, createdAt: new Date(draft!.createdAt).toISOString(), researchProject }));
   } catch (error) {
     if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 413 });
     throw error;

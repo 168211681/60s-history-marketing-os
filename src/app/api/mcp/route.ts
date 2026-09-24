@@ -2,6 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { isMcpAuthorized } from "@/lib/ai/mcp-auth";
+import { ownerId } from "@/lib/auth/config";
+import { databaseConfigured } from "@/lib/database";
+import { researchProjectForOwner, researchProjectsForOwner } from "@/lib/research/data";
+import { factCheckedContext } from "@/lib/research/model";
 import { archivedProductionRecords, insightSnapshot, ownerContext, saveAiInsight, saveContentIdea, saveScriptDraft } from "@/lib/ai/mcp-data";
 
 export const runtime = "nodejs";
@@ -20,6 +24,30 @@ function failure(error: unknown) {
 
 function server() {
   const mcp = new McpServer({ name: "60s-history-marketing-os", version: "0.1.0" });
+  function researchOwner() {
+    const id = ownerId();
+    if (!id || !databaseConfigured()) throw new Error("Research database is not configured");
+    return id;
+  }
+  mcp.registerTool("list_research_projects", {
+    title: "List research projects", description: "Read owner-scoped research topics and human review states.", inputSchema: {},
+  }, async () => {
+    try { return result({ projects: await researchProjectsForOwner(researchOwner()) }); } catch (error) { return failure(error); }
+  });
+  mcp.registerTool("get_research_project", {
+    title: "Get research project", description: "Read sources, claims, assessments and uncertainties without promoting disputed claims to facts.",
+    inputSchema: { id: z.string().uuid() },
+  }, async ({ id }) => {
+    try {
+      const project = await researchProjectForOwner(id, researchOwner());
+      if (!project) return failure(new Error("Research project not found"));
+      const context = factCheckedContext(project);
+      return result({ project: { id: project.id, topic: project.topic, status: project.status, researchQuestion: project.researchQuestion, summary: project.summary },
+        FACTS: context.facts, SUPPORTED_CLAIMS: context.supportedClaims, DISPUTED_CLAIMS: context.disputedClaims,
+        INSUFFICIENT_CLAIMS: context.insufficientClaims, SOURCES: context.sources, UNCERTAINTIES: context.uncertainties,
+        evidenceStatus: context.evidenceStatus });
+    } catch (error) { return failure(error); }
+  });
   mcp.registerTool("get_channel_metrics", {
     title: "Get channel metrics",
     description: "Read the connected owner's latest stored YouTube analytics. Values are real synced data when available.",

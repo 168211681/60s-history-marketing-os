@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { evidenceStatus, factCheckedContext, type ResearchProject } from "./research/model";
 
 export type ExportDraft = {
   title: string;
@@ -10,6 +11,7 @@ export type ExportDraft = {
   researchNotes: string;
   status: "draft" | "reviewed" | "approved" | "archived";
   createdAt: string;
+  researchProject?: ResearchProject | null;
 };
 
 export type BriefPackageFile = { name: string; content: string };
@@ -42,6 +44,10 @@ export function buildBriefPackage(draft: ExportDraft): BriefPackageFile[] {
   const hook = clean(draft.hook);
   const cta = clean(draft.callToAction);
   const research = clean(draft.researchNotes);
+  const context = factCheckedContext(draft.researchProject ?? null);
+  const references = context.sources.map((source) => `- ${clean(source.citationText)}${source.url ? ` — ${clean(source.url)}` : ""}`).join("\n");
+  const uncertainties = context.uncertainties.map((note) => `- ${clean(note)}`).join("\n");
+  const supported = context.supportedClaims.map((claim) => `- ${clean(claim.claimText)}`).join("\n");
   const cues = clean(draft.sceneCues);
   const captions = clean(draft.captionText);
   const storyboardLines = cues
@@ -56,11 +62,11 @@ export function buildBriefPackage(draft: ExportDraft): BriefPackageFile[] {
   return [
     {
       name: "content-brief.md",
-      content: `# Content Brief\n\n## Working title\n${title}\n\n## Target audience\nViewers interested in concise, evidence-backed history stories.\n\n## Hook\n${hook}\n\n## Evidence and limitations\n${research || "No research notes were supplied. Claims require fact-checking before publication."}\n\n## Hypotheses\nThe hook and visual structure are creative hypotheses, not causal conclusions. Compare performance against a similar experiment after publication.\n\n## Production boundary\nThis package is for external editing tools. It does not contain a rendered video, upload action, or publication instruction.\n\n## Security review\nExported content is sanitized with heuristic patterns only. Review it before sharing externally; this is not full DLP protection.\n`,
+      content: `# Content Brief\n\n## Working title\n${title}\n\n## Target audience\nViewers interested in concise, evidence-backed history stories.\n\n## Hook\n${hook}\n\n## Evidence status\n${evidenceStatus(draft.researchProject ?? null)}\n\n## Research references\n${references || "No linked research sources."}\n\n## Known uncertainties\n${uncertainties || "No uncertainty note supplied; review every historical claim."}\n\n## Evidence and limitations\n${research || "No research notes were supplied. Claims require fact-checking before publication."}\n\n## Hypotheses\nThe hook and visual structure are creative hypotheses, not causal conclusions. Compare performance against a similar experiment after publication.\n\n## Production boundary\nThis package is for external editing tools. It does not contain a rendered video, upload action, or publication instruction.\n\n## Security review\nExported content is sanitized with heuristic patterns only. Review it before sharing externally; this is not full DLP protection.\n`,
     },
     {
       name: "script.md",
-      content: `# Script\n\n## Hook\n${hook}\n\n## Narration\n${script}\n\n## CTA\n${cta || "Invite viewers to follow for the next history story."}\n`,
+      content: `# Script\n\n## Hook\n${hook}\n\n## Narration\n${script}\n\n## Reviewed supporting claims\n${supported || "No supporting claims have completed research review."}\n\n## CTA\n${cta || "Invite viewers to follow for the next history story."}\n`,
     },
     {
       name: "storyboard.md",
@@ -76,7 +82,10 @@ export function buildBriefPackage(draft: ExportDraft): BriefPackageFile[] {
         description: `${hook}\n\n${cta}`.trim(),
         language: "th",
         keywords: ["history", "60s History", "สารคดีสั้น"],
-        factCheckStatus: research ? "needs_human_review" : "insufficient_evidence",
+        factCheckStatus: draft.researchProject ? evidenceStatus(draft.researchProject) : research ? "needs_human_review" : "insufficient_evidence",
+        researchProjectId: draft.researchProject?.id ?? null,
+        sourceReferences: context.sources.map((source) => ({ title: clean(source.title), citation: clean(source.citationText), url: source.url ? clean(source.url) : null })),
+        knownUncertainties: context.uncertainties.map(clean),
         evidenceLimitations: research ? research : "No research notes supplied.",
         draftStatus: draft.status,
         createdAt: draft.createdAt,

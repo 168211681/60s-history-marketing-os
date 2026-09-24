@@ -9,6 +9,7 @@ const links = [
   { href: "/analytics", label: "Analytics", symbol: "▥" },
   { href: "/insights", label: "Insights", symbol: "✧" },
   { href: "/scripts", label: "Scripts", symbol: "✎" },
+  { href: "/research", label: "Research", symbol: "⌕" },
   { href: "/settings", label: "Settings", symbol: "⚙" },
 ];
 export function Navigation() {
@@ -19,7 +20,7 @@ export function Navigation() {
         <Link
           key={link.href}
           href={link.href}
-          aria-current={path === link.href ? "page" : undefined}
+          aria-current={path === link.href || path.startsWith(`${link.href}/`) ? "page" : undefined}
         >
           <span aria-hidden="true" className="nav-symbol">
             {link.symbol}

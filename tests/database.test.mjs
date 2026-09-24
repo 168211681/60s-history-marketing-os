@@ -136,13 +136,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "14",
+    "18",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "14",
+      "18",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -170,6 +170,37 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
       "f",
     );
   }
+});
+test("research sources, claims and relationships stay inside the owner's project", () => {
+  const projectA = "60000000-0000-4000-8000-000000000001";
+  const projectB = "60000000-0000-4000-8000-000000000002";
+  const sourceA = "70000000-0000-4000-8000-000000000001";
+  const sourceB = "70000000-0000-4000-8000-000000000002";
+  const claimA = "80000000-0000-4000-8000-000000000001";
+  sql(`insert into public.research_projects (id,channel_id,content_idea_id,topic) values
+    ('${projectA}','${channelA}','${ideaA}','Synthetic history topic'),
+    ('${projectB}','${channelB}','${ideaB}','Other synthetic topic')`);
+  sql(`insert into public.research_sources (id,research_project_id,source_type,title,citation_text) values
+    ('${sourceA}','${projectA}','museum_archive','Synthetic source','A source observation'),
+    ('${sourceB}','${projectB}','unknown','Other source','Other observation')`);
+  sql(`insert into public.research_claims (id,research_project_id,claim_text) values
+    ('${claimA}','${projectA}','A claim requiring evidence')`);
+  sql(`insert into public.research_claim_sources (research_project_id,claim_id,source_id,relationship) values
+    ('${projectA}','${claimA}','${sourceA}','supports')`);
+  for (const table of ["research_projects", "research_sources", "research_claims", "research_claim_sources"]) {
+    const ownerFilter = table === "research_projects" ? `id='${projectA}'` : `research_project_id='${projectA}'`;
+    assert.equal(asRole("authenticated", userA, `select count(*) from public.${table}`), "1");
+    asRole("anon", "", `select * from public.${table}`, "42501");
+    asRole("authenticated", userA, `insert into public.${table} default values`, "42501");
+    assert.equal(asRole("authenticated", userB, `select count(*) from public.${table} where ${ownerFilter}`), "0");
+  }
+  sql(`insert into public.research_claim_sources (research_project_id,claim_id,source_id,relationship)
+    values ('${projectA}','${claimA}','${sourceB}','supports')`, "23503");
+  sql(`insert into public.research_projects (channel_id,content_idea_id,topic)
+    values ('${channelA}','${ideaB}','Wrong-channel idea')`, "23503");
+  assert.equal(sql(`select verdict from public.research_claims where id='${claimA}'`), "insufficient");
+  assert.equal(sql(`select count(*) from public.research_claim_sources where claim_id='${claimA}'`), "1");
+  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'research_%' and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity"), "4");
 });
 for (const table of tables) {
   test(`${table}: each owner reads only their own row; missing identity reads none`, () => {

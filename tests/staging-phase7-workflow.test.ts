@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import { validateDryRunOutput, validatePhase7MigrationSet } from "../scripts/ci/assert-staging-phase7-plan.mjs";
@@ -58,9 +59,16 @@ test("Phase 7 workflow uses the phase-specific 16/15 set validator, not reconcil
   assert.doesNotMatch(workflow, /assert-staging-reconciliation-plan\.mjs/);
 });
 
-test("bootstrap keeps the Phase 7 migration out of main", () => {
+test("main baseline stays at 15 migrations and Phase 7 source stays pinned when present", () => {
   const migrationPath = new URL("../supabase/migrations/20260924041349_research_fact_checking.sql", import.meta.url);
   const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
-  assert.equal(existsSync(migrationPath), false);
-  assert.equal(readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).length, 15);
+  const migrationCount = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).length;
+  assert.ok(migrationCount === 15 || migrationCount === 16, `Unexpected migration count: ${migrationCount}`);
+  if (migrationCount === 15) {
+    assert.equal(existsSync(migrationPath), false);
+    return;
+  }
+  assert.equal(existsSync(migrationPath), true);
+  const digest = createHash("sha256").update(readFileSync(migrationPath)).digest("hex");
+  assert.equal(digest, "fe04ca2a96e65394beabb1dcf46146f805d6b7d7a886a3ed77c3c019b79621ec");
 });
