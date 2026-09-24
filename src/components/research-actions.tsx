@@ -12,6 +12,7 @@ export function ResearchActions({ project, options }: { project?: ResearchProjec
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>, path: string, method: "POST" | "PATCH", data: Record<string, unknown>) {
     event.preventDefault(); const form = event.currentTarget; setBusy(true); setError(null);
     try {
@@ -21,6 +22,17 @@ export function ResearchActions({ project, options }: { project?: ResearchProjec
       if (!project && body?.id) router.push(`/research/${body.id}`);
       else router.refresh();
       if (method === "POST") form.reset();
+    } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
+  }
+  async function deleteProject() {
+    if (!project) return;
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`/api/research/${project.id}`, { method: "DELETE", credentials: "same-origin" });
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? "Could not delete research project");
+      router.push("/research");
+      router.refresh();
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   if (!project) return <form className="stack-md" onSubmit={(event) => {
@@ -94,6 +106,21 @@ export function ResearchActions({ project, options }: { project?: ResearchProjec
         </form>
       </>}
     </section>)}
+    <section className="panel stack-md" aria-labelledby="delete-research-project-title">
+      <h3 id="delete-research-project-title">Delete research project</h3>
+      <p className="muted">This deletes this project and its research sources, claims, and evidence links. Linked scripts, ideas, and experiments remain.</p>
+      {confirmDelete ? <div className="stack-md">
+        <p role="status">Confirm deletion of this research project?</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="button secondary" disabled={busy} onClick={() => void deleteProject()}>
+            {busy ? "Deleting…" : "Confirm delete research project"}
+          </button>
+          <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button>
+        </div>
+      </div> : <button type="button" className="button secondary" disabled={busy} onClick={() => { setError(null); setConfirmDelete(true); }}>
+        Delete research project
+      </button>}
+    </section>
     {error && <p role="alert" className="error-text">{error}</p>}
   </div>;
 }

@@ -11,7 +11,7 @@
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "tsx --test tests/analytics.test.ts tests/workspace.test.ts tests/insights.test.ts tests/youtube.test.ts tests/mcp.test.ts tests/cron.test.ts tests/ai-provider.test.ts tests/production-retired.test.ts tests/verify-retirement-sql.test.ts tests/creative-brief-export.test.ts tests/staging-database-url.test.ts tests/staging-ci-helpers.test.ts tests/staging-reconciliation-workflow.test.ts tests/staging-reconciliation-plan.test.ts tests/closed-loop.test.ts tests/research.test.ts tests/staging-phase7-workflow.test.ts",
+    "test": "tsx --test tests/analytics.test.ts tests/workspace.test.ts tests/insights.test.ts tests/youtube.test.ts tests/mcp.test.ts tests/cron.test.ts tests/ai-provider.test.ts tests/production-retired.test.ts tests/verify-retirement-sql.test.ts tests/creative-brief-export.test.ts tests/staging-database-url.test.ts tests/staging-ci-helpers.test.ts tests/staging-reconciliation-workflow.test.ts tests/staging-reconciliation-plan.test.ts tests/closed-loop.test.ts tests/research.test.ts tests/research-delete.test.ts tests/staging-phase7-workflow.test.ts",
     "test:e2e": "playwright test",
     "test:db": "node --test tests/database.test.mjs",
     "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"

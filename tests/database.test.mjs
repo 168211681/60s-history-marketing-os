@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { deleteResearchProjectSql } from "../src/lib/research/delete-query.mjs";
 
 // Only a newly created local cluster is used. DATABASE_URL and all PG* variables
 // are ignored so tests can never reset or connect to an existing database.
@@ -201,6 +202,30 @@ test("research sources, claims and relationships stay inside the owner's project
   assert.equal(sql(`select verdict from public.research_claims where id='${claimA}'`), "insufficient");
   assert.equal(sql(`select count(*) from public.research_claim_sources where claim_id='${claimA}'`), "1");
   assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname like 'research_%' and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity"), "4");
+});
+test("owner deletion cascades research children but preserves linked channel content", () => {
+  const scriptDraft = "90000000-0000-4000-8000-000000000001";
+  sql(`insert into public.script_drafts (id,channel_id,title,hook,script_body,status)
+    values ('${scriptDraft}','${channelA}','Smoke test fixture','Question hook','Temporary local test script','approved');
+    update public.research_projects set experiment_id='50000000-0000-4000-8000-000000000001',
+      script_draft_id='${scriptDraft}',status='approved' where id='60000000-0000-4000-8000-000000000001'`);
+  const replaceIds = (id, ownerId) => deleteResearchProjectSql
+    .replace("$1", `'${id}'`)
+    .replace("$2", `'${ownerId}'`);
+  const projectA = "60000000-0000-4000-8000-000000000001";
+  assert.equal(sql(replaceIds(projectA, userB)), "");
+  assert.equal(sql(`select count(*) from public.research_projects where id='${projectA}'`), "1");
+  assert.equal(sql(replaceIds("60000000-0000-4000-8000-000000000099", userA)), "");
+  assert.equal(sql(replaceIds(projectA, userA)), projectA);
+  assert.equal(sql(`select
+    (select count(*) from public.research_sources where research_project_id='${projectA}') || '|' ||
+    (select count(*) from public.research_claims where research_project_id='${projectA}') || '|' ||
+    (select count(*) from public.research_claim_sources where research_project_id='${projectA}')`), "0|0|0");
+  assert.equal(sql(`select
+    (select count(*) from public.channels where id='${channelA}') || '|' ||
+    (select count(*) from public.content_ideas where id='${ideaA}') || '|' ||
+    (select count(*) from public.content_experiments where id='50000000-0000-4000-8000-000000000001') || '|' ||
+    (select count(*) from public.script_drafts where id='${scriptDraft}')`), "1|1|1|1");
 });
 for (const table of tables) {
   test(`${table}: each owner reads only their own row; missing identity reads none`, () => {
