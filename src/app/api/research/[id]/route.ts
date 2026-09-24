@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/database";
 import { researchProjectForOwner } from "@/lib/research/data";
+import { deleteResearchProjectSql, researchProjectDeleteResult } from "@/lib/research/delete-query.mjs";
 import { canApproveResearch } from "@/lib/research/model";
 import { privateHeaders, researchRequest } from "@/lib/research/http";
 
@@ -60,4 +61,14 @@ export async function PATCH(request: NextRequest, { params }: Context) {
   }
   if (!result.rows[0]) return NextResponse.json({ error: "Project changed; reload before retrying" }, { status: 409 });
   return NextResponse.json({ project: result.rows[0] }, { headers: privateHeaders });
+}
+
+export async function DELETE(request: NextRequest, { params }: Context) {
+  const access = await researchRequest(request, true);
+  if (access.error) return access.error;
+  const { id } = await params;
+  if (!z.uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
+  const result = await database().query<{ id: string }>(deleteResearchProjectSql, [id, access.ownerId]);
+  const outcome = researchProjectDeleteResult(result.rows);
+  return NextResponse.json(outcome.body, { status: outcome.status, headers: privateHeaders });
 }
