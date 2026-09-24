@@ -51,7 +51,12 @@ jobs:
         run: |
           set -euo pipefail
           trusted_helper="$GITHUB_WORKSPACE/scripts/ci/assert-staging-reconciliation-plan.mjs"
-          node "$trusted_helper" --help | grep -F -- '--migration-set'
+          compatibility_error="$RUNNER_TEMP/reconciliation-helper-compatibility.err"
+          if node "$trusted_helper" --migration-set > /dev/null 2>"$compatibility_error"; then
+            echo "Reconciliation helper compatibility check unexpectedly succeeded." >&2
+            exit 1
+          fi
+          grep -F -- '--migration-set' "$compatibility_error"
           staging_worktree="$RUNNER_TEMP/staging-reconciliation-worktree"
           mkdir -p "$staging_worktree/supabase/migrations"
           find "$GITHUB_WORKSPACE/supabase/migrations" -maxdepth 1 -type f -name '*.sql' -exec cp '{}' "$staging_worktree/supabase/migrations/" ';'
