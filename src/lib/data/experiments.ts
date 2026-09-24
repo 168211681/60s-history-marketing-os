@@ -12,11 +12,11 @@ import {
 export type ExperimentRecord = {
   id: string;
   channelId: string;
-  title: string;
+  title: string | null;
   hypothesis: string;
   hookFormat: string;
   status: ExperimentStatus;
-  reportingWindowDays: number;
+  reportingWindowDays: number | null;
   contentIdeaTitle: string | null;
   scriptTitle: string | null;
   videoTitle: string | null;
@@ -50,8 +50,8 @@ function aggregate(rows: readonly MetricRow[]): ExperimentMetrics {
   };
 }
 
-function windowFor(publishedAt: string | null, days: number): ReportingWindow | null {
-  if (!publishedAt) return null;
+function windowFor(publishedAt: string | null, days: number | null): ReportingWindow | null {
+  if (!publishedAt || days === null || ![1, 7, 28].includes(days)) return null;
   const from = new Date(publishedAt);
   if (Number.isNaN(from.getTime())) return null;
   const through = new Date(from);
@@ -63,8 +63,8 @@ export async function experimentsForOwner(): Promise<readonly ExperimentRecord[]
   const owner = await currentOwner();
   if (!owner || !databaseConfigured()) return [];
   const result = await database().query<{
-    id: string; channel_id: string; title: string; hypothesis: string; hook_format: string;
-    status: ExperimentStatus; reporting_window_days: number; content_idea_title: string | null;
+    id: string; channel_id: string; title: string | null; hypothesis: string; hook_format: string;
+    status: ExperimentStatus; reporting_window_days: number | null; content_idea_title: string | null;
     script_title: string | null; video_id: string | null; video_title: string | null;
     video_published_at: Date | string | null;
   }>(

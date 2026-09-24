@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid experiment id" }, { status: 400 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid experiment status" }, { status: 400 });
-  const current = await database().query<{ status: string; video_id: string | null; video_published_at: Date | null; reporting_window_days: number }>(
+  const current = await database().query<{ status: string; video_id: string | null; video_published_at: Date | null; reporting_window_days: number | null }>(
     `select e.status, e.video_id, v.published_at as video_published_at, e.reporting_window_days
        from public.content_experiments e join public.channels c on c.id=e.channel_id and c.owner_id=$2
        left join public.videos v on v.id=e.video_id and v.channel_id=e.channel_id where e.id=$1`, [id, owner.id]);
