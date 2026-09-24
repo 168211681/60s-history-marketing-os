@@ -18,7 +18,7 @@ test("staging reconciliation workflow is manual and isolated", async () => {
   assert.match(workflow, /pre-apply-migration-versions\.txt/);
   assert.match(workflow, /path: reconciliation-source/);
   assert.match(workflow, /git -C reconciliation-source rev-parse HEAD/);
-  assert.match(workflow, /staging-reconciliation-worktree/);
+  assert.match(workflow, /staging-reconciliation-worktree-path/);
   assert.match(workflow, /trusted_helper=.*assert-staging-reconciliation-plan\.mjs/);
   assert.match(workflow, /node "\$trusted_helper" --migration-set/);
   assert.match(workflow, /test \"\$\(wc -l < \"\$RUNNER_TEMP\/local-migration-versions\.txt\"\)\" = \"15\"/);

@@ -66,7 +66,7 @@ jobs:
             | sed -nE 's/^([0-9]{14})_[A-Za-z0-9_]+\.sql$/\1/p' \
             | sort -u > "$RUNNER_TEMP/local-migration-versions.txt"
           test "$(wc -l < "$RUNNER_TEMP/local-migration-versions.txt")" = "15"
-          printf '%s\n' "$staging_worktree" > "$RUNNER_TEMP/staging-reconciliation-worktree"
+          printf '%s\n' "$staging_worktree" > "$RUNNER_TEMP/staging-reconciliation-worktree-path"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -134,7 +134,7 @@ jobs:
           set -euo pipefail
           dry_run="$RUNNER_TEMP/reconciliation-dry-run.out"
           dry_err="$RUNNER_TEMP/reconciliation-dry-run.err"
-          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree")"
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
           if ! (cd "$staging_worktree" && npx --yes supabase@2.117.0 db push \
             --db-url "$STAGING_DATABASE_URL" \
             --dry-run --yes --skip-vault >"$dry_run" 2>"$dry_err"); then
@@ -149,7 +149,7 @@ jobs:
         run: |
           set -euo pipefail
           apply_err="$RUNNER_TEMP/reconciliation-apply.err"
-          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree")"
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
           if ! (cd "$staging_worktree" && npx --yes supabase@2.117.0 db push \
             --db-url "$STAGING_DATABASE_URL" \
             --yes --skip-vault >"$RUNNER_TEMP/reconciliation-apply.out" 2>"$apply_err"); then
@@ -186,7 +186,7 @@ jobs:
           psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
             --command='select version from supabase_migrations.schema_migrations order by version;' \
             > "$RUNNER_TEMP/staging-migration-versions.txt"
-          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree")"
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
           node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migration-versions.mjs" \
             "$RUNNER_TEMP/staging-migration-versions.txt" "$staging_worktree/supabase/migrations"
           echo "Staging post-apply state verified: 15 migrations, schema intact, row count preserved, RLS enabled."
