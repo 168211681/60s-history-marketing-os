@@ -14,6 +14,8 @@ test("staging reconciliation workflow is manual and isolated", async () => {
   assert.match(workflow, /assert-staging-project\.mjs/);
   assert.match(workflow, /--dry-run --yes --skip-vault/);
   assert.match(workflow, /--yes --skip-vault/);
+  assert.equal(workflow.match(/--field-separator=\$'\\t'/g)?.length, 2);
+  assert.equal(workflow.match(/IFS=\$'\\t' read/g)?.length, 2);
   assert.doesNotMatch(workflow, /migration\s+repair|db\s+reset|db\s+seed|--include-seed|--include-all|--include-roles/);
   assert.doesNotMatch(workflow, /pull_request_target/);
   assert.doesNotMatch(workflow, /echo\s+.*STAGING_DATABASE_URL|echo\s+.*SUPABASE_ACCESS_TOKEN/);

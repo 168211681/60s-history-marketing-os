@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           preflight="$({
-            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
               --command="select
                 (select count(*) from supabase_migrations.schema_migrations),
                 (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           postflight="$({
-            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
               --command="select
                 (select count(*) from supabase_migrations.schema_migrations),
                 (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
