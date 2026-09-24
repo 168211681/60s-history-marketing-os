@@ -1,0 +1,193 @@
+name: Apply Staging Phase 7 research migration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-db-mutation
+  cancel-in-progress: false
+
+jobs:
+  apply-phase7-research:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: [self-hosted, linux, x64, history-ci]
+    timeout-minutes: 25
+    env:
+      STAGING_PROJECT_REF: haqpqifxlqpihkmhkwdu
+      PRODUCTION_PROJECT_REF: rscwajzsjvguezyisvja
+      EXPECTED_MIGRATION_VERSION: "20260924041349"
+      PHASE7_SOURCE_SHA: 0694991c82e150e4a4ea47fdf7eb9ab1aba61ed8
+      PHASE7_MIGRATION_SHA256: fe04ca2a96e65394beabb1dcf46146f805d6b7d7a886a3ed77c3c019b79621ec
+    steps:
+      - name: Checkout workflow and trusted helpers
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Checkout immutable Phase 7 migration source
+        uses: actions/checkout@v4
+        with:
+          path: phase7-source
+          ref: 0694991c82e150e4a4ea47fdf7eb9ab1aba61ed8
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify immutable source and migration checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C phase7-source rev-parse HEAD)" = "$PHASE7_SOURCE_SHA"
+          migration="phase7-source/supabase/migrations/${EXPECTED_MIGRATION_VERSION}_research_fact_checking.sql"
+          test -f "$migration"
+          test "$(basename "$migration")" = "20260924041349_research_fact_checking.sql"
+          test "$(sha256sum "$migration" | cut -d' ' -f1)" = "$PHASE7_MIGRATION_SHA256"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify Staging credentials and identity
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_STAGING_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT_REF" = "haqpqifxlqpihkmhkwdu"
+          test "$STAGING_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
+          test -n "${STAGING_DATABASE_URL:-}" || { echo "Missing SUPABASE_STAGING_DATABASE_URL." >&2; exit 64; }
+          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "Missing SUPABASE_STAGING_ACCESS_TOKEN." >&2; exit 64; }
+          node scripts/ci/assert-staging-database-url.mjs \
+            "$STAGING_DATABASE_URL" "$STAGING_PROJECT_REF" "$PRODUCTION_PROJECT_REF"
+          npx --yes supabase@2.117.0 projects list --output-format json > "$RUNNER_TEMP/staging-projects.json"
+          node scripts/ci/assert-staging-project.mjs "$RUNNER_TEMP/staging-projects.json" "$STAGING_PROJECT_REF"
+
+      - name: Prepare isolated 16-migration workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_dir="$GITHUB_WORKSPACE/supabase/migrations"
+          source_file="phase7-source/supabase/migrations/${EXPECTED_MIGRATION_VERSION}_research_fact_checking.sql"
+          test "$(find "$main_dir" -maxdepth 1 -type f -name '*.sql' | wc -l)" = "15"
+          work="$RUNNER_TEMP/phase7-staging-worktree"
+          mkdir -p "$work/supabase/migrations"
+          cp "$main_dir"/*.sql "$work/supabase/migrations/"
+          cp "$source_file" "$work/supabase/migrations/"
+          # Supabase CLI expects a project config beside migrations. Keep this
+          # minimal config temporary; it contains no project credentials/ref.
+          printf 'project_id = "phase7-staging-rehearsal"\n' > "$work/supabase/config.toml"
+          find "$work/supabase/migrations" -maxdepth 1 -type f -printf '%f\n' \
+            | sed -nE 's/^([0-9]{14})_[A-Za-z0-9_]+\.sql$/\1/p' | sort -u \
+            > "$RUNNER_TEMP/local-migration-versions.txt"
+          test "$(wc -l < "$RUNNER_TEMP/local-migration-versions.txt")" = "16"
+          printf '%s\n' "$work" > "$RUNNER_TEMP/phase7-worktree-path"
+
+      - name: Verify Staging preflight and exact version difference
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          preflight="$RUNNER_TEMP/phase7-preflight.tsv"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
+            --command="select
+              (select count(*) from supabase_migrations.schema_migrations),
+              (select count(*) from supabase_migrations.schema_migrations where version='$EXPECTED_MIGRATION_VERSION'),
+              (select count(*) from supabase_migrations.schema_migrations where version='20260923231944'),
+              (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_sources','research_claims','research_claim_sources')),
+              (select count(*) from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('channels','content_ideas','content_experiments','script_drafts') and k.contype='p'),
+              (select count(*) from information_schema.columns where table_schema='public' and ((table_name='channels' and column_name='id') or (table_name in ('content_ideas','content_experiments','script_drafts') and column_name in ('id','channel_id')))),
+              (select count(*) from pg_class i join pg_namespace n on n.oid=i.relnamespace where n.nspname='public' and i.relname in ('content_ideas_id_channel_research_idx','content_experiments_id_channel_research_idx','script_drafts_id_channel_research_idx'));" \
+            > "$preflight"
+          IFS=$'\t' read -r migration_count target_count reconcile_count research_tables pk_count target_columns conflicting_indexes < "$preflight"
+          test "$migration_count" = "15"
+          test "$target_count" = "0"
+          test "$reconcile_count" = "1"
+          test "$research_tables" = "0"
+          test "$pk_count" = "4"
+          test "$target_columns" = "7"
+          test "$conflicting_indexes" = "0"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/remote-migration-versions.txt"
+          node scripts/ci/assert-staging-phase7-plan.mjs --migration-set \
+            "$EXPECTED_MIGRATION_VERSION" "$RUNNER_TEMP/local-migration-versions.txt" "$RUNNER_TEMP/remote-migration-versions.txt"
+          echo "Staging preflight passed: 15 remote migrations, one expected pending version, empty research schema."
+
+      - name: Dry-run exactly the Phase 7 migration
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          work="$(cat "$RUNNER_TEMP/phase7-worktree-path")"
+          out="$RUNNER_TEMP/phase7-dry-run.out"
+          err="$RUNNER_TEMP/phase7-dry-run.err"
+          if ! (cd "$work" && npx --yes supabase@2.117.0 db push --db-url "$STAGING_DATABASE_URL" --dry-run --yes --skip-vault >"$out" 2>"$err"); then
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$err" "$STAGING_DATABASE_URL"
+            exit 1
+          fi
+          node scripts/ci/assert-staging-phase7-plan.mjs --dry-run "$out" "$EXPECTED_MIGRATION_VERSION"
+
+      - name: Apply Phase 7 migration to Staging
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          work="$(cat "$RUNNER_TEMP/phase7-worktree-path")"
+          if ! (cd "$work" && npx --yes supabase@2.117.0 db push --db-url "$STAGING_DATABASE_URL" --yes --skip-vault >"$RUNNER_TEMP/phase7-apply.out" 2>"$RUNNER_TEMP/phase7-apply.err"); then
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$RUNNER_TEMP/phase7-apply.err" "$STAGING_DATABASE_URL"
+            exit 1
+          fi
+          echo "Pinned Phase 7 migration applied to the verified Staging database."
+
+      - name: Verify schema, policies, constraints and exact history
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/phase7-postflight.tsv"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
+            --command="select
+              (select count(*) from supabase_migrations.schema_migrations),
+              (select count(*) from supabase_migrations.schema_migrations where version='$EXPECTED_MIGRATION_VERSION'),
+              (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_sources','research_claims','research_claim_sources')),
+              (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_sources','research_claims','research_claim_sources') and c.relrowsecurity and c.relforcerowsecurity),
+              (select count(*) from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace join pg_roles r on r.rolname='authenticated' where n.nspname='public' and p.polname in ('research_projects_read_own','research_sources_read_own','research_claims_read_own','research_claim_sources_read_own') and p.polcmd='r' and r.oid=any(p.polroles)),
+              (select count(*) from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_sources','research_claims','research_claim_sources') and k.contype='f' and k.convalidated),
+              (select count(*) from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_claim_sources') and k.contype='f' and array_length(k.conkey,1)=2 and k.convalidated),
+              (select count(*) from pg_indexes where schemaname='public' and indexname in ('content_ideas_id_channel_research_idx','content_experiments_id_channel_research_idx','script_drafts_id_channel_research_idx','research_projects_channel_updated_idx','research_projects_script_idx','research_projects_idea_idx','research_projects_experiment_idx','research_sources_project_idx','research_claims_project_idx','research_claim_sources_source_idx')),
+              (select count(*) from pg_index i join pg_class x on x.oid=i.indexrelid where x.relnamespace='public'::regnamespace and x.relname in ('content_ideas_id_channel_research_idx','content_experiments_id_channel_research_idx','script_drafts_id_channel_research_idx') and i.indisunique),
+              (select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('research_projects','research_claims') and t.tgname='set_updated_at' and not t.tgisinternal);" \
+            > "$result"
+          IFS=$'\t' read -r migration_count target_count table_count rls_count policy_count fk_count composite_fk_count index_count unique_idx_count trigger_count < "$result"
+          test "$migration_count" = "16"
+          test "$target_count" = "1"
+          test "$table_count" = "4"
+          test "$rls_count" = "4"
+          test "$policy_count" = "4"
+          test "$fk_count" = "9"
+          test "$composite_fk_count" = "5"
+          test "$index_count" = "10"
+          test "$unique_idx_count" = "3"
+          test "$trigger_count" = "2"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/phase7-remote-migrations.txt"
+          work="$(cat "$RUNNER_TEMP/phase7-worktree-path")"
+          node scripts/ci/assert-staging-migration-versions.mjs \
+            "$RUNNER_TEMP/phase7-remote-migrations.txt" "$work/supabase/migrations"
+          echo "Postflight passed: migration 20260924041349 recorded; 4 tables, forced RLS, 4 authenticated read policies, 9 valid foreign keys (5 composite), 10 indexes and 2 triggers verified."
+
+      - name: Run disposable database security tests
+        run: |
+          npm ci
+          npm run test:db
