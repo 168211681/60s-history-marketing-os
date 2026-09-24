@@ -5,6 +5,9 @@ import { ScriptDraftForm } from "@/components/script-draft-form";
 import { AiScriptDraftForm } from "@/components/ai-script-draft-form";
 import { WorkflowEvents } from "@/components/workflow-events";
 import { BriefExportAction } from "@/components/brief-export-action";
+import { currentOwner } from "@/lib/auth/server";
+import { researchEvidenceForOwner } from "@/lib/research/data";
+import Link from "next/link";
 
 export const metadata = { title: "Script drafts" };
 
@@ -22,12 +25,14 @@ function dateLabel(value: string) {
 }
 
 export default async function ScriptsPage() {
+  const owner = await currentOwner();
   const [draftsResult, workflowsResult] = await Promise.allSettled([
     scriptDraftsForOwner(),
     productionWorkflowsForOwner(),
   ]);
   const drafts = draftsResult.status === "fulfilled" ? draftsResult.value : [];
   const workflows = workflowsResult.status === "fulfilled" ? workflowsResult.value : [];
+  const research = owner ? await researchEvidenceForOwner(owner.id).catch(() => new Map<string, { id: string; evidenceStatus: string }>()) : new Map<string, { id: string; evidenceStatus: string }>();
   if (draftsResult.status === "rejected") {
     console.error("scripts drafts load failed", draftsResult.reason instanceof Error ? draftsResult.reason.message : "unknown error");
   }
@@ -69,6 +74,9 @@ export default async function ScriptsPage() {
                 {draft.captionText ? <div><p className="eyebrow">CAPTIONS</p><p className="pre-wrap">{draft.captionText}</p></div> : null}
                 {draft.callToAction ? <div><p className="eyebrow">CALL TO ACTION</p><p>{draft.callToAction}</p></div> : null}
                 {draft.researchNotes ? <div><p className="eyebrow">RESEARCH NOTES</p><p className="pre-wrap">{draft.researchNotes}</p></div> : null}
+                <div><p className="eyebrow">EVIDENCE STATUS</p><p>{research.get(draft.id)?.evidenceStatus ?? "not_researched"}</p>
+                  {research.get(draft.id) ? <Link className="text-link" href={`/research/${research.get(draft.id)!.id}`}>Review sources and claims →</Link> : <Link className="text-link" href="/research">Start research →</Link>}
+                </div>
               </div>
             </Panel>
           ))}

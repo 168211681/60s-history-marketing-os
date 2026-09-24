@@ -44,6 +44,14 @@ for (const [route, heading] of routes) {
     expect(errors).toEqual([]);
   });
 }
+test("research workspace stays private without an owner session", async ({ page, request }) => {
+  const response = await page.goto("/research");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByText("Sign in as the channel owner to view research.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create research project" })).toHaveCount(0);
+  const api = await request.get("/api/research");
+  expect(api.status()).toBe(401);
+});
 test("navigation, filtering, empty recovery and sorting work", async ({
   page,
 }) => {

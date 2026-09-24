@@ -51,8 +51,10 @@ changes and off-host backup remain separate release gates.
 
 **Status: complete.** Link published-video performance to owner-scoped experiments and
 content ideas, compare equivalent reporting windows, and expose a human-reviewable
-result in `/insights`. Production schema reconciliation remains a separate,
-human-approved migration gate.
+result in `/insights`. Production reconciliation was applied and verified as remote
+`20260924040511_reconcile_content_experiments_schema`; the repository source remains
+`20260923231944_reconcile_content_experiments_schema.sql`. The historical version
+difference is intentional and must not be repaired, reset or replayed.
 
 Phase 6 rules:
 
@@ -60,6 +62,22 @@ Phase 6 rules:
 - Preserve `NULL` metrics as unavailable. Never treat missing metrics as zero, and return insufficient evidence when required values are missing or a baseline is empty.
 - Separate measured observations and deterministic comparisons from hypotheses and next-test recommendations. The evaluator never claims causation, virality, or guaranteed performance.
 - A `running` experiment requires a linked published video. A `completed` experiment additionally requires comparable measured evidence; otherwise it remains open for human review.
+
+## Phase 7 — research and fact-checking engine
+
+**Status: implemented on feature branch; Staging rehearsal and deployment verification pending.**
+Owner-scoped research projects link topics, ideas, experiments and drafts to source
+observations and reviewed claims. Sources retain human-readable provenance and
+limitations; source categories are not truth scores. Claims begin as `insufficient`.
+Only a human can assess a claim or approve a research package. A `supported`
+assessment requires a linked supporting source and reviewer note. Disputed and
+insufficient claims remain visibly separate from supported claims in the UI, MCP
+and six-file creative brief export. Existing scripts remain usable without a
+research link; their evidence status is `not_researched`.
+
+Research migration `20260924041349_research_fact_checking.sql` is forward-only.
+Apply it to isolated Staging only after reviewing the SQL and confirming the
+project target. Production migration requires a separate human-approved gate.
 
 ## Release gates
 

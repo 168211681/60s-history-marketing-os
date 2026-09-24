@@ -21,6 +21,8 @@ Available owner-scoped tools:
 - `create_content_idea`
 - `save_marketing_hypothesis`
 - `save_script_draft`
+- `list_research_projects` (read-only; available after the Phase 7 schema is deployed)
+- `get_research_project` (read-only; keeps supported, disputed and insufficient claims separate; `FACTS` is empty because source observations are not independently verified by MCP)
 - `get_archived_production_records` (read-only history)
 
 MCP does not expose rendering, provider inference, worker execution, YouTube upload,
