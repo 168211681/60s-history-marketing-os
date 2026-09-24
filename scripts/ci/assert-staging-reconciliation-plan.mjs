@@ -54,7 +54,10 @@ const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === 
 const [mode, firstPath, secondPath, thirdPath] = isDirectExecution ? process.argv.slice(2) : [];
 if (isDirectExecution) {
   const main = async () => {
-    if (mode === "--migration-set") {
+    if (mode === "--help") {
+      console.log("Usage: assert-staging-reconciliation-plan.mjs --migration-set|--dry-run ...");
+      console.log("Supported modes: --migration-set, --dry-run");
+    } else if (mode === "--migration-set") {
       if (!firstPath || !secondPath || !thirdPath) {
         throw new Error("Usage: assert-staging-reconciliation-plan.mjs --migration-set <expected-version> <local-versions> <remote-versions>");
       }
