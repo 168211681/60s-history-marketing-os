@@ -9,7 +9,7 @@ commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
 verification query. The workflow proves PostgreSQL connectivity first, then
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
-compares the returned 13 versions with local filenames. This avoids relying on
+compares the returned migration versions with local filenames. This avoids relying on
 the failing `supabase migration list` connection path.
 
 If the CLI cannot connect, only sanitized diagnostics are surfaced. The database
@@ -37,6 +37,42 @@ comes from the exact `postgres.<PROJECT_REF>` username. Never log the URL.
 
 The workflow does not provide credentials to fork pull requests. The self-hosted
 runner is therefore never used for untrusted fork code.
+
+## Manual Phase 7 Staging rehearsal
+
+`.github/workflows/apply-staging-phase7-research.yml` is a separate manual,
+`workflow_dispatch`-only workflow. It targets only Staging, uses the serialized
+`staging-db-mutation` concurrency group, and pins the research migration source
+to the immutable reviewed Phase 7 commit `0694991c82e150e4a4ea47fdf7eb9ab1aba61ed8`
+and a pinned SHA-256. The trusted workflow and helper scripts remain in the
+workflow checkout; only the migration payload is checked out into the separate
+`phase7-source` directory. The temporary CLI workspace is built from the 15
+migrations on `main` plus that one pinned payload, with a minimal temporary
+Supabase config; the repository migration directory is never changed.
+
+This bootstrap PR intentionally includes no Phase 7 migration, application
+code, API, UI, or MCP implementation. GitHub only allows manual dispatch for a
+workflow present on the default branch, so this rehearsal becomes dispatchable
+after the bootstrap infrastructure is separately reviewed and merged. That
+does not merge or apply the Phase 7 schema/application PR.
+
+Before applying, it requires exactly 15 remote versions and 16 isolated local
+versions, with the sole local-minus-remote version
+`20260924041349`. It independently verifies the Staging database URL and
+Supabase API project identity, rejects the Production ref, checks that the
+research tables do not already exist, and requires a successful dry-run that
+does not report the database as up to date. Only then does it run the pinned
+Supabase CLI `db push` against the verified Staging URL. It does not use
+`apply_migration`, migration repair, reset, replay, seed, or Production
+credentials. Post-apply checks verify the exact 16-version history, table
+presence, RLS, policies, foreign keys, indexes, triggers, and the disposable
+database regression suite.
+
+The workflow does not currently have a genuine hosted Supabase Auth session
+credential for two synthetic owners. Therefore it does not claim hosted JWT or
+Data API owner-isolation smoke-test evidence; those checks remain a separate
+manual gate. Local database tests cover the migration and RLS behavior in a
+disposable database, which is not equivalent to hosted Auth/Data API testing.
 
 ## Manual reconciliation apply
 
