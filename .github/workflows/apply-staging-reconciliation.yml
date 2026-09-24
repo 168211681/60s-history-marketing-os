@@ -1,0 +1,138 @@
+name: Apply staging reconciliation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-db-mutation
+  cancel-in-progress: false
+
+jobs:
+  apply-reconciliation:
+    runs-on: [self-hosted, linux, x64, history-ci]
+    timeout-minutes: 20
+    env:
+      STAGING_PROJECT_REF: haqpqifxlqpihkmhkwdu
+      PRODUCTION_PROJECT_REF: rscwajzsjvguezyisvja
+      EXPECTED_MIGRATION_VERSION: "20260923231944"
+      STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_STAGING_ACCESS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify staging-only configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT_REF" = "haqpqifxlqpihkmhkwdu"
+          test "$STAGING_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
+          test -n "${STAGING_DATABASE_URL:-}"
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          node scripts/ci/assert-staging-database-url.mjs \
+            "$STAGING_DATABASE_URL" "$STAGING_PROJECT_REF" "$PRODUCTION_PROJECT_REF"
+
+      - name: Verify Supabase API target
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.117.0 projects list --output-format json > "$RUNNER_TEMP/staging-projects.json"
+          node scripts/ci/assert-staging-project.mjs \
+            "$RUNNER_TEMP/staging-projects.json" "$STAGING_PROJECT_REF"
+
+      - name: Verify pre-apply Staging state
+        shell: bash
+        run: |
+          set -euo pipefail
+          preflight="$({
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+              --command="select
+                (select count(*) from supabase_migrations.schema_migrations),
+                (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
+                (select count(*) from supabase_migrations.schema_migrations where version = '20260923223010'),
+                (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                  where n.nspname = 'public' and c.relname = 'content_experiments'),
+                (select count(*) from public.content_experiments),
+                (select relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                  where n.nspname = 'public' and c.relname = 'content_experiments');"
+          } 2>"$RUNNER_TEMP/preflight.err")" || {
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$RUNNER_TEMP/preflight.err" "$STAGING_DATABASE_URL"
+            exit 1
+          }
+          IFS=$'\t' read -r migration_count new_count previous_count table_count row_count rls_enabled <<< "$preflight"
+          test "$migration_count" = "14"
+          test "$new_count" = "0"
+          test "$previous_count" = "1"
+          test "$table_count" = "1"
+          test "$rls_enabled" = "t"
+          printf '%s\n' "$row_count" > "$RUNNER_TEMP/pre-apply-row-count"
+          echo "Staging pre-apply state verified: 14 migrations, previous content_experiments migration present, RLS enabled."
+
+      - name: Dry-run exact reconciliation migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          dry_run="$RUNNER_TEMP/reconciliation-dry-run.out"
+          dry_err="$RUNNER_TEMP/reconciliation-dry-run.err"
+          if ! npx --yes supabase@2.117.0 db push \
+            --db-url "$STAGING_DATABASE_URL" \
+            --dry-run --yes --skip-vault >"$dry_run" 2>"$dry_err"; then
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$dry_err" "$STAGING_DATABASE_URL"
+            exit 1
+          fi
+          node scripts/ci/assert-staging-reconciliation-plan.mjs \
+            "$dry_run" "$EXPECTED_MIGRATION_VERSION"
+
+      - name: Apply exact reconciliation migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          apply_err="$RUNNER_TEMP/reconciliation-apply.err"
+          if ! npx --yes supabase@2.117.0 db push \
+            --db-url "$STAGING_DATABASE_URL" \
+            --yes --skip-vault >"$RUNNER_TEMP/reconciliation-apply.out" 2>"$apply_err"; then
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$apply_err" "$STAGING_DATABASE_URL"
+            exit 1
+          fi
+          echo "Staging reconciliation migration applied through the pinned Supabase CLI."
+
+      - name: Verify post-apply Staging state
+        shell: bash
+        run: |
+          set -euo pipefail
+          postflight="$({
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+              --command="select
+                (select count(*) from supabase_migrations.schema_migrations),
+                (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
+                (select count(*) from public.content_experiments),
+                (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'content_experiments' and column_name = 'title'),
+                (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'content_experiments' and column_name = 'reporting_window_days'),
+                (select relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                  where n.nspname = 'public' and c.relname = 'content_experiments');"
+          } 2>"$RUNNER_TEMP/postflight.err")" || {
+            node scripts/ci/sanitize-cli-diagnostic.mjs "$RUNNER_TEMP/postflight.err" "$STAGING_DATABASE_URL"
+            exit 1
+          }
+          IFS=$'\t' read -r migration_count new_count row_count title_count window_count rls_enabled <<< "$postflight"
+          test "$migration_count" = "15"
+          test "$new_count" = "1"
+          test "$title_count" = "1"
+          test "$window_count" = "1"
+          test "$rls_enabled" = "t"
+          test "$row_count" = "$(cat "$RUNNER_TEMP/pre-apply-row-count")"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/staging-migration-versions.txt"
+          node scripts/ci/assert-staging-migration-versions.mjs \
+            "$RUNNER_TEMP/staging-migration-versions.txt" "$GITHUB_WORKSPACE/supabase/migrations"
+          echo "Staging post-apply state verified: 15 migrations, schema intact, row count preserved, RLS enabled."
