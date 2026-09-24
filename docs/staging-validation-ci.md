@@ -48,3 +48,9 @@ the pinned CLI dry-run before applying it with `--skip-vault`. It then verifies
 15 migrations, the new columns, RLS and unchanged row count. The workflow is
 serialized under `staging-db-mutation`, uses only the Staging secrets, and has
 no Production or pull-request trigger.
+
+The workflow is bootstrapped from `main`, then checks out the immutable reviewed
+source commit `98dacc62137d17470cadd512556558432c603c87` and verifies the pinned
+reconciliation migration filename and SHA-256 before any database command. This
+keeps the manual apply path available without making the open application PR the
+workflow definition or trusting a mutable branch name.

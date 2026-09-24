@@ -18,11 +18,55 @@ jobs:
       STAGING_PROJECT_REF: haqpqifxlqpihkmhkwdu
       PRODUCTION_PROJECT_REF: rscwajzsjvguezyisvja
       EXPECTED_MIGRATION_VERSION: "20260923231944"
+      RECONCILIATION_SOURCE_SHA: 98dacc62137d17470cadd512556558432c603c87
+      RECONCILIATION_SOURCE_SHA256: 5eb3937b38cb0c78fb23e6447dae8c69c5002de604e8d3298ae1e3c462cbba3a
       STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_STAGING_ACCESS_TOKEN }}
     steps:
-      - name: Checkout
+      - name: Checkout workflow context
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Checkout immutable reconciliation source
+        uses: actions/checkout@v4
+        with:
+          path: reconciliation-source
+          ref: 98dacc62137d17470cadd512556558432c603c87
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify immutable migration source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" != "$RECONCILIATION_SOURCE_SHA"
+          test "$(git -C reconciliation-source rev-parse HEAD)" = "$RECONCILIATION_SOURCE_SHA"
+          migration_file="reconciliation-source/supabase/migrations/${EXPECTED_MIGRATION_VERSION}_reconcile_content_experiments_schema.sql"
+          test -f "$migration_file"
+          test "$(sha256sum "$migration_file" | cut -d' ' -f1)" = "$RECONCILIATION_SOURCE_SHA256"
+
+      - name: Prepare isolated reconciliation migration set
+        shell: bash
+        run: |
+          set -euo pipefail
+          trusted_helper="$GITHUB_WORKSPACE/scripts/ci/assert-staging-reconciliation-plan.mjs"
+          compatibility_error="$RUNNER_TEMP/reconciliation-helper-compatibility.err"
+          if node "$trusted_helper" --migration-set > /dev/null 2>"$compatibility_error"; then
+            echo "Reconciliation helper compatibility check unexpectedly succeeded." >&2
+            exit 1
+          fi
+          grep -F -- '--migration-set' "$compatibility_error"
+          staging_worktree="$RUNNER_TEMP/staging-reconciliation-worktree"
+          mkdir -p "$staging_worktree/supabase/migrations"
+          find "$GITHUB_WORKSPACE/supabase/migrations" -maxdepth 1 -type f -name '*.sql' -exec cp '{}' "$staging_worktree/supabase/migrations/" ';'
+          cp "reconciliation-source/supabase/migrations/${EXPECTED_MIGRATION_VERSION}_reconcile_content_experiments_schema.sql" \
+            "$staging_worktree/supabase/migrations/"
+          find "$staging_worktree/supabase/migrations" -maxdepth 1 -type f -printf '%f\n' \
+            | sed -nE 's/^([0-9]{14})_[A-Za-z0-9_]+\.sql$/\1/p' \
+            | sort -u > "$RUNNER_TEMP/local-migration-versions.txt"
+          test "$(wc -l < "$RUNNER_TEMP/local-migration-versions.txt")" = "15"
+          printf '%s\n' "$staging_worktree" > "$RUNNER_TEMP/staging-reconciliation-worktree-path"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -54,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           preflight="$({
-            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
               --command="select
                 (select count(*) from supabase_migrations.schema_migrations),
                 (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
@@ -75,6 +119,13 @@ jobs:
           test "$table_count" = "1"
           test "$rls_enabled" = "t"
           printf '%s\n' "$row_count" > "$RUNNER_TEMP/pre-apply-row-count"
+          psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            --command='select version from supabase_migrations.schema_migrations order by version;' \
+            > "$RUNNER_TEMP/pre-apply-migration-versions.txt"
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-reconciliation-plan.mjs" \
+            --migration-set "$EXPECTED_MIGRATION_VERSION" \
+            "$RUNNER_TEMP/local-migration-versions.txt" \
+            "$RUNNER_TEMP/pre-apply-migration-versions.txt"
           echo "Staging pre-apply state verified: 14 migrations, previous content_experiments migration present, RLS enabled."
 
       - name: Dry-run exact reconciliation migration
@@ -83,24 +134,26 @@ jobs:
           set -euo pipefail
           dry_run="$RUNNER_TEMP/reconciliation-dry-run.out"
           dry_err="$RUNNER_TEMP/reconciliation-dry-run.err"
-          if ! npx --yes supabase@2.117.0 db push \
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
+          if ! (cd "$staging_worktree" && npx --yes supabase@2.117.0 db push \
             --db-url "$STAGING_DATABASE_URL" \
-            --dry-run --yes --skip-vault >"$dry_run" 2>"$dry_err"; then
-            node scripts/ci/sanitize-cli-diagnostic.mjs "$dry_err" "$STAGING_DATABASE_URL"
+            --dry-run --yes --skip-vault >"$dry_run" 2>"$dry_err"); then
+            node "$GITHUB_WORKSPACE/scripts/ci/sanitize-cli-diagnostic.mjs" "$dry_err" "$STAGING_DATABASE_URL"
             exit 1
           fi
-          node scripts/ci/assert-staging-reconciliation-plan.mjs \
-            "$dry_run" "$EXPECTED_MIGRATION_VERSION"
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-reconciliation-plan.mjs" \
+            --dry-run "$dry_run" "$EXPECTED_MIGRATION_VERSION"
 
       - name: Apply exact reconciliation migration
         shell: bash
         run: |
           set -euo pipefail
           apply_err="$RUNNER_TEMP/reconciliation-apply.err"
-          if ! npx --yes supabase@2.117.0 db push \
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
+          if ! (cd "$staging_worktree" && npx --yes supabase@2.117.0 db push \
             --db-url "$STAGING_DATABASE_URL" \
-            --yes --skip-vault >"$RUNNER_TEMP/reconciliation-apply.out" 2>"$apply_err"; then
-            node scripts/ci/sanitize-cli-diagnostic.mjs "$apply_err" "$STAGING_DATABASE_URL"
+            --yes --skip-vault >"$RUNNER_TEMP/reconciliation-apply.out" 2>"$apply_err"); then
+            node "$GITHUB_WORKSPACE/scripts/ci/sanitize-cli-diagnostic.mjs" "$apply_err" "$STAGING_DATABASE_URL"
             exit 1
           fi
           echo "Staging reconciliation migration applied through the pinned Supabase CLI."
@@ -110,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           postflight="$({
-            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=$'\t' \
               --command="select
                 (select count(*) from supabase_migrations.schema_migrations),
                 (select count(*) from supabase_migrations.schema_migrations where version = '$EXPECTED_MIGRATION_VERSION'),
@@ -133,6 +186,7 @@ jobs:
           psql "$STAGING_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
             --command='select version from supabase_migrations.schema_migrations order by version;' \
             > "$RUNNER_TEMP/staging-migration-versions.txt"
-          node scripts/ci/assert-staging-migration-versions.mjs \
-            "$RUNNER_TEMP/staging-migration-versions.txt" "$GITHUB_WORKSPACE/supabase/migrations"
+          staging_worktree="$(cat "$RUNNER_TEMP/staging-reconciliation-worktree-path")"
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migration-versions.mjs" \
+            "$RUNNER_TEMP/staging-migration-versions.txt" "$staging_worktree/supabase/migrations"
           echo "Staging post-apply state verified: 15 migrations, schema intact, row count preserved, RLS enabled."
