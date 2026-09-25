@@ -1,8 +1,18 @@
 # Owner-authenticated production smoke test
 
-Run this checklist after the backup, staging test, and production migration are
-complete. Use the deployed production URL in a private browser session. Do not
-record cookies, access tokens, refresh tokens, or private analytics in screenshots.
+This is a reusable checklist, not evidence that every item has passed. The Phase 7
+Production migration has already been applied. A partial owner-authenticated UI
+smoke was reported: a research project, source, and claim were created; an invalid
+supported transition was rejected; a supported transition with a supporting source
+and reviewer note succeeded; the research project was deleted through the UI; and
+Scripts and Insights loaded without visible errors. This is owner-reported browser
+evidence, not an independently reproduced run or database-level deletion proof.
+See [`Phase 7 final verification`](architecture/reviews/PHASE-7-FINAL-VERIFICATION.md)
+for scope and remaining gaps.
+
+Use the deployed Production URL in a private browser session. Do not record cookies,
+access tokens, refresh tokens, or private analytics in screenshots. A single owner
+session does not prove cross-owner isolation.
 
 ## Authentication and ownership
 

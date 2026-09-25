@@ -102,12 +102,17 @@ read-only analytics, owner idea CRUD, cross-owner mutation denial, private jobs,
 cross-channel FK integrity, sync job acquisition/transactional upserts, nullable metrics, invalid values,
 insight provenance, workflow telemetry grants and account deletion isolation.
 
-## Applying to Supabase later
+## Historical initial-migration instructions
 
-This change has not been applied to any cloud project. Only apply it after choosing
-an authorized development/staging project and reviewing existing schemas. The
-migration intentionally fails on conflicting existing tables rather than silently
-replacing them. There is no destructive automatic down migration.
+The statement in this section that the initial schema had not been applied to a
+cloud project was true when this foundation document was written; it is not the
+current cloud state. Current migration identities and verification are recorded in
+the [database transition runbook](database-transition.md): Staging matches the 16
+local migrations, while Production intentionally has a different historical
+version for Phase 7. Do not normalize Production history.
+
+The initial migration intentionally fails on conflicting existing tables rather
+than silently replacing them. There is no destructive automatic down migration.
 
 The migration filename was generated with Supabase CLI 2.117.0. When cloud access
 is available, use a trusted local terminal (not chat) to authenticate and initialize
@@ -120,10 +125,11 @@ npx --yes supabase@2.117.0 link --help
 npx --yes supabase@2.117.0 db push --help
 ```
 
-Use `db push --dry-run --skip-vault` on the explicitly linked project first. Applying `db push --skip-vault`
-requires separate authorization for that database; neither command has been run
-against a cloud database by this task. Do not put credentials in command history
-or tracked files. The app still needs no environment variables in sample mode.
+The following CLI guidance is retained for a future, separately authorized
+database change; it is not evidence of current migration state. Any future cloud
+apply requires explicit human approval and a verified non-Production target. Do not
+put credentials in command history or tracked files. The app still needs no
+environment variables in sample mode.
 
 Before real analytics go live, verify the migration with Supabase Auth and Data
 API owner/foreign-owner/anonymous sessions, run the Supabase database advisors,

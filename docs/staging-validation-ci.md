@@ -9,8 +9,9 @@ commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
 verification query. The workflow proves PostgreSQL connectivity first, then
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
-compares the returned migration versions with local filenames. This avoids relying on
-the failing `supabase migration list` connection path.
+compares the returned migration versions with local filenames. The currently
+verified repository and Staging project each contain 16 migration versions. This
+avoids relying on the failing `supabase migration list` connection path.
 
 If the CLI cannot connect, only sanitized diagnostics are surfaced. The database
 URL, password and access token are never printed.
@@ -38,7 +39,7 @@ comes from the exact `postgres.<PROJECT_REF>` username. Never log the URL.
 The workflow does not provide credentials to fork pull requests. The self-hosted
 runner is therefore never used for untrusted fork code.
 
-## Manual Phase 7 Staging rehearsal
+## Completed Phase 7 Staging rehearsal
 
 `.github/workflows/apply-staging-phase7-research.yml` is a separate manual,
 `workflow_dispatch`-only workflow. It targets only Staging, uses the serialized
@@ -50,11 +51,9 @@ workflow checkout; only the migration payload is checked out into the separate
 migrations on `main` plus that one pinned payload, with a minimal temporary
 Supabase config; the repository migration directory is never changed.
 
-This bootstrap PR intentionally includes no Phase 7 migration, application
-code, API, UI, or MCP implementation. GitHub only allows manual dispatch for a
-workflow present on the default branch, so this rehearsal becomes dispatchable
-after the bootstrap infrastructure is separately reviewed and merged. That
-does not merge or apply the Phase 7 schema/application PR.
+The bootstrap workflow infrastructure was reviewed and merged separately from
+the Phase 7 application/schema PR. The workflow completed successfully in run
+`36001809750`; the rehearsal did not merge the Phase 7 application.
 
 Before applying, it requires exactly 15 remote versions and 16 isolated local
 versions, with the sole local-minus-remote version
@@ -68,22 +67,36 @@ credentials. Post-apply checks verify the exact 16-version history, table
 presence, RLS, policies, foreign keys, indexes, triggers, and the disposable
 database regression suite.
 
-The workflow does not currently have a genuine hosted Supabase Auth session
-credential for two synthetic owners. Therefore it does not claim hosted JWT or
-Data API owner-isolation smoke-test evidence; those checks remain a separate
-manual gate. Local database tests cover the migration and RLS behavior in a
-disposable database, which is not equivalent to hosted Auth/Data API testing.
+This migration is already present in Staging. Do not dispatch the manual apply
+workflow again against the current project; use the read-only validation workflow
+for ongoing checks.
+
+The rehearsal completed successfully in run `36001809750`. Read-only migration
+history confirms Staging version `20260924041349` is present and matches the local
+16-version set. Hosted catalog inspection confirmed the four research tables,
+RLS/FORCE RLS, expected read policies, indexes, foreign keys, and timestamp triggers.
+This workflow does not test a two-owner authenticated UI/API session. Local database
+tests are not equivalent to hosted Auth/Data API testing.
+
+The Staging six-file export has **not** been verified at runtime. Code inspection
+confirms that the owner-scoped export route calls `researchForScript` and that the
+package builder composes evidence status, source references, supported claims and
+known uncertainties into the existing files. Tests assert the six filenames, linked
+project ID and source-reference count; separate research tests cover evidence
+classification, and export tests cover missing-evidence behavior. They do not test
+the route's database lookup or establish a successful hosted Staging export.
 
 ## Manual reconciliation apply
 
 `.github/workflows/apply-staging-reconciliation.yml` is a separate,
-`workflow_dispatch`-only operation for the single pending migration
-`20260923231944_reconcile_content_experiments_schema.sql`. It verifies that
-Staging has exactly 14 migrations and that this migration is the only item in
-the pinned CLI dry-run before applying it with `--skip-vault`. It then verifies
-15 migrations, the new columns, RLS and unchanged row count. The workflow is
-serialized under `staging-db-mutation`, uses only the Staging secrets, and has
-no Production or pull-request trigger.
+`workflow_dispatch`-only historical operation for migration
+`20260923231944_reconcile_content_experiments_schema.sql`. At the time it ran, it
+verified 14 pre-apply versions, applied that single migration, then verified 15
+versions, new columns, RLS, and unchanged row count. Current Staging has 16
+migrations. The workflow is serialized under `staging-db-mutation`, uses only the
+Staging secrets, and has no Production or pull-request trigger. Do not dispatch
+this historical apply workflow again against the already-reconciled Staging
+project; its preconditions should fail closed.
 
 The workflow is bootstrapped from `main`, then checks out the immutable reviewed
 source commit `98dacc62137d17470cadd512556558432c603c87` and verifies the pinned

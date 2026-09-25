@@ -1,10 +1,36 @@
 # Production database transition runbook
 
-This runbook applies the analysis-first retirement migration without deleting
-historical production records. It is intentionally manual: Codex must not apply
-the migration to a production Supabase project.
+This runbook records the analysis-first retirement migration and retains the
+operator procedures used during the transition. The retirement and Phase 7
+migrations have already been applied as documented below. Codex must not apply
+these historical migrations to a Production Supabase project.
 
-## Migration under review
+## Current verified transition state
+
+This runbook contains historical procedures as well as the current state; follow
+the evidence record rather than treating old pre-apply checklists as pending work.
+
+- Phase 7 Staging migration `20260924041349_research_fact_checking` was applied by
+  workflow run `36001809750`. Current Staging migration history matches all 16
+  repository migrations.
+- Production records Phase 7 as
+  `20260924151134_research_fact_checking`. The local source remains
+  `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
+  difference is intentional; do not repair, replay, reset, or normalize it.
+- Read-only catalog inspection confirmed the four research tables, RLS and FORCE
+  RLS, policies, indexes, foreign keys, and the `set_updated_at` triggers on
+  projects and claims in Staging and Production.
+- The owner reported a partial authenticated Production UI smoke test. Its exact
+  scope and gaps are recorded in
+  [`Phase 7 final verification`](architecture/reviews/PHASE-7-FINAL-VERIFICATION.md).
+- No encrypted off-host Production backup has been verified. Do not infer one from
+  the presence of a local backup or restore rehearsal.
+
+The owner reported that the Production deployment was READY on
+`5f1719112aea550f724f20f2791b8924a0b7db0b`; this runbook update did not independently
+verify the Vercel deployment state.
+
+## Historical retirement migration source
 
 `supabase/migrations/20260921130000_retire_internal_production.sql` revokes
 `INSERT`, `UPDATE`, and `DELETE` from `service_role` on
@@ -103,7 +129,12 @@ historical rows, but it does not verify Vault contents, hosted extension
 behavior, Supabase-managed roles, or JWT/Data API behavior. A genuinely
 isolated Supabase staging project is required for those checks.
 
-## Staging migration
+## Staging migration procedure for a new disposable project
+
+This retained operator procedure is for a newly provisioned, isolated
+disposable project. The current hosted Staging project has already received the
+Phase 7 migration and contains 16 versions; do not rerun this generic procedure
+against it. Use the read-only validation workflow for current Staging checks.
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
    the production URL.
@@ -132,20 +163,20 @@ operator-supplied expected identity. They do not rely on URL string matching to
 decide whether a target is staging or production, and they reject missing or
 ambiguous identity values.
 
-## Pending workflow disposition
+## Historical pending workflow disposition
 
-The read-only Production inventory currently reports one queued
-`production_workflows` row and no queued `video_generation_jobs`. Preserve that
-row and its audit history. Do not retry, delete, update, or execute it while the
-retired worker is disabled. Record its identifier and timestamps in the change
-record, then have the owner or DBA approve an explicit archival disposition
-before any separately approved workflow disposition. The retirement migration was not a
+At the time of the original retirement transition, a read-only Production inventory
+reported one queued `production_workflows` row and no queued
+`video_generation_jobs`. That is a historical observation, not a current-status
+claim. Preserve the row and audit history; do not retry, delete, update, or execute
+it without a separately approved disposition. The retirement migration was not a
 cleanup operation.
 
-## Production application
+## Historical Production retirement procedure
 
-Only a human database operator should perform this step after the backup and
-staging gates pass:
+The retirement SQL has already been applied. The following operator checklist is
+retained as historical verification guidance; it is not an instruction to apply or
+reapply the retirement migration:
 
 1. Confirm the production worker remains disabled and there are no active runs.
 2. Run the read-only inventory in `scripts/db/pending-production-jobs.sql` and
@@ -178,22 +209,28 @@ The migration has no destructive down migration. If verification fails:
    for any production recovery.
 6. Keep the GitHub workflow disabled until the incident is closed.
 
-## Current status
+## Retirement and schema reconciliation status
 
 The disposable PostgreSQL migration audit passed in this repository. The
 retirement SQL is verified as applied in Production under remote version
 `20260923205655`; the legacy `production_workflows` row remains preserved and
-`video_generation_jobs` remains empty. The owner smoke test and any future
-Production migration still require explicit human approval. Production history
-is intentionally not normalized to the local timestamp.
+`video_generation_jobs` remains empty in the recorded inventory. Phase 6 content
+experiment reconciliation was applied and verified on Production as remote
+`20260924040511_reconcile_content_experiments_schema`; local source remains
+`20260923231944_reconcile_content_experiments_schema.sql`. Phase 7 research
+schema was applied on Production as remote `20260924151134_research_fact_checking`,
+while its local source remains
+`20260924041349_research_fact_checking.sql`. The two timestamp differences are
+intentional and must not be normalized. See the Phase 7 final verification record
+for the distinction between live catalog evidence and owner-reported UI evidence.
 
 ## Migration-history policy
 
 **Staging CI** discovers every local migration filename and requires that complete
-set to match Staging remote history exactly. The count is not hardcoded; the
-baseline `main` repository and Staging project contain 14 versions, while this
-reconciliation branch adds a 15th forward-only migration for rehearsal. A
-mismatch blocks the staging validation workflow.
+set to match Staging remote history exactly. At this verification, both contain 16
+versions, including `20260924041349_research_fact_checking`. The workflow count is
+not hardcoded; any future migration changes the expected set and must be reviewed.
+A mismatch blocks the staging validation workflow.
 
 **Production** has historical divergence and is validated by the known remote
 retirement record plus effective schema, privilege, RLS, and preserved-row
@@ -221,6 +258,6 @@ Production. Effective columns, grants, RLS and preserved rows are the verificati
 criteria. The migration has no automatic down migration; recovery needs a reviewed
 forward SQL change or restoration in a disposable environment.
 
-The Phase 7 research migration is a separate pending change. Its local SQL and
-disposable database test do not show that Staging or Production has applied it.
-No encrypted off-host backup is claimed by this runbook.
+Phase 7 is applied on Staging and Production under the distinct versions recorded
+above. Production history must remain untouched. No encrypted off-host backup is
+claimed by this runbook.
