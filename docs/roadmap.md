@@ -41,14 +41,16 @@ the production schedule is removed so no provider call can start accidentally.
 
 ## Phase 5 — external production package
 
-**Status: six-file package implemented; research-aware export remains incomplete.**
+**Status: six-file research-aware package implemented; Staging runtime verification pending.**
 The approved-draft export contract contains `content-brief.md`, `script.md`,
 `storyboard.md`, `voiceover.txt`, `captions.txt`, and `metadata.json`. Captions have no
-fabricated timing and exporting does not generate a video. The current export route
-does not load the linked Phase 7 research project, claims, and sources into that
-package; do not claim research-linked citations or evidence metadata are exported
-until that path is implemented and verified. Production changes and off-host backup
-remain separate release gates.
+fabricated timing and exporting does not generate a video. The owner-scoped export
+route loads the linked research project; package generation includes evidence
+status, source references, supported claims, and known uncertainties in these six
+files. Unit tests check filenames, linked project/source metadata, research
+classification, and missing-evidence behavior; they do not exercise the route's
+database lookup or hosted export. Production changes and off-host backup remain
+separate release gates.
 
 ## Phase 6 — closed-loop marketing system
 

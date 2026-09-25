@@ -89,8 +89,11 @@ and [the roadmap](docs/roadmap.md).
 
 The approved-draft export is implemented as a six-file ZIP: a brief, script,
 storyboard, voiceover text, captions without invented timestamps, and metadata. It
-does not claim that a finished video was generated. Phase 7 research evidence is not
-yet loaded into the export package; see the [Phase 7 evidence record](docs/architecture/reviews/PHASE-7-FINAL-VERIFICATION.md).
+does not claim that a finished video was generated. When a research project is
+linked to the draft, the export implementation composes its evidence status, source
+references, supporting claims and uncertainties into the existing files. Unit tests
+cover the six-file contract and selected linked-research fields; hosted Staging
+export remains unverified. See the [Phase 7 evidence record](docs/architecture/reviews/PHASE-7-FINAL-VERIFICATION.md).
 
 Google and Supabase setup is documented in [docs/connection-setup.md](docs/connection-setup.md).
 ChatGPT Plus is not API billing, and deployment verification is separate from local

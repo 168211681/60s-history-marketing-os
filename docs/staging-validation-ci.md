@@ -78,12 +78,13 @@ RLS/FORCE RLS, expected read policies, indexes, foreign keys, and timestamp trig
 This workflow does not test a two-owner authenticated UI/API session. Local database
 tests are not equivalent to hosted Auth/Data API testing.
 
-The Staging six-file export has **not** been verified at runtime. Unit tests verify
-the six filenames and that captions contain no fabricated timestamps. The current
-export route only selects script-draft fields and the package builder does not load
-the linked research project's claims and sources; research metadata inclusion is
-therefore also unverified by code inspection. Do not present the six-file contract
-test as proof of a Staging export or research-aware export.
+The Staging six-file export has **not** been verified at runtime. Code inspection
+confirms that the owner-scoped export route calls `researchForScript` and that the
+package builder composes evidence status, source references, supported claims and
+known uncertainties into the existing files. Tests assert the six filenames, linked
+project ID and source-reference count; separate research tests cover evidence
+classification, and export tests cover missing-evidence behavior. They do not test
+the route's database lookup or establish a successful hosted Staging export.
 
 ## Manual reconciliation apply
 

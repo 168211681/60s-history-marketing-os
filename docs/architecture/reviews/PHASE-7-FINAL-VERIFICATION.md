@@ -62,14 +62,17 @@ The six-file contract verified by automated tests is exactly:
 5. `captions.txt`
 6. `metadata.json`
 
-Tests also verify that caption timestamps are not fabricated. This is local code/test
-evidence only, not a Staging export. Static inspection of the current export route
-and package builder shows that the route selects script-draft fields and the builder
-does not load the linked Phase 7 research project, claims, or source references.
-Therefore research-project ID, evidence status, source references, and uncertainty
-metadata in the export are **not verified and are not currently composed from the
-linked research records**. Do not claim a research-aware export until this is
-implemented and reviewed separately; preserve the six-file contract.
+Tests also verify that caption timestamps are not fabricated. Code inspection shows
+that the owner-scoped export route calls `researchForScript(id, owner.id)`. That
+reader loads the owner's linked project, sources, claims, and source relationships;
+the package builder composes the project ID, evidence status, source references,
+supported claims, and known uncertainties into the existing six files. Unit tests
+assert the exact filenames, linked project ID and source-reference count; separate
+research-model tests cover evidence classification and export tests cover the
+missing-evidence case. They do not exercise the route's database lookup or assert
+every composed uncertainty/citation value. This verifies implementation and
+selected package-builder behavior only; it is **not** evidence that the export
+succeeded against hosted Staging.
 
 Safe Staging verification plan:
 
@@ -78,9 +81,8 @@ Safe Staging verification plan:
    privileged credential for convenience.
 2. If an eligible draft exists, test the authenticated export route, extract the ZIP,
    and assert exactly the six filenames above, no `.srt`, and no invented timestamps.
-   Once research-aware export is implemented, also verify that the existing files
-   contain the linked research ID, evidence state, source references, and
-   uncertainties.
+   Verify that the existing files contain the linked research ID, evidence state,
+   source references, supported claims, and uncertainties.
 3. If no eligible draft exists, do not create a synthetic script draft yet. The
    repository has no normal `DELETE /api/scripts/[id]` route. First agree on a
    separately reviewed, owner-scoped cleanup path or obtain explicit approval for
