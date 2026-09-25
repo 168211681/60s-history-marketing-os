@@ -87,10 +87,10 @@ and [the roadmap](docs/roadmap.md).
 
 ## External editing package
 
-Exporting a production package is planned. It will contain only reliable fields from
-approved drafts and research evidence, such as a brief, script, storyboard,
-voiceover text, captions without invented timestamps, and metadata. It will not claim
-that a finished video was generated.
+The approved-draft export is implemented as a six-file ZIP: a brief, script,
+storyboard, voiceover text, captions without invented timestamps, and metadata. It
+does not claim that a finished video was generated. Phase 7 research evidence is not
+yet loaded into the export package; see the [Phase 7 evidence record](docs/architecture/reviews/PHASE-7-FINAL-VERIFICATION.md).
 
 Google and Supabase setup is documented in [docs/connection-setup.md](docs/connection-setup.md).
 ChatGPT Plus is not API billing, and deployment verification is separate from local
@@ -99,6 +99,6 @@ tests.
 Database transition work is intentionally manual. Review the
 [production transition runbook](docs/database-transition.md) before taking a backup
 or applying the retirement migration. The [owner smoke-test checklist](docs/owner-smoke-test.md)
-must be completed after a production migration. The repository includes guarded
+records reusable verification steps and current evidence. The repository includes guarded
 backup, disposable restore, staging migration, permissions, and pending-job scripts
 under `scripts/db/`; they refuse to run without explicit safety gates.

@@ -41,11 +41,14 @@ the production schedule is removed so no provider call can start accidentally.
 
 ## Phase 5 — external production package
 
-**Status: complete.** Export an approved draft into a structured package for an
-external editor. Include only supported content: brief, script, storyboard, voiceover
-text, caption text without fabricated timing, metadata, research references, and fact-
-check status. Exporting a package does not generate a video. Future Production
-changes and off-host backup remain separate release gates.
+**Status: six-file package implemented; research-aware export remains incomplete.**
+The approved-draft export contract contains `content-brief.md`, `script.md`,
+`storyboard.md`, `voiceover.txt`, `captions.txt`, and `metadata.json`. Captions have no
+fabricated timing and exporting does not generate a video. The current export route
+does not load the linked Phase 7 research project, claims, and sources into that
+package; do not claim research-linked citations or evidence metadata are exported
+until that path is implemented and verified. Production changes and off-host backup
+remain separate release gates.
 
 ## Phase 6 — closed-loop marketing system
 
@@ -65,19 +68,32 @@ Phase 6 rules:
 
 ## Phase 7 — research and fact-checking engine
 
-**Status: implemented on feature branch; Staging rehearsal and deployment verification pending.**
+**Status: implementation merged; Staging and Production schema are applied and
+structurally verified; full acceptance remains pending.** PR #27 merged as
+`da9428e86b121ba2921a2d42b8636beba853c26f`; the Phase 7 Staging rehearsal succeeded
+in workflow run `36001809750` for migration `20260924041349`. Production records the
+same migration name at remote version `20260924151134`. PR #29 merged as
+`5f1719112aea550f724f20f2791b8924a0b7db0b`.
 Owner-scoped research projects link topics, ideas, experiments and drafts to source
 observations and reviewed claims. Sources retain human-readable provenance and
 limitations; source categories are not truth scores. Claims begin as `insufficient`.
 Only a human can assess a claim or approve a research package. A `supported`
 assessment requires a linked supporting source and reviewer note. Disputed and
-insufficient claims remain visibly separate from supported claims in the UI, MCP
-and six-file creative brief export. Existing scripts remain usable without a
-research link; their evidence status is `not_researched`.
+insufficient claims remain visibly separate from supported claims in the UI and MCP.
+Existing scripts remain usable without a research link; their evidence status is
+`not_researched`.
 
-Research migration `20260924041349_research_fact_checking.sql` is forward-only.
-Apply it to isolated Staging only after reviewing the SQL and confirming the
-project target. Production migration requires a separate human-approved gate.
+Local migration source: `20260924041349_research_fact_checking.sql`. Production remote
+migration: `20260924151134_research_fact_checking`. This timestamp divergence is
+intentional; never repair, replay, reset, or normalize the history. Production UI
+research creation, claim review, and project deletion were reported by the owner;
+these observations do not establish database-level deletion or two-owner isolation.
+
+Full acceptance is pending: Staging export has not been exercised at runtime,
+cross-owner authenticated isolation has not been tested with two hosted owner
+sessions, Production runtime logs could not be inspected (403), and the direct HTTP
+status of Production project deletion was not captured. The evidence record is
+[`Phase 7 final verification`](architecture/reviews/PHASE-7-FINAL-VERIFICATION.md).
 
 ## Release gates
 
