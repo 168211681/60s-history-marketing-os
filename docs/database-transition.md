@@ -11,8 +11,10 @@ This runbook contains historical procedures as well as the current state; follow
 the evidence record rather than treating old pre-apply checklists as pending work.
 
 - Phase 7 Staging migration `20260924041349_research_fact_checking` was applied by
-  workflow run `36001809750`. Current Staging migration history matches all 16
-  repository migrations.
+  workflow run `36001809750` and ended that phase at 16 migrations. Staging later
+  received `20260928140124_password_setup_authorizations`. Current Staging therefore
+  has 17 migrations. This branch has those 17 plus one pending file,
+  `20261006175601_clipforge_projects_and_content_items`.
 - Production records Phase 7 as
   `20260924151134_research_fact_checking`. The local source remains
   `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
@@ -132,9 +134,12 @@ isolated Supabase staging project is required for those checks.
 ## Staging migration procedure for a new disposable project
 
 This retained operator procedure is for a newly provisioned, isolated
-disposable project. The current hosted Staging project has already received the
-Phase 7 migration and contains 16 versions; do not rerun this generic procedure
-against it. Use the read-only validation workflow for current Staging checks.
+disposable project. Phase 7 historically left hosted Staging at 16 migrations.
+Staging later received `20260928140124_password_setup_authorizations`, so the
+current hosted Staging project has 17 migrations. This branch has 18 files, and
+`20261006175601_clipforge_projects_and_content_items` is the only one still
+pending. Do not rerun this generic procedure against the current hosted project.
+Use the read-only validation workflow for current Staging checks.
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
    the production URL.
