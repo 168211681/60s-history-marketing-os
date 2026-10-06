@@ -553,8 +553,9 @@ td {
   font-size: 12px;
   font-weight: 600;
 }
-.search-label {
-  flex: 1;
+.filters .button {
+  margin: 0;
+  min-height: 44px;
 }
 input,
 select {
@@ -990,5 +991,84 @@ footer {
 @media (max-width: 700px) {
   .planned-list li {
     flex-direction: column;
+  }
+}
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+.form-grid textarea {
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid #acbbb1;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+  resize: vertical;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.form-actions .button {
+  margin: 0;
+  min-height: 44px;
+}
+.content-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.content-cards li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.content-cards li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.content-cards h3 {
+  margin-bottom: 4px;
+}
+.content-cards a {
+  color: inherit;
+}
+.content-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.future-blocks {
+  display: grid;
+  gap: 12px;
+}
+.future-blocks fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 12px;
+}
+.future-blocks legend {
+  padding: 0 4px;
+  font-weight: 650;
+}
+.future-blocks p {
+  margin-top: 8px;
+}
+@media (max-width: 700px) {
+  .content-cards li {
+    flex-direction: column;
+  }
+  .form-actions .button {
+    flex: 1 1 140px;
   }
 }

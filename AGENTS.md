@@ -27,12 +27,18 @@ named 60s History Marketing OS. Sprint 001 is an application-shell change only.
 
 ClipForge is the private owner workspace. The shell navigation is Dashboard,
 Projects, Library, Distribution, Calendar, Analytics, Archive, and Settings.
-Projects, Library, Distribution, Calendar, and Archive are unfinished
-placeholders and must not pretend to store or publish content. Videos, insights,
-scripts, research, settings, and YouTube analytics keep their existing routes.
+Projects and Library store owner-scoped project and content-item records.
+Distribution, Calendar, and Archive remain unfinished placeholders and must not
+pretend to store or publish content. Videos, insights, scripts, research,
+settings, and YouTube analytics keep their existing routes.
 
 YouTube OAuth, Supabase Auth, PostgreSQL analytics, and daily Vercel sync are
 live. The active product is Codex/MCP-assisted evidence-based intelligence,
 research, experiments, and reviewed script drafts for external editing tools.
 Internal video production is retired; see `docs/adr/0001-analysis-first-scope.md`.
-Do not add or rewrite Supabase migrations to finish the ClipForge content model.
+
+New ClipForge migrations are allowed only when explicitly scoped, locally tested,
+and reviewed. Never rewrite, rename, or replay historical migrations. Never
+normalize Staging or Production migration history, and never repair the
+intentional Phase 6 or Phase 7 timestamp divergence. Do not apply a new migration
+to Staging or Production unless that apply is a separate approved operation.

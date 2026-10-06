@@ -1,44 +1,102 @@
 import Link from "next/link";
-import { PageHeading, Panel } from "@/components/ui";
+import { EmptyState, PageHeading, Panel } from "@/components/ui";
+import { ContentItemForm } from "@/components/content-item-form";
+import { currentOwner } from "@/lib/auth/server";
+import { listContentItems, listProjects } from "@/lib/clipforge/data";
+import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
+import { contentStatuses, isUuid } from "@/lib/clipforge/model";
+import type { ContentStatus } from "@/lib/clipforge/model";
+import { databaseConfigured } from "@/lib/database";
 
 export const metadata = { title: "Library" };
 
-const existing = [
-  ["Videos", "/videos", "Existing performance explorer for synced or sample videos."],
-  ["Scripts", "/scripts", "Existing human-reviewed script drafts."],
-  ["Research", "/research", "Existing source and claim review."],
-] as const;
-
-export default function LibraryPage() {
+export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ q?: string; project?: string; status?: string }> }) {
+  const owner = await currentOwner();
+  if (!owner) {
+    return (
+      <>
+        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items belong to your projects. Files, thumbnails, and posts are not stored here." />
+        <Panel title="Library is private"><p>Sign in as the channel owner to manage content. <Link href="/settings">Open settings →</Link></p></Panel>
+      </>
+    );
+  }
+  if (!databaseConfigured()) {
+    return (
+      <>
+        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items belong to your projects. Files, thumbnails, and posts are not stored here." />
+        <Panel title="Library unavailable"><p>Database is not configured.</p></Panel>
+      </>
+    );
+  }
+  const params = await searchParams;
+  const projectId = params.project && isUuid(params.project) ? params.project : undefined;
+  const status = contentStatuses.includes(params.status as ContentStatus) ? params.status as ContentStatus : undefined;
+  const query = params.q?.trim() ?? "";
+  let projects;
+  let items;
+  try {
+    [projects, items] = await Promise.all([
+      listProjects(owner.id),
+      listContentItems(owner.id, { projectId, status, query: query || undefined }),
+    ]);
+  } catch {
+    return <Panel title="Library unavailable"><p role="alert">We could not load content right now. <Link href="/library">Try again</Link>.</p></Panel>;
+  }
   return (
     <>
-      <PageHeading
-        eyebrow="CLIPFORGE"
-        title="Library"
-        description="A unified library for master video, thumbnail, script, prompts, captions, and posts is not available yet."
-        action={<span className="badge neutral">Not yet implemented</span>}
-      />
-      <Panel
-        title="Not stored yet"
-        description="No asset upload, storage bucket, or content-item record exists in this version."
-      >
-        <p className="muted">
-          Use the working tools below. They are the current videos, drafts, and research pages, not a new library.
-        </p>
-        <ul className="planned-list">
-          {existing.map(([label, href, detail]) => (
-            <li key={href}>
-              <div>
-                <h3>{label}</h3>
-                <p className="muted">{detail}</p>
-              </div>
-              <Link className="text-link" href={href}>
-                Open {label.toLowerCase()} →
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <PageHeading eyebrow="CLIPFORGE" title="Library" description="Search and edit content metadata. There is no thumbnail until asset storage exists." />
+      <Panel title="Filter" description="Filters apply to your records only.">
+        <form className="filters" method="get">
+          <label className="search-label">Search title, topic, or key
+            <input name="q" defaultValue={query} maxLength={200} />
+          </label>
+          <label>Project
+            <select name="project" defaultValue={projectId ?? ""}>
+              <option value="">All projects</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label>Status
+            <select name="status" defaultValue={status ?? ""}>
+              <option value="">Any status</option>
+              {contentStatuses.map((value) => <option key={value} value={value}>{clipforgeLabel(value)}</option>)}
+            </select>
+          </label>
+          <button className="button" type="submit">Apply</button>
+        </form>
       </Panel>
+      <Panel title={items.length ? "Content items" : "No matching content"} description={query || projectId || status ? "Change the filter if this is narrower than you expected." : "Saved items appear here."}>
+        {items.length ? (
+          <ul className="content-cards">
+            {items.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <p className="eyebrow">{item.contentKey ?? "No key"}</p>
+                  <h3><Link href={`/library/${item.id}`}>{item.title}</Link></h3>
+                  <p className="muted">{item.projectCode ? `${item.projectCode} · ` : ""}{item.projectName}</p>
+                  <p className="content-meta">
+                    <span className="badge neutral">{clipforgeLabel(item.format)}</span>
+                    <span className="badge neutral">{clipforgeLabel(item.productionType)}</span>
+                    <span className="badge neutral">{clipforgeLabel(item.status)}</span>
+                    <span className="muted">{item.durationSeconds === null ? "No duration" : `${item.durationSeconds}s`}</span>
+                    <span className="muted">Updated {clipforgeTime(item.updatedAt)} UTC</span>
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title="No content items yet">
+            <p>{projects.length ? "Create one below. Nothing is invented for you." : "Create a project before adding content."}</p>
+            {projects.length ? null : <Link className="text-link" href="/projects">Open projects →</Link>}
+          </EmptyState>
+        )}
+      </Panel>
+      {projects.length ? (
+        <Panel title="Create content item" description="Pick one of your projects. Upload and publishing are not part of this form.">
+          <ContentItemForm projects={projects} defaultProjectId={projectId} />
+        </Panel>
+      ) : null}
     </>
   );
 }

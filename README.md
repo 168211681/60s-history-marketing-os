@@ -5,9 +5,9 @@ started as 60s History Marketing OS: it collects owner-authorized YouTube data,
 calculates evidence-backed insights, supports experiments and reviewed script
 drafts, and prepares creative briefs for external editing tools.
 
-Sprint 001 changes the application shell and navigation only. Projects, Library,
-Distribution, Calendar, and Archive are labeled placeholders. They do not store
-content, upload media, or publish.
+Sprint 001 changed the application shell. Sprint 002 adds owner-scoped projects
+and content items. Distribution, Calendar, and Archive remain labeled
+placeholders. They do not upload media or publish.
 
 Internal video rendering, provider inference, artifact storage, production workers,
 YouTube upload, and public publishing remain retired. Historical production rows
@@ -39,8 +39,8 @@ The optional database and browser checks are `npm run test:db` and `npm run test
 | Route | Purpose |
 | --- | --- |
 | `/` | Channel overview, metrics, recent videos and trend |
-| `/projects` | Planned project names only. Not implemented |
-| `/library` | Placeholder. Existing videos, scripts, and research stay on their routes |
+| `/projects` | Owner projects. Create, edit, archive, and open a project |
+| `/library` | Owner content items. Filter, create, edit, and archive metadata |
 | `/videos` | Video search and performance exploration |
 | `/distribution` | Placeholder. No platform posting |
 | `/calendar` | Placeholder. No schedule |

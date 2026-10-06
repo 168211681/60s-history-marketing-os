@@ -12,14 +12,23 @@ script draft. Internal rendering and publishing remain retired.
 
 ## ClipForge Sprint 001 — application shell
 
-**Status: UI foundation only. Not a database phase.** The private product name is
+**Status: complete as a UI foundation.** The private product name is
 ClipForge. Navigation exposes Dashboard, Projects, Library, Distribution, Calendar,
 Analytics, Archive, and Settings, while Videos, Insights, Scripts, and Research stay
-on their existing routes. Projects, Library, Distribution, Calendar, and Archive are
-labeled placeholders. No content tables, storage, uploads, or publishing APIs are
-part of this sprint. Do not add, edit, replay, or normalize Supabase migrations to
-finish these sections. Staging and Production migration-history differences stay
-intentional.
+on their existing routes. Projects and Library were placeholders in this sprint and
+became owner records in Sprint 002. Distribution, Calendar, and Archive remain
+placeholders. Staging and Production migration-history differences stay intentional.
+
+## ClipForge Sprint 002 — projects and content items
+
+**Status: local schema and owner UI only. Not applied to Staging or Production.**
+`public.projects` and `public.content_items` are the first ClipForge records.
+A project has its own `owner_id` and does not require a channel. Content
+ownership follows the project. There are no asset, caption, post, or analytics
+snapshot tables in this sprint. The new migration was created with the Supabase
+CLI and is covered by the local database tests. Do not apply it to a hosted
+project from this branch, and do not rewrite the earlier 16 migrations to make
+histories match.
 
 ## Phase 0 — repository and security baseline
 

@@ -26,6 +26,13 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `private.production_workflow_events` | Sanitized archived production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
+| `public.projects` | ClipForge workspace name, optional code, description, and active/archived status. Owned directly by `owner_id`; not a YouTube channel | Read/create/edit/delete own projects |
+| `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
+
+The ClipForge tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.
+That file is local until a later, explicit apply. It does not change historical
+migration files or the intentional Staging/Production version difference. Do not
+apply it to Staging or Production as part of an unrelated verification workflow.
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
 `updated_at` is maintained by a security-invoker trigger in `private`; no

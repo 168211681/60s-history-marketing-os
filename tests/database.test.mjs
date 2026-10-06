@@ -137,13 +137,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "18",
+    "20",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "18",
+      "20",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -170,6 +170,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
       ),
       "f",
     );
+  }
+  for (const table of ["projects", "content_items"]) {
+    assert.equal(sql(`select has_table_privilege('anon','public.${table}','select')`), "f");
+    assert.equal(sql(`select has_table_privilege('authenticated','public.${table}','truncate')`), "f");
+    assert.equal(sql(`select has_table_privilege('service_role','public.${table}','truncate')`), "f");
+    assert.equal(sql(`select has_table_privilege('authenticated','public.${table}','select')`), "t");
+    assert.equal(sql(`select has_table_privilege('authenticated','public.${table}','delete')`), "t");
   }
 });
 test("research sources, claims and relationships stay inside the owner's project", () => {
@@ -561,4 +568,53 @@ test("deleting an auth user cascades their data but preserves the other owner's 
     ),
     Array(9).fill("1").join("\n"),
   );
+});
+test("clipforge projects and content items stay inside the owning account", () => {
+  const projectA = "a1000000-0000-4000-8000-000000000001";
+  const projectA2 = "a1000000-0000-4000-8000-000000000003";
+  const projectB = "a1000000-0000-4000-8000-000000000002";
+  const itemA = "b1000000-0000-4000-8000-000000000001";
+  const tempItem = "b1000000-0000-4000-8000-000000000099";
+  sql(`insert into public.projects (id, owner_id, name, code) values
+    ('${projectA}','${userA}','History in 60s','H60'),
+    ('${projectA2}','${userA}','Notes','NOTE'),
+    ('${projectB}','${userB}','Affiliate','AFF')`);
+  sql(`insert into public.content_items (id, project_id, owner_id, content_key, title, topic, format, production_type, status, duration_seconds)
+    values ('${itemA}','${projectA}','${userA}','H60-0042','Siege logistics','medieval','short_form','new','editing',58)`);
+  assert.equal(asRole("authenticated", userA, `select name from public.projects where id='${projectA}'`), "History in 60s");
+  assert.equal(asRole("authenticated", userA, `update public.projects set name='History', description='Short', status='archived' where id='${projectA}' returning status`), "archived");
+  assert.equal(asRole("authenticated", userA, `insert into public.projects (owner_id, name, code) values ('${userA}','Chronicles of Suvarnabhumi','COS') returning code`), "COS");
+  assert.equal(asRole("authenticated", userB, `select count(*) from public.projects where id='${projectA}'`), "0");
+  assert.equal(asRole("authenticated", userB, `update public.projects set name='Stolen' where id='${projectA}' returning id`), "");
+  assert.equal(asRole("authenticated", userB, `delete from public.projects where id='${projectA}' returning id`), "");
+  assert.equal(sql(`select name from public.projects where id='${projectA}'`), "History in 60s");
+  asRole("anon", "", "select * from public.projects", "42501");
+  asRole("anon", "", `insert into public.projects (owner_id, name) values ('${userA}','Anon')`, "42501");
+  asRole("authenticated", userB, `insert into public.projects (owner_id, name) values ('${userA}','Stolen')`, "42501");
+  asRole("authenticated", userA, `insert into public.projects (owner_id, name, status) values ('${userA}','Bad','paused')`, "23514");
+  asRole("authenticated", userA, `update public.projects set owner_id='${userB}' where id='${projectA}'`, "42501");
+  asRole("authenticated", userA, `update public.projects set created_at=now() where id='${projectA}'`, "42501");
+  assert.equal(asRole("authenticated", userA, `select title from public.content_items where id='${itemA}'`), "Siege logistics");
+  assert.equal(asRole("authenticated", userA, `insert into public.content_items (project_id, owner_id, title) values ('${projectA}','${userA}','New clip') returning title`), "New clip");
+  assert.equal(asRole("authenticated", userA, `update public.content_items set title='Edited siege', status='ready' where id='${itemA}' returning status`), "ready");
+  assert.equal(asRole("authenticated", userA, `update public.content_items set project_id='${projectA2}' where id='${itemA}' returning project_id`), projectA2);
+  assert.equal(asRole("authenticated", userB, `select count(*) from public.content_items where id='${itemA}'`), "0");
+  assert.equal(asRole("authenticated", userB, `update public.content_items set project_id='${projectB}' where id='${itemA}' returning id`), "");
+  assert.equal(sql(`select project_id from public.content_items where id='${itemA}'`), projectA);
+  asRole("authenticated", userA, `update public.content_items set project_id='${projectB}' where id='${itemA}'`, "42501");
+  sql(`update public.content_items set project_id='${projectB}' where id='${itemA}'`, "23503");
+  asRole("authenticated", userB, `insert into public.content_items (project_id, owner_id, title) values ('${projectA}','${userB}','Steal')`, "42501");
+  asRole("anon", "", "select * from public.content_items", "42501");
+  asRole("authenticated", userA, `update public.content_items set status='viral' where id='${itemA}'`, "23514");
+  asRole("authenticated", userA, `update public.content_items set owner_id='${userB}' where id='${itemA}'`, "42501");
+  assert.equal(sql("select count(*) from pg_trigger where tgname='set_updated_at' and tgrelid in ('public.projects'::regclass, 'public.content_items'::regclass) and not tgisinternal"), "2");
+  sql(`insert into public.content_items (id, project_id, owner_id, title) values ('${tempItem}','${projectA}','${userA}','Temporary')`);
+  assert.equal(sql(`delete from public.content_items where id='${tempItem}' returning id`), tempItem);
+  assert.equal(sql(`select count(*) from public.content_items where id='${tempItem}'`), "0");
+  assert.equal(sql(`select count(*) from public.projects where id='${projectA}'`), "1");
+  assert.equal(asRole("authenticated", userA, `delete from public.content_items where id='${itemA}' returning id`), itemA);
+  assert.equal(sql(`select count(*) from public.content_items where id='${itemA}'`), "1");
+  sql(`delete from public.projects where id='${projectA}'`);
+  assert.equal(sql(`select count(*) from public.content_items where project_id='${projectA}' or id='${itemA}'`), "0");
+  assert.equal(sql(`select count(*) from public.projects where id='${projectB}'`), "1");
 });
