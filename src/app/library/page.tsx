@@ -15,7 +15,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   if (!owner) {
     return (
       <>
-        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items belong to your projects. Files, thumbnails, and posts are not stored here." />
+        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items, private files, and manual platform copy belong to your projects." />
         <Panel title="Library is private"><p>Sign in as the channel owner to manage content. <Link href="/settings">Open settings →</Link></p></Panel>
       </>
     );
@@ -23,7 +23,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   if (!databaseConfigured()) {
     return (
       <>
-        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items belong to your projects. Files, thumbnails, and posts are not stored here." />
+        <PageHeading eyebrow="CLIPFORGE" title="Library" description="Content items, private files, and manual platform copy belong to your projects." />
         <Panel title="Library unavailable"><p>Database is not configured.</p></Panel>
       </>
     );
@@ -44,7 +44,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   }
   return (
     <>
-      <PageHeading eyebrow="CLIPFORGE" title="Library" description="Search and edit content metadata. There is no thumbnail until asset storage exists." />
+      <PageHeading eyebrow="CLIPFORGE" title="Library" description="Search content, file status, and how many platforms are already published or skipped." />
       <Panel title="Filter" description="Filters apply to your records only.">
         <form className="filters" method="get">
           <label className="search-label">Search title, topic, or key
@@ -78,7 +78,9 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
                     <span className="badge neutral">{clipforgeLabel(item.format)}</span>
                     <span className="badge neutral">{clipforgeLabel(item.productionType)}</span>
                     <span className="badge neutral">{clipforgeLabel(item.status)}</span>
-                    <span className="muted">{item.durationSeconds === null ? "No duration" : `${item.durationSeconds}s`}</span>
+                    <span className="badge neutral">{item.distributionComplete}/4 complete</span>
+                    <span className="badge neutral">{item.hasMasterVideo ? "Master video" : "No master video"}</span>
+                    <span className="badge neutral">{item.hasThumbnail ? "Thumbnail" : "No thumbnail"}</span>
                     <span className="muted">Updated {clipforgeTime(item.updatedAt)} UTC</span>
                   </p>
                 </div>
@@ -93,7 +95,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
         )}
       </Panel>
       {projects.length ? (
-        <Panel title="Create content item" description="Pick one of your projects. Upload and publishing are not part of this form.">
+        <Panel title="Create content item" description="Four platform rows are created with the item. Nothing is published.">
           <ContentItemForm projects={projects} defaultProjectId={projectId} />
         </Panel>
       ) : null}

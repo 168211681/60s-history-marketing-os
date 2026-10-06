@@ -28,7 +28,9 @@ named 60s History Marketing OS. Sprint 001 is an application-shell change only.
 ClipForge is the private owner workspace. The shell navigation is Dashboard,
 Projects, Library, Distribution, Calendar, Analytics, Archive, and Settings.
 Projects and Library store owner-scoped project and content-item records.
-Distribution, Calendar, and Archive remain unfinished placeholders and must not
+Distribution is a manual cross-post queue: private master video and thumbnail
+files, per-platform copy, and posting status. It does not publish to a platform.
+Calendar and Archive remain unfinished placeholders and must not
 pretend to store or publish content. Videos, insights, scripts, research,
 settings, and YouTube analytics keep their existing routes.
 
@@ -42,8 +44,12 @@ and reviewed. Never rewrite, rename, or replay historical migrations. Never
 normalize Staging or Production migration history, and never repair the
 intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
 `20260928140124_password_setup_authorizations` and
-`20261006175601_clipforge_projects_and_content_items`. Staging and this branch
-both have 18 migrations, so there is no pending Staging migration. The ClipForge
-migration was applied separately after review. Do not reapply it, and do not
+`20261006175601_clipforge_projects_and_content_items`. Staging and `main` have
+18 migrations. This branch has 19 because
+`20261006210730_clipforge_distribution_assets` is still pending. Do not apply
+it to Staging or Production from this branch. The pull-request gate remains
+exact equality, so do not open a pull request until a separate reviewed apply
+makes Staging match. The earlier ClipForge migration was applied separately
+after review. Do not reapply it, and do not
 apply it to Production. Production
 does not contain the password-setup migration and must not be normalized to add it.

@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeading, Panel } from "@/components/ui";
+import { AssetManager } from "@/components/asset-manager";
 import { ContentItemForm } from "@/components/content-item-form";
+import { PlatformMatrix } from "@/components/platform-matrix";
+import { PageHeading, Panel } from "@/components/ui";
 import { currentOwner } from "@/lib/auth/server";
-import { getContentItem, listProjects } from "@/lib/clipforge/data";
+import { getContentItem, listAssets, listPlatformPosts, listProjects } from "@/lib/clipforge/data";
+import { distributionSummary } from "@/lib/clipforge/distribution";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
 import { isUuid } from "@/lib/clipforge/model";
+import { signStoredObjects } from "@/lib/clipforge/storage";
 import { databaseConfigured } from "@/lib/database";
 
-const futureSections = [
-  ["Master Video", "No video file is stored. Upload is not implemented."],
-  ["Thumbnail", "No image is stored. Thumbnail upload is not implemented."],
+const unfinished = [
   ["Script", "A script is not attached to this content item yet."],
   ["AI Prompts", "Prompt storage and generation are not implemented."],
-  ["Platform Distribution", "Posting to YouTube, Facebook, TikTok, or Instagram is not implemented."],
 ];
 
 export default async function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,21 +25,31 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   if (!isUuid(id)) notFound();
   let item;
   let projects;
+  let assets;
+  let posts;
   try {
-    [item, projects] = await Promise.all([getContentItem(owner.id, id), listProjects(owner.id)]);
+    [item, projects, assets, posts] = await Promise.all([
+      getContentItem(owner.id, id),
+      listProjects(owner.id),
+      listAssets(owner.id, id),
+      listPlatformPosts(owner.id, id),
+    ]);
   } catch {
     return <Panel title="Content unavailable"><p role="alert">We could not load this content item. <Link href="/library">Back to library</Link>.</p></Panel>;
   }
-  if (!item) notFound();
+  if (!item || !posts) notFound();
+  const urls = await signStoredObjects(assets.map((asset) => asset.storagePath));
+  const signedUrls = Object.fromEntries(urls);
+  const progress = distributionSummary(posts.map((post) => post.status));
   return (
     <>
       <PageHeading
         eyebrow={item.contentKey ?? "NO KEY"}
         title={item.title}
-        description={`${item.projectName} · ${clipforgeLabel(item.status)} · Updated ${clipforgeTime(item.updatedAt)} UTC`}
+        description={`${item.projectName} · ${clipforgeLabel(item.status)} · ${progress.remaining} distributions remaining · Updated ${clipforgeTime(item.updatedAt)} UTC`}
         action={<Link className="text-link" href="/library">All content</Link>}
       />
-      <Panel title="Saved metadata" description="These are the only stored fields. There is no file, thumbnail, or post URL.">
+      <Panel title="Saved metadata">
         <dl className="definition-list">
           <div><dt>Content key</dt><dd>{item.contentKey ?? "None"}</dd></div>
           <div><dt>Project</dt><dd><Link href={`/projects/${item.projectId}`}>{item.projectName}</Link></dd></div>
@@ -48,15 +59,22 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           <div><dt>Status</dt><dd>{clipforgeLabel(item.status)}</dd></div>
           <div><dt>Language</dt><dd>{item.languageCode}</dd></div>
           <div><dt>Duration</dt><dd>{item.durationSeconds === null ? "No duration" : `${item.durationSeconds} seconds`}</dd></div>
+          <div><dt>Distribution</dt><dd>{progress.label}</dd></div>
         </dl>
         {item.notes ? <p className="pre-wrap">{item.notes}</p> : <p className="muted">No notes.</p>}
       </Panel>
       <Panel title="Edit metadata">
         <ContentItemForm key={item.updatedAt} item={item} projects={projects} />
       </Panel>
-      <Panel title="Not available yet" description="These sections are disabled. They do not contain files or links.">
+      <Panel title="Assets" description="Files stay in the private clipforge-assets bucket. Links expire and are not stored.">
+        <AssetManager contentItemId={item.id} assets={assets} signedUrls={signedUrls} />
+      </Panel>
+      <Panel title="Platform distribution" description="Copy is saved here. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.">
+        <PlatformMatrix contentItemId={item.id} posts={posts} />
+      </Panel>
+      <Panel title="Not available yet" description="These sections are disabled. They do not contain generated text.">
         <div className="future-blocks">
-          {futureSections.map(([title, detail]) => (
+          {unfinished.map(([title, detail]) => (
             <fieldset key={title} disabled>
               <legend>{title}</legend>
               <span className="badge neutral">Not yet implemented</span>
