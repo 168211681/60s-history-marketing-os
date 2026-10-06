@@ -27,17 +27,27 @@ A project has its own `owner_id` and does not require a channel. Content
 ownership follows the project. There are no asset, caption, post, or analytics
 snapshot tables in this sprint. The new migration was created with the Supabase
 CLI and is covered by the local database tests. Do not apply it to a hosted
-project from this branch, and do not rewrite the earlier 16 migrations to make
-histories match.
+project from this branch, and do not rewrite the earlier historical migrations
+to make histories match.
 
 ## ClipForge Sprint 002.5 — password setup authorizations
 
-**Status: original SQL restored locally. Not applied to Staging or Production.**
+**Status: original source restored. Already applied on Staging. Absent from Production.**
 `private.password_setup_authorizations` is
-`supabase/migrations/20260928140124_password_setup_authorizations.sql`.
-The file bytes are the original migration and must not be reformatted.
-No password-change route, provider update, or hosted apply is part of this
-restore. The earlier 16 historical migrations are unchanged.
+`supabase/migrations/20260928140124_password_setup_authorizations.sql`
+(SHA-256 `9e79a69c7e5f000adb21b2db26e38a87af128c8d7453f187e2145eaffebd49f8`).
+Staging already had version `20260928140124`. Sprint 002.5 restored those
+bytes and did not apply the migration again. Production does not contain it.
+No password-change route or provider update was added. The earlier historical
+migration files were not rewritten.
+
+## ClipForge Sprint 002.6 — Staging migration gate
+
+**Status: documentation and read-only CI correction. No migration applied.**
+Staging has 17 migrations. This branch has 18. The only pending version is
+`20261006175601`. Pull-request validation compares that set and does not push
+SQL. `.github/workflows/apply-staging-phase7-research.yml` stays historical
+Phase 7 infrastructure and is not a ClipForge apply workflow.
 
 ## Phase 0 — repository and security baseline
 

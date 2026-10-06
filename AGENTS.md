@@ -40,5 +40,8 @@ Internal video production is retired; see `docs/adr/0001-analysis-first-scope.md
 New ClipForge migrations are allowed only when explicitly scoped, locally tested,
 and reviewed. Never rewrite, rename, or replay historical migrations. Never
 normalize Staging or Production migration history, and never repair the
-intentional Phase 6 or Phase 7 timestamp divergence. Do not apply a new migration
-to Staging or Production unless that apply is a separate approved operation.
+intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
+`20260928140124_password_setup_authorizations`. The only pending Staging
+migration on this branch is `20261006175601_clipforge_projects_and_content_items`.
+Do not apply it unless that apply is a separate approved operation. Production
+does not contain the password-setup migration and must not be normalized to add it.

@@ -1,5 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 
+// Exact local == remote equality for a fully synchronized tree.
+// Pull-request validation uses assert-staging-pending-migration.mjs while one
+// reviewed migration is still pending. Do not weaken this comparison.
+
 export async function compareStagingMigrationVersions(versionsPath, migrationsPath) {
   const local = (await readdir(migrationsPath))
     .map((name) => name.match(/^(\d{14})_[A-Za-z0-9_]+\.sql$/)?.[1])

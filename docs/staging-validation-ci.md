@@ -9,9 +9,13 @@ commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
 verification query. The workflow proves PostgreSQL connectivity first, then
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
-compares the returned migration versions with local filenames. The currently
-verified repository and Staging project each contain 16 migration versions. This
-avoids relying on the failing `supabase migration list` connection path.
+compares the returned versions with local filenames. The set comparison is
+authoritative. Staging currently has 17 migrations, including
+`20260928140124_password_setup_authorizations`. This branch has 18 files. The
+only pending version must be `20261006175601`. Counts alone are not sufficient.
+The exact-equality helper remains available for a fully synchronized tree and is
+not the pull-request gate while that migration is pending. This avoids relying
+on the failing `supabase migration list` connection path.
 
 If the CLI cannot connect, only sanitized diagnostics are surfaced. The database
 URL, password and access token are never printed.
@@ -67,16 +71,21 @@ credentials. Post-apply checks verify the exact 16-version history, table
 presence, RLS, policies, foreign keys, indexes, triggers, and the disposable
 database regression suite.
 
-This migration is already present in Staging. Do not dispatch the manual apply
-workflow again against the current project; use the read-only validation workflow
-for ongoing checks.
+This migration is already present in Staging. The Phase 7 workflow is historical
+infrastructure. Do not rewrite it into a ClipForge apply workflow, and do not
+weaken its fail-closed 15/16 checks. Do not dispatch it again against the
+current project. ClipForge recognition belongs only to the read-only validator
+in `validate-staging-db.yml`.
 
-The rehearsal completed successfully in run `36001809750`. Read-only migration
-history confirms Staging version `20260924041349` is present and matches the local
-16-version set. Hosted catalog inspection confirmed the four research tables,
-RLS/FORCE RLS, expected read policies, indexes, foreign keys, and timestamp triggers.
-This workflow does not test a two-owner authenticated UI/API session. Local database
-tests are not equivalent to hosted Auth/Data API testing.
+The rehearsal completed successfully in run `36001809750`. That record showed
+Staging version `20260924041349` in a 16-version history. Staging now has 17
+versions, including `20260928140124`. This branch's eighteenth file,
+`20261006175601_clipforge_projects_and_content_items`, is pending and must not
+be applied by the validation workflow. Hosted catalog inspection at the Phase 7
+rehearsal confirmed the four research tables, RLS/FORCE RLS, expected read
+policies, indexes, foreign keys, and timestamp triggers. This workflow does not
+test a two-owner authenticated UI/API session. Local database tests are not
+equivalent to hosted Auth/Data API testing.
 
 The Staging six-file export has **not** been verified at runtime. Code inspection
 confirms that the owner-scoped export route calls `researchForScript` and that the
@@ -92,8 +101,8 @@ the route's database lookup or establish a successful hosted Staging export.
 `workflow_dispatch`-only historical operation for migration
 `20260923231944_reconcile_content_experiments_schema.sql`. At the time it ran, it
 verified 14 pre-apply versions, applied that single migration, then verified 15
-versions, new columns, RLS, and unchanged row count. Current Staging has 16
-migrations. The workflow is serialized under `staging-db-mutation`, uses only the
+versions, new columns, RLS, and unchanged row count. Current Staging has 17
+migrations, including `20260928140124_password_setup_authorizations`. The workflow is serialized under `staging-db-mutation`, uses only the
 Staging secrets, and has no Production or pull-request trigger. Do not dispatch
 this historical apply workflow again against the already-reconciled Staging
 project; its preconditions should fail closed.

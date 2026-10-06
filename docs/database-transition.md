@@ -226,15 +226,19 @@ for the distinction between live catalog evidence and owner-reported UI evidence
 
 ## Migration-history policy
 
-**Staging CI** discovers every local migration filename and requires that complete
-set to match Staging remote history exactly. At this verification, both contain 16
-versions, including `20260924041349_research_fact_checking`. The workflow count is
-not hardcoded; any future migration changes the expected set and must be reviewed.
-A mismatch blocks the staging validation workflow.
+**Staging CI** reads `supabase_migrations.schema_migrations` and compares that
+set with repository filenames. On this branch the invariant is not a count: every
+Staging version must exist locally, and local-only must be exactly
+`20261006175601`. Staging has 17 versions, including
+`20260928140124_password_setup_authorizations`. This branch has those 17 plus
+the pending ClipForge file. The exact-equality helper remains for a fully
+synchronized tree; the pull-request workflow uses the pending-migration check
+and does not apply SQL. A mismatch blocks validation.
 
 **Production** has historical divergence and is validated by the known remote
 retirement record plus effective schema, privilege, RLS, and preserved-row
-checks. Production history must not be repaired, reset, replayed, or cosmetically
+checks. Production does not contain `20260928140124_password_setup_authorizations`.
+Production history must not be repaired, reset, replayed, or cosmetically
 normalized. No automated workflow may apply a Production migration; every future
 Production change requires a separate human-approved gate.
 

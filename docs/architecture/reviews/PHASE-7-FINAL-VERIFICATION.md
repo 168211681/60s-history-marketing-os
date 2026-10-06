@@ -24,6 +24,12 @@ history. Phase 6 has the same intentional divergence: local source
 `20260923231944_reconcile_content_experiments_schema.sql`, Production remote version
 `20260924040511_reconcile_content_experiments_schema`.
 
+This 2026-09-25 snapshot describes `main` at the commit above. It is not the
+current branch inventory. Staging later gained
+`20260928140124_password_setup_authorizations` and now has 17 migrations.
+Production does not contain that migration. This branch has 18 files; the only
+pending version is `20261006175601_clipforge_projects_and_content_items`.
+
 ## Evidence matrix
 
 | Evidence class | Result | Source and limit |
