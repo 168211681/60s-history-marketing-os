@@ -31,8 +31,8 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
 
 The ClipForge tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.
-That file is the only repository migration not yet on Staging. Do not apply it
-as part of validation, and do not apply it to Production from this branch.
+That migration was applied separately to Staging after review. Do not reapply it,
+and do not apply it to Production from this branch.
 
 `private.password_setup_authorizations` is the original file
 `supabase/migrations/20260928140124_password_setup_authorizations.sql`.
@@ -43,8 +43,9 @@ contain it. The table has forced RLS, no allow policy, and no grant for `anon`,
 `authenticated`, or `service_role`. It stores a hash, not a reusable browser
 token, and it has no `updated_at` trigger.
 
-Staging currently has 17 migrations. This branch contains those 17 plus the one
-pending ClipForge migration above. Production migration history stays
+Staging currently has 18 migrations, the same set as this branch, including
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. Production migration history stays
 intentionally divergent and must not be normalized.
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
@@ -128,10 +129,11 @@ insight provenance, workflow telemetry grants and account deletion isolation.
 The statement in this section that the initial schema had not been applied to a
 cloud project was true when this foundation document was written; it is not the
 current cloud state. Current migration identities and verification are recorded in
-the [database transition runbook](database-transition.md). Staging now has 17
-migrations, including `20260928140124_password_setup_authorizations`. This
-branch has 18 files; the only version not on Staging is
-`20261006175601_clipforge_projects_and_content_items`. Production intentionally
+the [database transition runbook](database-transition.md). Staging and this
+branch now both have 18 migrations, including
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. The ClipForge migration
+was applied separately to Staging after review. Production intentionally
 uses different historical versions for Phase 6 and Phase 7, and it does not
 contain the password-setup migration. Do not normalize Production history.
 

@@ -22,7 +22,6 @@ jobs:
     env:
       STAGING_PROJECT_REF: haqpqifxlqpihkmhkwdu
       PRODUCTION_PROJECT_REF: rscwajzsjvguezyisvja
-      EXPECTED_PENDING_MIGRATION: "20261006175601"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,13 +96,12 @@ jobs:
           run_read_only_query identity 'select current_database(), current_user;'
           run_read_only_query migration-access 'select count(*) from supabase_migrations.schema_migrations;'
 
-      - name: Compare staging history with the one pending migration
+      - name: Verify staging migration history matches local migrations
         shell: bash
         env:
           STAGING_DATABASE_URL: ${{ secrets.SUPABASE_STAGING_DATABASE_URL }}
         run: |
           set -euo pipefail
-          test "$EXPECTED_PENDING_MIGRATION" = "20261006175601"
           psql "$STAGING_DATABASE_URL" \
             --no-psqlrc \
             --set=ON_ERROR_STOP=1 \
@@ -112,8 +110,7 @@ jobs:
             --quiet \
             --command='select version from supabase_migrations.schema_migrations order by version;' \
             > "$RUNNER_TEMP/staging-migration-versions.txt"
-          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-pending-migration.mjs" \
-            "$EXPECTED_PENDING_MIGRATION" \
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-migration-versions.mjs" \
             "$RUNNER_TEMP/staging-migration-versions.txt" \
             "$GITHUB_WORKSPACE/supabase/migrations"
 

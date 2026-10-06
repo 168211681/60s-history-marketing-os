@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 const VERSION_PATTERN = /^\d{14}$/;
 const FILENAME_PATTERN = /^(\d{14})_[A-Za-z0-9_]+\.sql$/;
 
+// Kept for a future reviewed pending migration. The current pull-request gate
+// is exact equality in assert-staging-migration-versions.mjs.
+
 export function parseVersionLines(contents, label) {
   const versions = String(contents).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (versions.some((version) => !VERSION_PATTERN.test(version))) {

@@ -1,8 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 
-// Exact local == remote equality for a fully synchronized tree.
-// Pull-request validation uses assert-staging-pending-migration.mjs while one
-// reviewed migration is still pending. Do not weaken this comparison.
+// Exact local == remote equality. This is the current pull-request gate.
+// assert-staging-pending-migration.mjs remains available for a future reviewed
+// pending migration and is not the current gate. Do not weaken this comparison.
 
 export async function compareStagingMigrationVersions(versionsPath, migrationsPath) {
   const local = (await readdir(migrationsPath))

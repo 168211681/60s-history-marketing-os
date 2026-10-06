@@ -21,14 +21,15 @@ placeholders. Staging and Production migration-history differences stay intentio
 
 ## ClipForge Sprint 002 — projects and content items
 
-**Status: local schema and owner UI only. Not applied to Staging or Production.**
+**Status: applied to Staging after review. Not applied to Production.**
 `public.projects` and `public.content_items` are the first ClipForge records.
 A project has its own `owner_id` and does not require a channel. Content
 ownership follows the project. There are no asset, caption, post, or analytics
 snapshot tables in this sprint. The new migration was created with the Supabase
-CLI and is covered by the local database tests. Do not apply it to a hosted
-project from this branch, and do not rewrite the earlier historical migrations
-to make histories match.
+CLI and is covered by the local database tests.
+`20261006175601_clipforge_projects_and_content_items` was applied separately to
+Staging after review. Do not reapply it, do not apply it to Production, and do
+not rewrite the earlier historical migrations to make histories match.
 
 ## ClipForge Sprint 002.5 — password setup authorizations
 
@@ -43,9 +44,11 @@ migration files were not rewritten.
 
 ## ClipForge Sprint 002.6 — Staging migration gate
 
-**Status: documentation and read-only CI correction. No migration applied.**
-Staging has 17 migrations. This branch has 18. The only pending version is
-`20261006175601`. Pull-request validation compares that set and does not push
+**Status: documentation and read-only CI correction. No migration applied by this sprint.**
+At that review, Staging had 17 migrations and this branch had 18. The only
+pending version was `20261006175601`. That migration was applied separately to
+Staging after review. Staging and this branch now both have 18 migrations.
+Pull-request validation requires exact local and remote equality and does not push
 SQL. `.github/workflows/apply-staging-phase7-research.yml` stays historical
 Phase 7 infrastructure and is not a ClipForge apply workflow.
 

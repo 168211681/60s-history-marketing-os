@@ -26,9 +26,10 @@ history. Phase 6 has the same intentional divergence: local source
 
 This 2026-09-25 snapshot describes `main` at the commit above. It is not the
 current branch inventory. Staging later gained
-`20260928140124_password_setup_authorizations` and now has 17 migrations.
-Production does not contain that migration. This branch has 18 files; the only
-pending version is `20261006175601_clipforge_projects_and_content_items`.
+`20260928140124_password_setup_authorizations` and, after a separate reviewed
+apply, `20261006175601_clipforge_projects_and_content_items`. Staging and this
+branch now both have 18 migrations. Production does not contain the
+password-setup migration and remains intentionally divergent.
 
 ## Evidence matrix
 

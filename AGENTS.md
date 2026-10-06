@@ -41,7 +41,9 @@ New ClipForge migrations are allowed only when explicitly scoped, locally tested
 and reviewed. Never rewrite, rename, or replay historical migrations. Never
 normalize Staging or Production migration history, and never repair the
 intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
-`20260928140124_password_setup_authorizations`. The only pending Staging
-migration on this branch is `20261006175601_clipforge_projects_and_content_items`.
-Do not apply it unless that apply is a separate approved operation. Production
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. Staging and this branch
+both have 18 migrations, so there is no pending Staging migration. The ClipForge
+migration was applied separately after review. Do not reapply it, and do not
+apply it to Production. Production
 does not contain the password-setup migration and must not be normalized to add it.

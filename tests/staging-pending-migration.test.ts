@@ -90,20 +90,18 @@ test("reads only valid local migration filenames", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test("this branch pending set is only the ClipForge migration", async () => {
+test("this branch includes the password and ClipForge migrations", async () => {
   const versions = await readLocalMigrationVersions("supabase/migrations");
   assert.equal(versions.length, 18);
   assert.ok(versions.includes("20260928140124"));
-  const remote = versions.filter((version) => version !== pending);
-  const result = validatePendingMigrationSet(versions.join("\n"), remote.join("\n"), pending);
-  assert.equal(result.remote.length, 17);
-  assert.deepEqual(result.pending, [pending]);
+  assert.ok(versions.includes("20261006175601"));
 });
 
-test("staging validation stays read-only and names the pending migration", async () => {
+test("staging validation requires exact migration equality and stays read-only", async () => {
   const workflow = await readFile(".github/workflows/validate-staging-db.yml", "utf8");
-  assert.match(workflow, /EXPECTED_PENDING_MIGRATION: "20261006175601"/);
-  assert.match(workflow, /assert-staging-pending-migration\.mjs/);
+  assert.match(workflow, /assert-staging-migration-versions\.mjs/);
+  assert.doesNotMatch(workflow, /EXPECTED_PENDING_MIGRATION/);
+  assert.doesNotMatch(workflow, /assert-staging-pending-migration\.mjs/);
   assert.match(workflow, /select version from supabase_migrations\.schema_migrations order by version/);
   assert.match(workflow, /assert-staging-database-url\.mjs/);
   assert.match(workflow, /assert-staging-project-identity\.mjs/);
@@ -113,6 +111,5 @@ test("staging validation stays read-only and names the pending migration", async
   assert.doesNotMatch(workflow, /echo\s+.*SUPABASE_ACCESS_TOKEN/);
   assert.match(workflow, /npm run test:db/);
   assert.match(workflow, /scripts\/db\/verify-retirement\.sql/);
-  assert.doesNotMatch(workflow, /assert-staging-migration-versions\.mjs/);
-  assert.doesNotMatch(workflow, /db push|migration repair|db reset|db seed|apply_migration/);
+  assert.doesNotMatch(workflow, /db push|migration repair|db reset|db seed|apply_migration|migration up/);
 });

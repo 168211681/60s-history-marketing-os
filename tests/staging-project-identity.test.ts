@@ -75,8 +75,9 @@ test("staging validation reads one project and stays read-only", async () => {
   assert.equal(workflow.match(/api\.supabase\.com/g)?.length, 1);
   assert.match(workflow, /assert-staging-project-identity\.mjs/);
   assert.match(workflow, /assert-staging-database-url\.mjs/);
-  assert.match(workflow, /assert-staging-pending-migration\.mjs/);
-  assert.match(workflow, /EXPECTED_PENDING_MIGRATION: "20261006175601"/);
+  assert.match(workflow, /assert-staging-migration-versions\.mjs/);
+  assert.doesNotMatch(workflow, /assert-staging-pending-migration\.mjs/);
+  assert.doesNotMatch(workflow, /EXPECTED_PENDING_MIGRATION/);
   assert.doesNotMatch(workflow, /echo\s+.*SUPABASE_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /echo\s+.*Authorization/);
   assert.doesNotMatch(workflow, /--verbose/);
@@ -84,6 +85,6 @@ test("staging validation reads one project and stays read-only", async () => {
   assert.doesNotMatch(workflow, /--request\s+(POST|PUT|PATCH|DELETE)/);
   const databaseCheck = workflow.indexOf("assert-staging-database-url.mjs");
   const projectCheck = workflow.indexOf("assert-staging-project-identity.mjs");
-  const pendingCheck = workflow.indexOf("assert-staging-pending-migration.mjs");
-  assert.ok(databaseCheck > 0 && projectCheck > databaseCheck && pendingCheck > projectCheck);
+  const equalityCheck = workflow.indexOf("assert-staging-migration-versions.mjs");
+  assert.ok(databaseCheck > 0 && projectCheck > databaseCheck && equalityCheck > projectCheck);
 });
