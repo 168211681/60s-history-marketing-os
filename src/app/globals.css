@@ -145,70 +145,87 @@ h3 {
   grid-template-columns: 228px minmax(0, 1fr);
 }
 .sidebar {
-  background: #102f27;
-  color: #f5f7ef;
-  padding: 32px 20px;
+  background: #14161c;
+  color: #f3f4f6;
+  padding: 28px 16px 20px;
   display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow: auto;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.2px;
+  color: #f3f4f6;
 }
 .brand-mark {
   display: grid;
   place-items: center;
-  background: #d9ed99;
-  color: #163b2f;
-  border-radius: 12px;
-  width: 48px;
-  height: 48px;
-  font-family: Georgia, serif;
-  font-size: 25px;
-  letter-spacing: -2px;
+  background: #e7e9ee;
+  color: #14161c;
+  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
 }
 .brand-sub {
   display: block;
-  font-size: 9px;
-  font-weight: 400;
-  letter-spacing: 2px;
-  color: #bed0c7;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: #d5d8e0;
+  margin-top: 2px;
 }
 .workspace-label {
-  margin: 48px 12px 12px;
-  color: #abc4b6;
-  font-size: 10px;
-  letter-spacing: 2px;
+  margin: 14px 4px 16px;
+  color: #d5d8e0;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: 1.4;
 }
 .navigation {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 18px;
 }
-.navigation a {
-  min-height: 46px;
-  padding: 11px 14px;
+.nav-group-label {
+  margin: 0 12px 8px;
+  color: #c5cad3;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-links a {
+  min-height: 44px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 13px;
-  color: #c6d7cd;
+  gap: 12px;
+  color: #c8cdd6;
   border-radius: 8px;
   font-weight: 500;
 }
-.navigation a:hover {
-  background: #224538;
+.nav-links a:hover {
+  background: #232833;
   text-decoration: none;
 }
-.navigation a[aria-current="page"] {
-  background: #d9ed99;
-  color: #15372b;
+.nav-links a[aria-current="page"] {
+  background: #e7e9ee;
+  color: #14161c;
   font-weight: 700;
 }
 .nav-symbol {
@@ -219,20 +236,20 @@ h3 {
 }
 .sidebar-note {
   margin-top: auto;
-  padding: 22px 10px 0;
-  border-top: 1px solid #3b5146;
-  color: #dae4d9;
+  padding: 18px 4px 0;
+  border-top: 1px solid #2c313c;
+  color: #d5d8e0;
   font-size: 12px;
 }
 .sidebar-note p {
-  color: #b3c7b9;
+  color: #d5d8e0;
   margin-top: 8px;
 }
 .status-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
-  background: #d9ed99;
+  background: #d5d8e0;
   border-radius: 50%;
   margin-right: 8px;
 }
@@ -536,8 +553,9 @@ td {
   font-size: 12px;
   font-weight: 600;
 }
-.search-label {
-  flex: 1;
+.filters .button {
+  margin: 0;
+  min-height: 44px;
 }
 input,
 select {
@@ -711,10 +729,10 @@ footer {
 }
 @media (max-width: 1150px) {
   .app-shell {
-    grid-template-columns: 195px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
   .sidebar {
-    padding: 28px 14px;
+    padding: 24px 12px 16px;
   }
   main {
     padding: 24px 24px 0;
@@ -741,32 +759,48 @@ footer {
   .sidebar {
     height: auto;
     position: static;
-    padding: 18px 16px 10px;
+    overflow-x: hidden;
+    padding: 14px 12px 8px;
   }
   .brand {
-    font-size: 15px;
+    font-size: 16px;
     gap: 10px;
   }
   .brand-mark {
-    width: 38px;
-    height: 38px;
-    font-size: 22px;
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
   }
   .workspace-label,
   .sidebar-note {
     display: none;
   }
   .navigation {
-    flex-direction: row;
-    margin-top: 16px;
-    gap: 3px;
+    gap: 8px;
+    margin-top: 12px;
   }
-  .navigation a {
-    flex: 1;
+  .nav-section {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .nav-group-label {
+    margin: 0 4px 6px;
+  }
+  .nav-links {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 4px;
+  }
+  .nav-links a {
+    flex: 0 0 auto;
     min-width: 0;
     justify-content: center;
-    padding: 10px 2px;
-    font-size: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
     min-height: 44px;
   }
   .nav-symbol {
@@ -926,5 +960,115 @@ footer {
   }
   .experiment-details {
     grid-template-columns: 1fr;
+  }
+}
+.planned-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.planned-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.planned-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.planned-list h3 {
+  margin-bottom: 4px;
+}
+.planned-list .text-link {
+  margin-top: 0;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .planned-list li {
+    flex-direction: column;
+  }
+}
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+.form-grid textarea {
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid #acbbb1;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+  resize: vertical;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.form-actions .button {
+  margin: 0;
+  min-height: 44px;
+}
+.content-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.content-cards li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.content-cards li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.content-cards h3 {
+  margin-bottom: 4px;
+}
+.content-cards a {
+  color: inherit;
+}
+.content-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.future-blocks {
+  display: grid;
+  gap: 12px;
+}
+.future-blocks fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 12px;
+}
+.future-blocks legend {
+  padding: 0 4px;
+  font-weight: 650;
+}
+.future-blocks p {
+  margin-top: 8px;
+}
+@media (max-width: 700px) {
+  .content-cards li {
+    flex-direction: column;
+  }
+  .form-actions .button {
+    flex: 1 1 140px;
   }
 }

@@ -7,9 +7,9 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: { default: "Dashboard | 60s History", template: "%s | 60s History" },
-  description:
-    "60s History Marketing OS — an owner analytics and content strategy workspace.",
+  title: { default: "Dashboard | ClipForge", template: "%s | ClipForge" },
+  description: "ClipForge — your private content operating system.",
+  applicationName: "ClipForge",
   robots: { index: false, follow: false },
 };
 
@@ -28,24 +28,24 @@ export default async function RootLayout({
         </a>
         <div className="app-shell">
           <aside className="sidebar">
-            <Link href="/" className="brand" aria-label="60s History home">
-              <span className="brand-mark">60s</span>
+            <Link href="/" className="brand" aria-label="ClipForge home">
+              <span className="brand-mark">CF</span>
               <span>
-                HISTORY<span className="brand-sub">MARKETING OS</span>
+                ClipForge<span className="brand-sub">CONTENT OS</span>
               </span>
             </Link>
-            <p className="workspace-label">WORKSPACE</p>
+            <p className="workspace-label">Your private content operating system.</p>
             <Navigation />
             <div className="sidebar-note">
               <span className="status-dot" />
-              {data.source === "sample" ? "Demo workspace" : "Owner workspace"}
-              <p>{data.source === "sample" ? "Explore the foundation for your next chapter." : "Private analytics from the connected channel."}</p>
+              {data.source === "sample" ? "Sample workspace" : "Owner workspace"}
+              <p>{data.source === "sample" ? "Fictional metrics until a channel is connected." : "Private analytics from the connected channel."}</p>
             </div>
           </aside>
           <div className="workspace">
             <header className="topbar">
               <span>
-                Workspace <span className="muted">/ {data.channelTitle}</span>
+                ClipForge <span className="muted">/ {data.channelTitle}</span>
               </span>
               <span className="badge">{data.source === "sample" ? "Sample data" : "Private analytics"}</span>
             </header>
@@ -66,7 +66,7 @@ export default async function RootLayout({
               </div>
               {children}
               <footer>
-                60s History Marketing OS <span>{data.source === "sample" ? "Demo workspace" : "Owner analytics workspace"}</span>
+                ClipForge <span>Content OS · {data.source === "sample" ? "Sample workspace" : "Owner workspace"}</span>
               </footer>
             </main>
           </div>

@@ -23,9 +23,30 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
 | `private.youtube_connections` | Encrypted refresh token and owner/channel binding | No access |
+| `private.password_setup_authorizations` | Hashed one-time recovery or invite grant bound to an owner, session, and flow. No client or `service_role` grant | No access |
 | `private.production_workflow_events` | Sanitized archived production workflow transition telemetry and error codes | No access |
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
+| `public.projects` | ClipForge workspace name, optional code, description, and active/archived status. Owned directly by `owner_id`; not a YouTube channel | Read/create/edit/delete own projects |
+| `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
+
+The ClipForge tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.
+That migration was applied separately to Staging after review. Do not reapply it,
+and do not apply it to Production from this branch.
+
+`private.password_setup_authorizations` is the original file
+`supabase/migrations/20260928140124_password_setup_authorizations.sql`.
+Its SHA-256 is `9e79a69c7e5f000adb21b2db26e38a87af128c8d7453f187e2145eaffebd49f8`.
+Staging project `haqpqifxlqpihkmhkwdu` already has this version. Sprint 002.5
+restored the source; it did not apply the migration again. Production does not
+contain it. The table has forced RLS, no allow policy, and no grant for `anon`,
+`authenticated`, or `service_role`. It stores a hash, not a reusable browser
+token, and it has no `updated_at` trigger.
+
+Staging currently has 18 migrations, the same set as this branch, including
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. Production migration history stays
+intentionally divergent and must not be normalized.
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
 `updated_at` is maintained by a security-invoker trigger in `private`; no
@@ -47,7 +68,8 @@ the migration does not depend on old or new Supabase default privileges. See the
 and [RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security).
 
 `service_role` can perform server-side CRUD and bypasses RLS, except the explicit
-write revokes on archived production tables in the retirement migration. Future
+write revokes on archived production tables in the retirement migration and the
+complete revoke on `private.password_setup_authorizations`. Future
 backend code must derive ownership from a verified session and verified Google authorization;
 never accept a caller-supplied owner ID as authorization. Do not expose this key
 to browser code. Keep `private` out of the Data API exposed-schema list. A worker
@@ -107,9 +129,13 @@ insight provenance, workflow telemetry grants and account deletion isolation.
 The statement in this section that the initial schema had not been applied to a
 cloud project was true when this foundation document was written; it is not the
 current cloud state. Current migration identities and verification are recorded in
-the [database transition runbook](database-transition.md): Staging matches the 16
-local migrations, while Production intentionally has a different historical
-version for Phase 7. Do not normalize Production history.
+the [database transition runbook](database-transition.md). Staging and this
+branch now both have 18 migrations, including
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. The ClipForge migration
+was applied separately to Staging after review. Production intentionally
+uses different historical versions for Phase 6 and Phase 7, and it does not
+contain the password-setup migration. Do not normalize Production history.
 
 The initial migration intentionally fails on conflicting existing tables rather
 than silently replacing them. There is no destructive automatic down migration.

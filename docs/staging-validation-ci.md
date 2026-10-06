@@ -7,11 +7,19 @@ and uses the protected `history-ci` self-hosted runner.
 The workflow never runs `db push`, migration repair, reset, seed, or schema-write
 commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
-verification query. The workflow proves PostgreSQL connectivity first, then
+verification query. Staging identity is two independent checks: the database
+URL must target `haqpqifxlqpihkmhkwdu`, and one GET
+`https://api.supabase.com/v1/projects/haqpqifxlqpihkmhkwdu` must return that
+same project. The token is project-scoped, so the workflow does not call
+`supabase projects list`. The workflow proves PostgreSQL connectivity first, then
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
-compares the returned migration versions with local filenames. The currently
-verified repository and Staging project each contain 16 migration versions. This
-avoids relying on the failing `supabase migration list` connection path.
+compares the returned versions with local filenames. The comparison is exact
+equality of the ordered version lists, not a count and not a pending allowance.
+Staging and this branch both have 18 migrations.
+`20261006175601_clipforge_projects_and_content_items` was applied separately to
+Staging after review. The pending-migration helper remains in the repository for
+a future reviewed difference and is not this pull-request gate. This avoids relying
+on the failing `supabase migration list` connection path.
 
 If the CLI cannot connect, only sanitized diagnostics are surfaced. The database
 URL, password and access token are never printed.
@@ -20,8 +28,11 @@ URL, password and access token are never printed.
 
 Configure these in the repository settings before enabling the workflow:
 
-- `SUPABASE_STAGING_ACCESS_TOKEN`: a Supabase access token scoped for the Staging
-  project only. Do not use a Production token.
+- `SUPABASE_STAGING_ACCESS_TOKEN`: a Supabase access token scoped to the
+  `60s-history-staging` project only, with Project Settings read and no other
+  permissions. The workflow uses it for one GET of that project. Do not use a
+  Production token, a legacy account-wide token, or `supabase projects list`.
+  Never print the token or Authorization header.
 - `SUPABASE_STAGING_DATABASE_URL`: the Staging PostgreSQL connection string for
   database `postgres`, port `5432`. The workflow accepts either the direct host
   `db.haqpqifxlqpihkmhkwdu.supabase.co` with user `postgres`, or the official
@@ -67,16 +78,22 @@ credentials. Post-apply checks verify the exact 16-version history, table
 presence, RLS, policies, foreign keys, indexes, triggers, and the disposable
 database regression suite.
 
-This migration is already present in Staging. Do not dispatch the manual apply
-workflow again against the current project; use the read-only validation workflow
-for ongoing checks.
+This migration is already present in Staging. The Phase 7 workflow is historical
+infrastructure. Do not rewrite it into a ClipForge apply workflow, and do not
+weaken its fail-closed 15/16 checks. Do not dispatch it again against the
+current project. ClipForge recognition belongs only to the read-only validator
+in `validate-staging-db.yml`.
 
-The rehearsal completed successfully in run `36001809750`. Read-only migration
-history confirms Staging version `20260924041349` is present and matches the local
-16-version set. Hosted catalog inspection confirmed the four research tables,
-RLS/FORCE RLS, expected read policies, indexes, foreign keys, and timestamp triggers.
-This workflow does not test a two-owner authenticated UI/API session. Local database
-tests are not equivalent to hosted Auth/Data API testing.
+The rehearsal completed successfully in run `36001809750`. That record showed
+Staging version `20260924041349` in a 16-version history. Staging later received
+`20260928140124` and, after a separate reviewed apply,
+`20261006175601_clipforge_projects_and_content_items`. Staging now has 18
+versions, matching this branch. The validation workflow must not apply SQL.
+Hosted catalog inspection at the Phase 7
+rehearsal confirmed the four research tables, RLS/FORCE RLS, expected read
+policies, indexes, foreign keys, and timestamp triggers. This workflow does not
+test a two-owner authenticated UI/API session. Local database tests are not
+equivalent to hosted Auth/Data API testing.
 
 The Staging six-file export has **not** been verified at runtime. Code inspection
 confirms that the owner-scoped export route calls `researchForScript` and that the
@@ -92,8 +109,9 @@ the route's database lookup or establish a successful hosted Staging export.
 `workflow_dispatch`-only historical operation for migration
 `20260923231944_reconcile_content_experiments_schema.sql`. At the time it ran, it
 verified 14 pre-apply versions, applied that single migration, then verified 15
-versions, new columns, RLS, and unchanged row count. Current Staging has 16
-migrations. The workflow is serialized under `staging-db-mutation`, uses only the
+versions, new columns, RLS, and unchanged row count. Current Staging has 18
+migrations, including `20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. The workflow is serialized under `staging-db-mutation`, uses only the
 Staging secrets, and has no Production or pull-request trigger. Do not dispatch
 this historical apply workflow again against the already-reconciled Staging
 project; its preconditions should fail closed.

@@ -8,6 +8,18 @@ const routes = [
   ["/scripts", "Script drafts"],
   ["/settings", "Settings & connections"],
 ] as const;
+const placeholders = ["/distribution", "/calendar", "/archive"] as const;
+for (const route of placeholders) {
+  test(`${route} is labeled unfinished and does not overflow`, async ({ page }) => {
+    const response = await page.goto(route);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText("Not yet implemented").first()).toBeVisible();
+    await expect(page.locator('nav [aria-current="page"]')).toHaveAttribute("href", route);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+}
 for (const [route, heading] of routes) {
   test(`${route} renders labeled samples without overflow or accessibility violations`, async ({
     page,
@@ -44,6 +56,22 @@ for (const [route, heading] of routes) {
     expect(errors).toEqual([]);
   });
 }
+test("projects and library stay private without an owner session", async ({ page }) => {
+  for (const route of ["/projects", "/library"]) {
+    const response = await page.goto(route);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText(/Sign in as the channel owner/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Create/ })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "History in 60s" })).toHaveCount(0);
+    await expect(page.locator('nav [aria-current="page"]')).toHaveAttribute("href", route);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+  const detail = await page.goto("/library/00000000-0000-4000-8000-000000000001");
+  expect(detail?.status()).toBe(200);
+  await expect(page.getByText("Sign in as the channel owner to view content.")).toBeVisible();
+});
 test("research workspace stays private without an owner session", async ({ page, request }) => {
   const response = await page.goto("/research");
   expect(response?.status()).toBe(200);

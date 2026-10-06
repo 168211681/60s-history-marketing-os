@@ -14,8 +14,8 @@ isolation.
 
 | Environment | Migration identity | Evidence |
 | --- | --- | --- |
-| Local repository | `supabase/migrations/20260924041349_research_fact_checking.sql` | Present in `main`; repository contains 16 migration files. |
-| Hosted Staging | `20260924041349_research_fact_checking` | Present in current read-only migration listing; the full 16-version list matches local. |
+| Local repository | `supabase/migrations/20260924041349_research_fact_checking.sql` | Present in `main` at this 2026-09-25 snapshot; that tree contained 16 migration files. |
+| Hosted Staging | `20260924041349_research_fact_checking` | Present in the 2026-09-25 read-only listing; that 16-version list matched local `main` then. |
 | Production | `20260924151134_research_fact_checking` | Present in current read-only Production migration listing. |
 
 The Production version differs from the local/Staging timestamp by design. Do not
@@ -24,12 +24,19 @@ history. Phase 6 has the same intentional divergence: local source
 `20260923231944_reconcile_content_experiments_schema.sql`, Production remote version
 `20260924040511_reconcile_content_experiments_schema`.
 
+This 2026-09-25 snapshot describes `main` at the commit above. It is not the
+current branch inventory. Staging later gained
+`20260928140124_password_setup_authorizations` and, after a separate reviewed
+apply, `20261006175601_clipforge_projects_and_content_items`. Staging and this
+branch now both have 18 migrations. Production does not contain the
+password-setup migration and remains intentionally divergent.
+
 ## Evidence matrix
 
 | Evidence class | Result | Source and limit |
 | --- | --- | --- |
 | Automated tests and repository checks | **VERIFIED** | PR #29 merged as `5f1719112aea550f724f20f2791b8924a0b7db0b`. Its GitHub `verify` run `36064818744` passed checkout, Node 22, `npm ci`, unit tests, lint, typecheck, and Webpack build. Its `validate-staging` run `36064818743` passed target identity, read-only PostgreSQL connectivity, exact migration comparison, `npm run test:db`, and read-only retirement verification. The previous implementation run recorded local `npm test` 60 passed, DB 25 passed, E2E 34 passed/2 skipped, lint/typecheck/build passed; these are prior local results, not claims that E2E ran in GitHub CI. |
-| Hosted Staging migration rehearsal | **VERIFIED** | GitHub run `36001809750` (`Apply Phase 7 Staging research migration`) succeeded, including exact migration-set guard, dry-run, Staging apply, schema/history checks, and disposable DB security tests. Current read-only migration listing again shows 16 versions and the Phase 7 version. |
+| Hosted Staging migration rehearsal | **VERIFIED** | GitHub run `36001809750` (`Apply Phase 7 Staging research migration`) succeeded, including exact migration-set guard, dry-run, Staging apply, schema/history checks, and disposable DB security tests. The 2026-09-25 read-only listing showed 16 versions and the Phase 7 version. That count is the Phase 7 closeout, not today's Staging history. |
 | Hosted Staging catalog | **VERIFIED** | Read-only catalog inspection on 2026-09-25 found all four research tables, RLS and FORCE RLS enabled, expected owner-read policies, indexes, foreign keys, and `set_updated_at` triggers on projects and claims. This is structural evidence; it is not an authenticated two-owner API test. |
 | Production migration history and catalog | **VERIFIED** | Read-only Production migration listing shows `20260924151134_research_fact_checking`; catalog inspection found the four research tables, RLS/FORCE RLS, expected owner-read policies, indexes, foreign keys, and project/claim update triggers. The migration approval is an owner-confirmed operational fact; no Production writes were performed for this record. |
 | Production deployment identity | **OWNER-REPORTED** | The owner reported Vercel Production `READY` on `5f1719112aea550f724f20f2791b8924a0b7db0b`. This closeout did not independently query Vercel Production deployment metadata. |

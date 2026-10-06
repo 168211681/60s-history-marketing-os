@@ -10,6 +10,48 @@ Validate the owner-controlled analytics-to-content loop: sync YouTube data, insp
 evidence-backed insights, hand a measured prompt to GPT Plus, and save a human-reviewed
 script draft. Internal rendering and publishing remain retired.
 
+## ClipForge Sprint 001 — application shell
+
+**Status: complete as a UI foundation.** The private product name is
+ClipForge. Navigation exposes Dashboard, Projects, Library, Distribution, Calendar,
+Analytics, Archive, and Settings, while Videos, Insights, Scripts, and Research stay
+on their existing routes. Projects and Library were placeholders in this sprint and
+became owner records in Sprint 002. Distribution, Calendar, and Archive remain
+placeholders. Staging and Production migration-history differences stay intentional.
+
+## ClipForge Sprint 002 — projects and content items
+
+**Status: applied to Staging after review. Not applied to Production.**
+`public.projects` and `public.content_items` are the first ClipForge records.
+A project has its own `owner_id` and does not require a channel. Content
+ownership follows the project. There are no asset, caption, post, or analytics
+snapshot tables in this sprint. The new migration was created with the Supabase
+CLI and is covered by the local database tests.
+`20261006175601_clipforge_projects_and_content_items` was applied separately to
+Staging after review. Do not reapply it, do not apply it to Production, and do
+not rewrite the earlier historical migrations to make histories match.
+
+## ClipForge Sprint 002.5 — password setup authorizations
+
+**Status: original source restored. Already applied on Staging. Absent from Production.**
+`private.password_setup_authorizations` is
+`supabase/migrations/20260928140124_password_setup_authorizations.sql`
+(SHA-256 `9e79a69c7e5f000adb21b2db26e38a87af128c8d7453f187e2145eaffebd49f8`).
+Staging already had version `20260928140124`. Sprint 002.5 restored those
+bytes and did not apply the migration again. Production does not contain it.
+No password-change route or provider update was added. The earlier historical
+migration files were not rewritten.
+
+## ClipForge Sprint 002.6 — Staging migration gate
+
+**Status: documentation and read-only CI correction. No migration applied by this sprint.**
+At that review, Staging had 17 migrations and this branch had 18. The only
+pending version was `20261006175601`. That migration was applied separately to
+Staging after review. Staging and this branch now both have 18 migrations.
+Pull-request validation requires exact local and remote equality and does not push
+SQL. `.github/workflows/apply-staging-phase7-research.yml` stays historical
+Phase 7 infrastructure and is not a ClipForge apply workflow.
+
 ## Phase 0 — repository and security baseline
 
 **Status: complete.** Repository rules, environment templates, ownership boundaries,

@@ -1,4 +1,7 @@
-# 60s History Marketing OS
+# ClipForge
+
+Private single-owner content operating system. The repository was previously
+named 60s History Marketing OS. Sprint 001 is an application-shell change only.
 
 ## Working rules
 
@@ -22,8 +25,25 @@
 
 ## Current product direction
 
-The production app is a private owner workspace for 60s History. YouTube OAuth,
-Supabase Auth, PostgreSQL analytics, and daily Vercel sync are live. The active
-product is Codex/MCP-assisted evidence-based intelligence, research, experiments,
-and reviewed script drafts for external editing tools. Internal video production is
-retired; see `docs/adr/0001-analysis-first-scope.md`.
+ClipForge is the private owner workspace. The shell navigation is Dashboard,
+Projects, Library, Distribution, Calendar, Analytics, Archive, and Settings.
+Projects and Library store owner-scoped project and content-item records.
+Distribution, Calendar, and Archive remain unfinished placeholders and must not
+pretend to store or publish content. Videos, insights, scripts, research,
+settings, and YouTube analytics keep their existing routes.
+
+YouTube OAuth, Supabase Auth, PostgreSQL analytics, and daily Vercel sync are
+live. The active product is Codex/MCP-assisted evidence-based intelligence,
+research, experiments, and reviewed script drafts for external editing tools.
+Internal video production is retired; see `docs/adr/0001-analysis-first-scope.md`.
+
+New ClipForge migrations are allowed only when explicitly scoped, locally tested,
+and reviewed. Never rewrite, rename, or replay historical migrations. Never
+normalize Staging or Production migration history, and never repair the
+intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
+`20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. Staging and this branch
+both have 18 migrations, so there is no pending Staging migration. The ClipForge
+migration was applied separately after review. Do not reapply it, and do not
+apply it to Production. Production
+does not contain the password-setup migration and must not be normalized to add it.

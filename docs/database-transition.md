@@ -11,8 +11,11 @@ This runbook contains historical procedures as well as the current state; follow
 the evidence record rather than treating old pre-apply checklists as pending work.
 
 - Phase 7 Staging migration `20260924041349_research_fact_checking` was applied by
-  workflow run `36001809750`. Current Staging migration history matches all 16
-  repository migrations.
+  workflow run `36001809750` and ended that phase at 16 migrations. Staging later
+  received `20260928140124_password_setup_authorizations`. Current Staging therefore
+  has 18 migrations, matching this branch.
+  `20261006175601_clipforge_projects_and_content_items` was applied separately
+  to Staging after review.
 - Production records Phase 7 as
   `20260924151134_research_fact_checking`. The local source remains
   `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
@@ -132,9 +135,12 @@ isolated Supabase staging project is required for those checks.
 ## Staging migration procedure for a new disposable project
 
 This retained operator procedure is for a newly provisioned, isolated
-disposable project. The current hosted Staging project has already received the
-Phase 7 migration and contains 16 versions; do not rerun this generic procedure
-against it. Use the read-only validation workflow for current Staging checks.
+disposable project. Phase 7 historically left hosted Staging at 16 migrations.
+Staging later received `20260928140124_password_setup_authorizations` and, after
+a separate reviewed apply, `20261006175601_clipforge_projects_and_content_items`.
+The current hosted Staging project has 18 migrations, matching this branch.
+There is no pending migration. Do not rerun this generic procedure against the current hosted project.
+Use the read-only validation workflow for current Staging checks.
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
    the production URL.
@@ -226,15 +232,19 @@ for the distinction between live catalog evidence and owner-reported UI evidence
 
 ## Migration-history policy
 
-**Staging CI** discovers every local migration filename and requires that complete
-set to match Staging remote history exactly. At this verification, both contain 16
-versions, including `20260924041349_research_fact_checking`. The workflow count is
-not hardcoded; any future migration changes the expected set and must be reviewed.
-A mismatch blocks the staging validation workflow.
+**Staging CI** reads `supabase_migrations.schema_migrations` and compares that
+ordered list with repository filenames. The invariant is exact equality, not a
+count and not a pending allowance. Staging and this branch both have 18
+versions, including `20260928140124_password_setup_authorizations` and
+`20261006175601_clipforge_projects_and_content_items`. The ClipForge migration
+was applied separately to Staging after review. The pending-migration helper
+remains for a future reviewed difference; the pull-request workflow uses exact
+equality and does not apply SQL. A mismatch blocks validation.
 
 **Production** has historical divergence and is validated by the known remote
 retirement record plus effective schema, privilege, RLS, and preserved-row
-checks. Production history must not be repaired, reset, replayed, or cosmetically
+checks. Production does not contain `20260928140124_password_setup_authorizations`.
+Production history must not be repaired, reset, replayed, or cosmetically
 normalized. No automated workflow may apply a Production migration; every future
 Production change requires a separate human-approved gate.
 
