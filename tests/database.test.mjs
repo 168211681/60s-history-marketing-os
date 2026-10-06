@@ -137,13 +137,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "20",
+    "21",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "20",
+      "21",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -617,4 +617,69 @@ test("clipforge projects and content items stay inside the owning account", () =
   sql(`delete from public.projects where id='${projectA}'`);
   assert.equal(sql(`select count(*) from public.content_items where project_id='${projectA}' or id='${itemA}'`), "0");
   assert.equal(sql(`select count(*) from public.projects where id='${projectB}'`), "1");
+});
+test("password setup authorizations stay server-only and reject invalid grants", () => {
+  const recovery = "ab".repeat(32);
+  const invite = "34".repeat(32);
+  const session = "c1000000-0000-4000-8000-000000000001";
+  for (const role of ["anon", "authenticated", "service_role"]) {
+    asRole(role, userA, "select * from private.password_setup_authorizations", "42501");
+    asRole(
+      role,
+      userA,
+      `insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow) values ('${recovery}','${userA}','${session}','recovery')`,
+      "42501",
+    );
+    asRole(role, userA, "update private.password_setup_authorizations set consumed_at=now()", "42501");
+    asRole(role, userA, "delete from private.password_setup_authorizations", "42501");
+    for (const privilege of ["select", "insert", "update", "delete"]) {
+      assert.equal(
+        sql(`select has_table_privilege('${role}','private.password_setup_authorizations','${privilege}')`),
+        "f",
+      );
+    }
+  }
+  assert.equal(
+    sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='private' and c.relname='password_setup_authorizations'"),
+    "t",
+  );
+  assert.equal(
+    sql("select count(*) from pg_policies where schemaname='private' and tablename='password_setup_authorizations'"),
+    "0",
+  );
+  assert.equal(
+    sql(`insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow) values ('${recovery}','${userA}','${session}','recovery') returning (expires_at > created_at and expires_at <= created_at + interval '10 minutes')`),
+    "t",
+  );
+  sql(
+    `insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow) values ('${"cd".repeat(32)}','${userA}','${session}','reset')`,
+    "23514",
+  );
+  sql(
+    `insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow) values ('not-a-hash','${userA}','${session}','invite')`,
+    "23514",
+  );
+  sql(
+    `insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow, created_at, expires_at) values ('${"ef".repeat(32)}','${userA}','${session}','invite', now(), now())`,
+    "23514",
+  );
+  sql(
+    `insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow, created_at, expires_at) values ('${"12".repeat(32)}','${userA}','${session}','invite', now(), now() + interval '11 minutes')`,
+    "23514",
+  );
+  sql(`insert into private.password_setup_authorizations (token_hash, owner_id, session_id, flow) values ('${invite}','${userB}','${session}','invite')`);
+  assert.equal(
+    sql(`begin; delete from auth.users where id='${userA}'; select count(*) from private.password_setup_authorizations where owner_id='${userA}'; select count(*) from private.password_setup_authorizations where token_hash='${invite}'; rollback;`),
+    "0\n1",
+  );
+  assert.equal(
+    sql(`update private.password_setup_authorizations set consumed_at=now() where token_hash='${recovery}' and owner_id='${userA}' and session_id='${session}' and flow='recovery' and consumed_at is null and expires_at > now() returning token_hash`),
+    recovery,
+  );
+  assert.equal(
+    sql(`update private.password_setup_authorizations set consumed_at=now() where token_hash='${recovery}' and consumed_at is null returning token_hash`),
+    "",
+  );
+  sql(`delete from private.password_setup_authorizations where token_hash in ('${recovery}','${invite}')`);
+  assert.equal(sql("select count(*) from private.password_setup_authorizations"), "0");
 });

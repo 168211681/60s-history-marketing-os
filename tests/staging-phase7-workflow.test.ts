@@ -59,15 +59,21 @@ test("Phase 7 workflow uses the phase-specific 16/15 set validator, not reconcil
   assert.doesNotMatch(workflow, /assert-staging-reconciliation-plan\.mjs/);
 });
 
-test("historical migrations stay immutable and ClipForge adds exactly one local file", () => {
+test("historical migrations stay immutable and later local files stay pinned", () => {
   const migrationPath = new URL("../supabase/migrations/20260924041349_research_fact_checking.sql", import.meta.url);
+  const passwordPath = new URL("../supabase/migrations/20260928140124_password_setup_authorizations.sql", import.meta.url);
   const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
   const names = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort();
   const versions = names.map((name) => name.slice(0, 14));
   for (const version of local) assert.ok(versions.includes(version), `missing historical migration ${version}`);
   const extras = names.filter((name) => !local.includes(name.slice(0, 14)));
-  assert.deepEqual(extras, ["20261006175601_clipforge_projects_and_content_items.sql"]);
+  assert.deepEqual(extras, [
+    "20260928140124_password_setup_authorizations.sql",
+    "20261006175601_clipforge_projects_and_content_items.sql",
+  ]);
   assert.equal(existsSync(migrationPath), true);
   const digest = createHash("sha256").update(readFileSync(migrationPath)).digest("hex");
   assert.equal(digest, "fe04ca2a96e65394beabb1dcf46146f805d6b7d7a886a3ed77c3c019b79621ec");
+  const passwordDigest = createHash("sha256").update(readFileSync(passwordPath)).digest("hex");
+  assert.equal(passwordDigest, "9e79a69c7e5f000adb21b2db26e38a87af128c8d7453f187e2145eaffebd49f8");
 });

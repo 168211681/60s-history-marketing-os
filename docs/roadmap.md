@@ -30,6 +30,15 @@ CLI and is covered by the local database tests. Do not apply it to a hosted
 project from this branch, and do not rewrite the earlier 16 migrations to make
 histories match.
 
+## ClipForge Sprint 002.5 — password setup authorizations
+
+**Status: original SQL restored locally. Not applied to Staging or Production.**
+`private.password_setup_authorizations` is
+`supabase/migrations/20260928140124_password_setup_authorizations.sql`.
+The file bytes are the original migration and must not be reformatted.
+No password-change route, provider update, or hosted apply is part of this
+restore. The earlier 16 historical migrations are unchanged.
+
 ## Phase 0 — repository and security baseline
 
 **Status: complete.** Repository rules, environment templates, ownership boundaries,
