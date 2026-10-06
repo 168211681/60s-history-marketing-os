@@ -1,13 +1,17 @@
-# 60s History Marketing OS
+# ClipForge
 
-60s History Marketing OS is an analytics and content-intelligence platform for a
-YouTube history channel. It collects owner-authorized YouTube data, calculates
-evidence-backed marketing insights, supports experiments and reviewed script drafts,
-and prepares creative briefs for external editing tools.
+ClipForge is a private, single-owner content operating system. This repository
+started as 60s History Marketing OS: it collects owner-authorized YouTube data,
+calculates evidence-backed insights, supports experiments and reviewed script
+drafts, and prepares creative briefs for external editing tools.
+
+Sprint 001 changes the application shell and navigation only. Projects, Library,
+Distribution, Calendar, and Archive are labeled placeholders. They do not store
+content, upload media, or publish.
 
 Internal video rendering, provider inference, artifact storage, production workers,
-YouTube upload, and public publishing are retired from the active product scope.
-Historical production rows and audit events remain available as read-only records.
+YouTube upload, and public publishing remain retired. Historical production rows
+and audit events stay read-only.
 
 ## Run locally
 
@@ -35,10 +39,16 @@ The optional database and browser checks are `npm run test:db` and `npm run test
 | Route | Purpose |
 | --- | --- |
 | `/` | Channel overview, metrics, recent videos and trend |
+| `/projects` | Planned project names only. Not implemented |
+| `/library` | Placeholder. Existing videos, scripts, and research stay on their routes |
 | `/videos` | Video search and performance exploration |
+| `/distribution` | Placeholder. No platform posting |
+| `/calendar` | Placeholder. No schedule |
 | `/analytics` | Channel analytics and metric definitions |
+| `/archive` | Placeholder. Does not move or restore content |
 | `/insights` | Evidence, comparisons, hypotheses and experiments |
 | `/scripts` | Human-reviewed script drafts and archived production records |
+| `/research` | Owner research projects, sources, and claims |
 | `/settings` | Owner authentication, read-only YouTube connection and sync |
 
 Sample data is explicitly labeled. Missing API metrics remain `null`; the app does

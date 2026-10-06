@@ -8,6 +8,18 @@ const routes = [
   ["/scripts", "Script drafts"],
   ["/settings", "Settings & connections"],
 ] as const;
+const placeholders = ["/projects", "/library", "/distribution", "/calendar", "/archive"] as const;
+for (const route of placeholders) {
+  test(`${route} is labeled unfinished and does not overflow`, async ({ page }) => {
+    const response = await page.goto(route);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText("Not yet implemented").first()).toBeVisible();
+    await expect(page.locator('nav [aria-current="page"]')).toHaveAttribute("href", route);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+}
 for (const [route, heading] of routes) {
   test(`${route} renders labeled samples without overflow or accessibility violations`, async ({
     page,

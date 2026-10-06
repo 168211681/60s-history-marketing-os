@@ -10,6 +10,17 @@ Validate the owner-controlled analytics-to-content loop: sync YouTube data, insp
 evidence-backed insights, hand a measured prompt to GPT Plus, and save a human-reviewed
 script draft. Internal rendering and publishing remain retired.
 
+## ClipForge Sprint 001 — application shell
+
+**Status: UI foundation only. Not a database phase.** The private product name is
+ClipForge. Navigation exposes Dashboard, Projects, Library, Distribution, Calendar,
+Analytics, Archive, and Settings, while Videos, Insights, Scripts, and Research stay
+on their existing routes. Projects, Library, Distribution, Calendar, and Archive are
+labeled placeholders. No content tables, storage, uploads, or publishing APIs are
+part of this sprint. Do not add, edit, replay, or normalize Supabase migrations to
+finish these sections. Staging and Production migration-history differences stay
+intentional.
+
 ## Phase 0 — repository and security baseline
 
 **Status: complete.** Repository rules, environment templates, ownership boundaries,

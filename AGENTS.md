@@ -1,4 +1,7 @@
-# 60s History Marketing OS
+# ClipForge
+
+Private single-owner content operating system. The repository was previously
+named 60s History Marketing OS. Sprint 001 is an application-shell change only.
 
 ## Working rules
 
@@ -22,8 +25,14 @@
 
 ## Current product direction
 
-The production app is a private owner workspace for 60s History. YouTube OAuth,
-Supabase Auth, PostgreSQL analytics, and daily Vercel sync are live. The active
-product is Codex/MCP-assisted evidence-based intelligence, research, experiments,
-and reviewed script drafts for external editing tools. Internal video production is
-retired; see `docs/adr/0001-analysis-first-scope.md`.
+ClipForge is the private owner workspace. The shell navigation is Dashboard,
+Projects, Library, Distribution, Calendar, Analytics, Archive, and Settings.
+Projects, Library, Distribution, Calendar, and Archive are unfinished
+placeholders and must not pretend to store or publish content. Videos, insights,
+scripts, research, settings, and YouTube analytics keep their existing routes.
+
+YouTube OAuth, Supabase Auth, PostgreSQL analytics, and daily Vercel sync are
+live. The active product is Codex/MCP-assisted evidence-based intelligence,
+research, experiments, and reviewed script drafts for external editing tools.
+Internal video production is retired; see `docs/adr/0001-analysis-first-scope.md`.
+Do not add or rewrite Supabase migrations to finish the ClipForge content model.
