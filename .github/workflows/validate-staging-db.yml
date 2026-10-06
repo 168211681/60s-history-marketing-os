@@ -48,9 +48,6 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-database-url.mjs" \
             "$STAGING_DATABASE_URL" "$STAGING_PROJECT_REF" "$PRODUCTION_PROJECT_REF"
 
-      - name: Install pinned Supabase CLI
-        run: npx --yes supabase@2.117.0 --version
-
       - name: Verify Supabase project access and ref
         shell: bash
         env:
@@ -61,8 +58,18 @@ jobs:
             echo "Missing SUPABASE_STAGING_ACCESS_TOKEN repository secret." >&2
             exit 64
           }
-          npx --yes supabase@2.117.0 projects list --output-format json > "$RUNNER_TEMP/staging-projects.json"
-          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-project.mjs" "$RUNNER_TEMP/staging-projects.json" "$STAGING_PROJECT_REF"
+          test "$STAGING_PROJECT_REF" = "haqpqifxlqpihkmhkwdu"
+          test "$STAGING_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --request GET \
+            --header "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            --output "$RUNNER_TEMP/staging-project.json" \
+            "https://api.supabase.com/v1/projects/${STAGING_PROJECT_REF}"
+          node "$GITHUB_WORKSPACE/scripts/ci/assert-staging-project-identity.mjs" \
+            "$RUNNER_TEMP/staging-project.json" "$STAGING_PROJECT_REF"
 
       - name: Prove read-only PostgreSQL connectivity
         shell: bash

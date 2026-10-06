@@ -7,7 +7,11 @@ and uses the protected `history-ci` self-hosted runner.
 The workflow never runs `db push`, migration repair, reset, seed, or schema-write
 commands. It compares the repository migrations with the isolated Staging
 project and runs the existing local database tests plus the read-only retirement
-verification query. The workflow proves PostgreSQL connectivity first, then
+verification query. Staging identity is two independent checks: the database
+URL must target `haqpqifxlqpihkmhkwdu`, and one GET
+`https://api.supabase.com/v1/projects/haqpqifxlqpihkmhkwdu` must return that
+same project. The token is project-scoped, so the workflow does not call
+`supabase projects list`. The workflow proves PostgreSQL connectivity first, then
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
 compares the returned versions with local filenames. The set comparison is
 authoritative. Staging currently has 17 migrations, including
@@ -24,8 +28,11 @@ URL, password and access token are never printed.
 
 Configure these in the repository settings before enabling the workflow:
 
-- `SUPABASE_STAGING_ACCESS_TOKEN`: a Supabase access token scoped for the Staging
-  project only. Do not use a Production token.
+- `SUPABASE_STAGING_ACCESS_TOKEN`: a Supabase access token scoped to the
+  `60s-history-staging` project only, with Project Settings read and no other
+  permissions. The workflow uses it for one GET of that project. Do not use a
+  Production token, a legacy account-wide token, or `supabase projects list`.
+  Never print the token or Authorization header.
 - `SUPABASE_STAGING_DATABASE_URL`: the Staging PostgreSQL connection string for
   database `postgres`, port `5432`. The workflow accepts either the direct host
   `db.haqpqifxlqpihkmhkwdu.supabase.co` with user `postgres`, or the official

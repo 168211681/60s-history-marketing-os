@@ -106,6 +106,11 @@ test("staging validation stays read-only and names the pending migration", async
   assert.match(workflow, /assert-staging-pending-migration\.mjs/);
   assert.match(workflow, /select version from supabase_migrations\.schema_migrations order by version/);
   assert.match(workflow, /assert-staging-database-url\.mjs/);
+  assert.match(workflow, /assert-staging-project-identity\.mjs/);
+  assert.match(workflow, /--request GET/);
+  assert.match(workflow, /https:\/\/api\.supabase\.com\/v1\/projects\/\$\{STAGING_PROJECT_REF\}/);
+  assert.doesNotMatch(workflow, /projects list/);
+  assert.doesNotMatch(workflow, /echo\s+.*SUPABASE_ACCESS_TOKEN/);
   assert.match(workflow, /npm run test:db/);
   assert.match(workflow, /scripts\/db\/verify-retirement\.sql/);
   assert.doesNotMatch(workflow, /assert-staging-migration-versions\.mjs/);
