@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ContentItemFields } from "../src/components/content-item-form";
 import { PlatformTimingFields } from "../src/components/platform-matrix";
-import { YoutubeImportView, youtubeImportActionLabel } from "../src/components/youtube-import";
+import { YoutubeImportButton, YoutubeImportView, youtubeImportActionLabel } from "../src/components/youtube-import";
 import { bindImportSql, youtubeImportSql, youtubePreviewSql } from "../src/lib/clipforge/import-sql.mjs";
 import { platforms } from "../src/lib/clipforge/distribution";
 
@@ -57,7 +57,7 @@ test("published platform rows hide the scheduled time", () => {
 
 test("YouTube import preview is counts only and import stays explicit", () => {
   assert.equal(youtubeImportActionLabel(41), "Import 41 videos");
-  assert.equal(youtubeImportActionLabel(0), "Import again");
+  assert.equal(youtubeImportActionLabel(0), "Nothing to import");
   const idle = renderToStaticMarkup(createElement(YoutubeImportView, {
     projectId,
     projectName: "History in 60s",
@@ -101,8 +101,8 @@ test("YouTube import preview is counts only and import stays explicit", () => {
   assert.match(panel, /Preview import/);
   assert.match(panel, /youtube-import\/preview/);
   assert.match(panel, /youtubeImportActionLabel/);
-  assert.doesNotMatch(panel, /useEffect|openai|generateText|access_token|refresh_token|OWNER_USER_ID/);
-  assert.ok(panel.indexOf("Preview import") < panel.lastIndexOf("youtubeImportActionLabel"));
+  assert.doesNotMatch(panel, /useEffect|Import again|openai|generateText|access_token|refresh_token|OWNER_USER_ID/);
+  assert.ok(panel.indexOf("Preview import") < panel.lastIndexOf("YoutubeImportButton"));
   assert.match(page, /Import \/ Sync content/);
   assert.ok(page.indexOf("Import / Sync content") < page.indexOf("Add content"));
   const server = readFileSync("src/lib/clipforge/import-youtube.ts", "utf8");
@@ -118,6 +118,42 @@ test("YouTube import preview is counts only and import stays explicit", () => {
   assert.match(youtubeImportSql, /count\(\*\) from source\) - \(select count\(\*\) from usable\) as skipped/);
   for (const platform of platforms) assert.match(youtubeImportSql, new RegExp(`'${platform}'`));
   assert.throws(() => bindImportSql(youtubeImportSql, "not-a-uuid", projectId), /invalid/i);
+});
+
+test("nothing to import stays disabled and a finished import refreshes the preview", () => {
+  assert.equal(youtubeImportActionLabel(3), "Import 3 videos");
+  assert.equal(youtubeImportActionLabel(0), "Nothing to import");
+  const ready = renderToStaticMarkup(createElement(YoutubeImportButton, { newItems: 3, importing: false, locked: false }));
+  assert.match(ready, /Import 3 videos/);
+  assert.doesNotMatch(ready, /disabled|Nothing to import|Import again/);
+  const empty = renderToStaticMarkup(createElement(YoutubeImportButton, { newItems: 0, importing: false, locked: false }));
+  assert.match(empty, /disabled=""/);
+  assert.match(empty, /Nothing to import/);
+  assert.doesNotMatch(empty, /Import again/);
+  const panel = readFileSync("src/components/youtube-import.tsx", "utf8");
+  const imported = panel.slice(panel.indexOf("async function importLibrary"));
+  const recorded = imported.indexOf("setResult(payload as ImportResult)");
+  const refreshed = imported.indexOf("youtube-import/preview");
+  assert.ok(recorded > 0 && refreshed > recorded);
+  assert.doesNotMatch(imported, /setResult\(null\)/);
+  const both = renderToStaticMarkup(createElement(YoutubeImportView, {
+    projectId,
+    projectName: "History in 60s",
+    preview: {
+      projectName: "History in 60s",
+      channelTitles: ["History in 60s"],
+      found: 6,
+      newItems: 0,
+      alreadyImported: 3,
+      invalid: 3,
+    },
+    result: { found: 6, created: 3, alreadyLinked: 0, updated: 0, skipped: 3 },
+    message: null,
+  }));
+  assert.match(both, /<dt>New<\/dt><dd>0<\/dd>/);
+  assert.match(both, /<dt>Already imported<\/dt><dd>3<\/dd>/);
+  assert.match(both, /<dt>Created<\/dt><dd>3<\/dd>/);
+  assert.match(both, /Already linked/);
 });
 
 test("the legacy import migration does not rewrite earlier ClipForge files", () => {

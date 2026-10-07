@@ -21,7 +21,25 @@ type ImportResult = {
 };
 
 export function youtubeImportActionLabel(newItems: number) {
-  return newItems > 0 ? `Import ${newItems} videos` : "Import again";
+  return newItems > 0 ? `Import ${newItems} videos` : "Nothing to import";
+}
+
+export function YoutubeImportButton({
+  newItems,
+  importing,
+  locked,
+  onImport,
+}: {
+  newItems: number;
+  importing: boolean;
+  locked: boolean;
+  onImport?: () => void;
+}) {
+  return (
+    <button className="button" type="button" disabled={locked || newItems <= 0} onClick={onImport}>
+      {importing ? "Importing…" : youtubeImportActionLabel(newItems)}
+    </button>
+  );
 }
 
 export function YoutubeImportView({
@@ -80,23 +98,44 @@ export function YoutubeImportPanel({ projectId, projectName }: { projectId: stri
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<"preview" | "import" | null>(null);
 
-  async function run(path: string, mode: "preview" | "import") {
-    setBusy(mode);
+  async function readPayload(response: Response) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      setMessage(typeof payload?.error === "string" ? payload.error : "The YouTube import could not be completed.");
+      return null;
+    }
+    return payload;
+  }
+
+  async function previewLibrary() {
+    setBusy("preview");
     setMessage(null);
     try {
-      const response = await fetch(path, { method: "POST" });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        setMessage(typeof payload?.error === "string" ? payload.error : "The YouTube import could not be completed.");
-        return;
-      }
-      if (mode === "preview") {
-        setPreview(payload as ImportPreview);
-        setResult(null);
-      } else {
-        setResult(payload as ImportResult);
-        router.refresh();
-      }
+      const response = await fetch(`/api/projects/${projectId}/youtube-import/preview`, { method: "POST" });
+      const payload = await readPayload(response);
+      if (!payload) return;
+      setPreview(payload as ImportPreview);
+      setResult(null);
+    } catch {
+      setMessage("The YouTube import could not be completed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function importLibrary() {
+    if (!preview || preview.newItems <= 0) return;
+    setBusy("import");
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/youtube-import`, { method: "POST" });
+      const payload = await readPayload(response);
+      if (!payload) return;
+      setResult(payload as ImportResult);
+      router.refresh();
+      const refreshed = await fetch(`/api/projects/${projectId}/youtube-import/preview`, { method: "POST" });
+      const counts = await readPayload(refreshed);
+      if (counts) setPreview(counts as ImportPreview);
     } catch {
       setMessage("The YouTube import could not be completed.");
     } finally {
@@ -108,13 +147,16 @@ export function YoutubeImportPanel({ projectId, projectName }: { projectId: stri
     <div className="import-panel">
       <YoutubeImportView projectId={projectId} projectName={projectName} preview={preview} result={result} message={message} />
       <div className="form-actions">
-        <button className="button secondary" type="button" disabled={busy !== null} onClick={() => void run(`/api/projects/${projectId}/youtube-import/preview`, "preview")}>
+        <button className="button secondary" type="button" disabled={busy !== null} onClick={() => void previewLibrary()}>
           {busy === "preview" ? "Previewing…" : "Preview import"}
         </button>
         {preview ? (
-          <button className="button" type="button" disabled={busy !== null} onClick={() => void run(`/api/projects/${projectId}/youtube-import`, "import")}>
-            {busy === "import" ? "Importing…" : youtubeImportActionLabel(preview.newItems)}
-          </button>
+          <YoutubeImportButton
+            newItems={preview.newItems}
+            importing={busy === "import"}
+            locked={busy !== null}
+            onImport={() => void importLibrary()}
+          />
         ) : null}
       </div>
     </div>
