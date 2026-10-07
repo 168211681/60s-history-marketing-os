@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ContentItemFields } from "../src/components/content-item-form";
 import { PlatformTimingFields } from "../src/components/platform-matrix";
 import { YoutubeImportButton, YoutubeImportView, youtubeImportActionLabel } from "../src/components/youtube-import";
+import { YoutubeSourceMetadataView } from "../src/components/youtube-source";
 import { bindImportSql, youtubeImportSql, youtubePreviewSql } from "../src/lib/clipforge/import-sql.mjs";
 import { platforms } from "../src/lib/clipforge/distribution";
 
@@ -110,8 +111,11 @@ test("YouTube import preview is counts only and import stays explicit", () => {
   assert.match(server, /previewYoutubeImport/);
   assert.doesNotMatch(server, /fetch\(|youtube\.googleapis|generateText|openai/);
   assert.doesNotMatch(`${youtubePreviewSql}\n${youtubeImportSql}`, /security definer|service_role/i);
-  assert.match(youtubeImportSql, /'published', 'und'/);
+  assert.match(youtubeImportSql, /coalesce\(f\.source_language, 'und'\)/);
+  assert.match(youtubeImportSql, /default_audio_language <> 'und'/);
+  assert.match(youtubeImportSql, /i\.language_code = 'und'/);
   assert.doesNotMatch(youtubeImportSql, /'published', 'en'/);
+  assert.doesNotMatch(youtubeImportSql, /v\.description|v\.tags|v\.category_id|v\.privacy_status|v\.thumbnail_url/);
   assert.match(youtubePreviewSql, /from usable u where exists/);
   assert.match(youtubeImportSql, /from usable u where exists/);
   assert.match(youtubePreviewSql, /count\(\*\) from source\) - \(select count\(\*\) from usable\) as invalid/);
@@ -165,8 +169,65 @@ test("the legacy import migration does not rewrite earlier ClipForge files", () 
   assert.match(migration, /language_code set default 'und'/);
   assert.match(migration, /\^\[a-z\]\{2\}/);
   assert.doesNotMatch(migration, /security definer|storage\.objects|drop table/i);
+  const sourceMetadata = readFileSync("supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql", "utf8");
+  assert.match(sourceMetadata, /security invoker/);
+  assert.doesNotMatch(sourceMetadata, /security definer|storage\.objects|drop table/i);
+  assert.match(sourceMetadata, /metadata_synced_at timestamptz/);
   const projects = createHash("sha256").update(readFileSync("supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql")).digest("hex");
   const assets = createHash("sha256").update(readFileSync("supabase/migrations/20261006210730_clipforge_distribution_assets.sql")).digest("hex");
   assert.equal(projects, "391b1d1c19f79621028a4a82ebad30495f512c296ab0f99008759bd7706a0a2f");
   assert.equal(assets, "2d94709e761998d9bf8dd7da387e1e1a94e426cff9e3e21062aa476f2cd7b431");
+});
+
+test("YouTube source metadata is read-only and does not invent editorial fields", () => {
+  const publishedAt = "2026-09-01T12:00:00.000Z";
+  const html = renderToStaticMarkup(createElement(YoutubeSourceMetadataView, {
+    source: {
+      title: "Source title",
+      description: "Line one\n<script>alert(1)</script>",
+      thumbnailUrl: "https://i.ytimg.com/vi/aaaaaaaaaaa/maxresdefault.jpg",
+      youtubeVideoId: "aaaaaaaaaaa",
+      publishedAt,
+      durationSeconds: "58",
+      defaultLanguage: "en",
+      defaultAudioLanguage: "en-US",
+      categoryId: "27",
+      privacyStatus: "public",
+      tags: ["siege", "logistics"],
+    },
+  }));
+  assert.match(html, /Source title/);
+  assert.match(html, /Line one/);
+  assert.match(html, /\u0026lt;script\u0026gt;alert\(1\)\u0026lt;\/script\u0026gt;/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /https:\/\/i\.ytimg\.com\/vi\/aaaaaaaaaaa\/maxresdefault\.jpg/);
+  assert.match(html, /https:\/\/www\.youtube\.com\/watch\?v=aaaaaaaaaaa/);
+  assert.match(html, /58 seconds/);
+  assert.match(html, /en-US/);
+  assert.match(html, />27</);
+  assert.match(html, /siege, logistics/);
+  assert.doesNotMatch(html, /#siege|Short form|Long form|Remaster|Entertainment/);
+  assert.doesNotMatch(html, /<input|<textarea|contenteditable/);
+  const missing = renderToStaticMarkup(createElement(YoutubeSourceMetadataView, { source: null }));
+  assert.match(missing, /No stored YouTube source is linked to this content item/);
+  const empty = renderToStaticMarkup(createElement(YoutubeSourceMetadataView, {
+    source: {
+      title: "Untitled source",
+      description: "",
+      thumbnailUrl: "http://insecure.example/thumb.jpg",
+      youtubeVideoId: "not a video",
+      publishedAt: null,
+      durationSeconds: null,
+      defaultLanguage: null,
+      defaultAudioLanguage: null,
+      categoryId: null,
+      privacyStatus: null,
+      tags: [],
+    },
+  }));
+  assert.match(empty, /No description stored/);
+  assert.match(empty, /Thumbnail unavailable/);
+  assert.doesNotMatch(empty, /<img|http:\/\/insecure/);
+  assert.match(empty, /Unavailable/);
+  assert.match(empty, />None</);
 });

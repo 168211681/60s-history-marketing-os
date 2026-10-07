@@ -27,9 +27,10 @@ history. Phase 6 has the same intentional divergence: local source
 This 2026-09-25 snapshot describes `main` at the commit above. It is not the
 current branch inventory. Staging later gained
 `20260928140124_password_setup_authorizations` and, after a separate reviewed
-apply, `20261006175601_clipforge_projects_and_content_items`. Staging and
-`main` both have those 18 migrations. This feature branch adds one pending
-migration, `20261006210730_clipforge_distribution_assets`, which has not been
+apply, `20261006175601_clipforge_projects_and_content_items`. Do not treat that
+18-migration snapshot as today's hosted inventory. Sprint 004 is
+Production-complete. This branch adds one pending migration,
+`20261007200200_clipforge_youtube_source_metadata`, which has not been
 applied to Staging or Production. Production does not contain the
 password-setup migration and remains intentionally divergent.
 

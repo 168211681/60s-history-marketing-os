@@ -15,10 +15,12 @@ same project. The token is project-scoped, so the workflow does not call
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
 compares the returned versions with local filenames. The comparison is exact
 equality of the ordered version lists, not a count and not a pending allowance.
-Staging and `main` both have 18 migrations. This branch has 19 local files
-because `20261006210730_clipforge_distribution_assets` is pending and was not
-applied. A pull request opened before a separate reviewed apply will fail this
-exact-equality gate. That failure is intentional until the migration is reviewed.
+Do not treat the older 18-migration snapshot as today's hosted inventory.
+Sprint 004 is Production-complete. This branch has one pending local file,
+`20261007200200_clipforge_youtube_source_metadata`, which has not been applied
+to Staging or Production. A pull request opened before a separate reviewed apply
+will fail this exact-equality gate. That failure is intentional until the
+migration is reviewed.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
 Staging after review. The pending-migration helper remains in the repository for
 a future reviewed difference and is not this pull-request gate. This avoids relying

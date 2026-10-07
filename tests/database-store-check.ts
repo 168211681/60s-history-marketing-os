@@ -17,7 +17,19 @@ async function main() {
     assert.deepEqual(await beginSyncJob(channelId, period), { kind: "existing", status: "running" });
 
     await completeSyncJob(ownerId, channelId, first.jobId, {
-      videos: [{ youtubeVideoId, title: "Synced video", publishedAt: "2026-09-18T10:00:00Z", durationSeconds: 58 }],
+      videos: [{
+        youtubeVideoId,
+        title: "Synced video",
+        publishedAt: "2026-09-18T10:00:00Z",
+        durationSeconds: 58,
+        description: "Exact source description",
+        thumbnailUrl: "https://i.ytimg.com/vi/syncvideo01/maxresdefault.jpg",
+        tags: ["siege", "logistics"],
+        categoryId: "27",
+        defaultLanguage: "en",
+        defaultAudioLanguage: "en-US",
+        privacyStatus: "public",
+      }],
       channelMetrics: [{
         metricDate: "2026-09-18", views: "125", estimatedMinutesWatched: "40.5",
         averageViewDurationSeconds: "19.44", subscribersGained: "3", subscribersLost: "1", likes: "12", comments: "2",
@@ -31,7 +43,9 @@ async function main() {
 
     const result = await pool.query(
       `select j.status, c.last_synced_at is not null as synced, cm.views as channel_views,
-            vm.views as video_views, v.duration_seconds
+            vm.views as video_views, v.duration_seconds, v.description, v.thumbnail_url,
+            v.tags, v.category_id, v.default_language, v.default_audio_language,
+            v.privacy_status, v.metadata_synced_at is not null as metadata_synced, v.topic
        from private.analytics_sync_jobs j
        join public.channels c on c.id = j.channel_id
        join public.channel_metrics cm on cm.channel_id = c.id and cm.metric_date = '2026-09-18'
@@ -40,7 +54,22 @@ async function main() {
       where j.id = $2`,
       [youtubeVideoId, first.jobId],
     );
-    assert.deepEqual(result.rows, [{ status: "succeeded", synced: true, channel_views: "125", video_views: "100", duration_seconds: "58" }]);
+    assert.deepEqual(result.rows, [{
+      status: "succeeded",
+      synced: true,
+      channel_views: "125",
+      video_views: "100",
+      duration_seconds: "58",
+      description: "Exact source description",
+      thumbnail_url: "https://i.ytimg.com/vi/syncvideo01/maxresdefault.jpg",
+      tags: ["siege", "logistics"],
+      category_id: "27",
+      default_language: "en",
+      default_audio_language: "en-US",
+      privacy_status: "public",
+      metadata_synced: true,
+      topic: null,
+    }]);
 
     const reader = authenticatedAnalyticsReader(ownerId);
     assert.equal((await reader.listChannels())[0].id, channelId);

@@ -18,7 +18,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | --- | --- | --- |
 | `public.users` | Minimal identity referencing `auth.users`; no duplicated email/profile data | Read own row |
 | `public.channels` | Verified channel identity and `owner_id` | Read owned channels |
-| `public.videos` | Video identity, title, topic, duration and channel FK | Read owned channel videos |
+| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, tags, category id, languages, privacy, `metadata_synced_at`). Source columns come from the pending Sprint 004.1 migration and are not an R2 asset | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
@@ -33,13 +33,17 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.platform_posts` | Manual YouTube, Facebook, TikTok, and Instagram copy and status | Read/create/edit/delete own rows; cannot retarget owner or platform |
 
 The ClipForge project and content tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.
-That migration was applied separately to Staging after review. Do not reapply it,
-and do not apply it to Production from this branch.
+That migration was applied separately to Staging after review. Do not reapply it.
 `supabase/migrations/20261006210730_clipforge_distribution_assets.sql` adds the
 asset and platform tables and the `(project_id, owner_id)` covering index.
 File bytes stay in the private Cloudflare R2 bucket `clipforge-assets`.
-It is pending on this branch. Do not apply it
-to Staging or Production until a separate review.
+That file is on `main` and is used by the Production Sprint 004 import. Do not reapply it.
+`supabase/migrations/20261007143000_clipforge_legacy_youtube_import.sql` is the
+Production-complete Sprint 004 import. Do not rewrite it.
+`supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` is the
+only pending migration on this branch. It stores YouTube source facts on
+`public.videos` and does not change R2. Do not apply it to Staging or Production
+until a separate review.
 
 `private.password_setup_authorizations` is the original file
 `supabase/migrations/20260928140124_password_setup_authorizations.sql`.
@@ -50,11 +54,12 @@ contain it. The table has forced RLS, no allow policy, and no grant for `anon`,
 `authenticated`, or `service_role`. It stores a hash, not a reusable browser
 token, and it has no `updated_at` trigger.
 
-Staging currently has 18 migrations, the same set as `main`, including
-`20260928140124_password_setup_authorizations` and
-`20261006175601_clipforge_projects_and_content_items`. This branch has those 18
-plus the pending `20261006210730_clipforge_distribution_assets` migration.
-Production migration history stays
+Do not treat the older 18-migration snapshot as the current hosted inventory.
+Sprint 004 is Production-complete: one ClipForge project, 41 stored YouTube
+videos imported, 41 content items, 164 platform posts, re-import idempotency
+verified, and duplicate external YouTube IDs = 0. This branch adds one pending
+file, `20261007200200_clipforge_youtube_source_metadata`, which has not been
+applied to Staging or Production. Production migration history stays
 intentionally divergent and must not be normalized.
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
@@ -138,12 +143,11 @@ insight provenance, workflow telemetry grants and account deletion isolation.
 The statement in this section that the initial schema had not been applied to a
 cloud project was true when this foundation document was written; it is not the
 current cloud state. Current migration identities and verification are recorded in
-the [database transition runbook](database-transition.md). Staging and `main`
-both have 18 migrations, including
-`20260928140124_password_setup_authorizations` and
-`20261006175601_clipforge_projects_and_content_items`. This branch adds one
-pending file, `20261006210730_clipforge_distribution_assets`, which has not
-been applied. The ClipForge projects migration
+the [database transition runbook](database-transition.md). Do not treat the older
+18-migration snapshot as today's hosted inventory. Sprint 004 is
+Production-complete. This branch adds one pending file,
+`20261007200200_clipforge_youtube_source_metadata`, which has not been applied
+to Staging or Production. The ClipForge projects migration
 was applied separately to Staging after review. Production intentionally
 uses different historical versions for Phase 6 and Phase 7, and it does not
 contain the password-setup migration. Do not normalize Production history.

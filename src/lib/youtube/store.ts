@@ -139,19 +139,44 @@ export async function completeSyncJob(ownerId: string, channelId: string, jobId:
       await client.query(
         `with incoming as (
            select * from jsonb_to_recordset($2::jsonb) as x(
-             youtube_video_id text, title text, published_at timestamptz, duration_seconds numeric
+             youtube_video_id text, title text, published_at timestamptz, duration_seconds numeric,
+             description text, thumbnail_url text, tags text[], category_id text,
+             default_language text, default_audio_language text, privacy_status text
            )
          )
-         insert into public.videos (channel_id, youtube_video_id, title, published_at, duration_seconds)
-         select $1, youtube_video_id, title, published_at, duration_seconds from incoming
+         insert into public.videos (
+           channel_id, youtube_video_id, title, published_at, duration_seconds,
+           description, thumbnail_url, tags, category_id, default_language,
+           default_audio_language, privacy_status, metadata_synced_at
+         )
+         select $1, youtube_video_id, title, published_at, duration_seconds,
+                description, thumbnail_url, tags, category_id, default_language,
+                default_audio_language, privacy_status, now()
+           from incoming
          on conflict (channel_id, youtube_video_id) do update
-           set title = excluded.title, published_at = excluded.published_at,
-               duration_seconds = excluded.duration_seconds`,
+           set title = excluded.title,
+               published_at = excluded.published_at,
+               duration_seconds = excluded.duration_seconds,
+               description = excluded.description,
+               thumbnail_url = excluded.thumbnail_url,
+               tags = excluded.tags,
+               category_id = excluded.category_id,
+               default_language = excluded.default_language,
+               default_audio_language = excluded.default_audio_language,
+               privacy_status = excluded.privacy_status,
+               metadata_synced_at = now()`,
         [channelId, JSON.stringify(payload.videos.map((video) => ({
           youtube_video_id: video.youtubeVideoId,
           title: video.title,
           published_at: video.publishedAt,
           duration_seconds: video.durationSeconds,
+          description: video.description,
+          thumbnail_url: video.thumbnailUrl,
+          tags: video.tags,
+          category_id: video.categoryId,
+          default_language: video.defaultLanguage,
+          default_audio_language: video.defaultAudioLanguage,
+          privacy_status: video.privacyStatus,
         })))],
       );
     }

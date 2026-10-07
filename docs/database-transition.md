@@ -12,11 +12,12 @@ the evidence record rather than treating old pre-apply checklists as pending wor
 
 - Phase 7 Staging migration `20260924041349_research_fact_checking` was applied by
   workflow run `36001809750` and ended that phase at 16 migrations. Staging later
-  received `20260928140124_password_setup_authorizations`. Current Staging therefore
-  has 18 migrations, matching `main`.
-  `20261006175601_clipforge_projects_and_content_items` was applied separately
-  to Staging after review. This branch also contains the unapplied migration
-  `20261006210730_clipforge_distribution_assets`. Do not apply it from this runbook.
+  received `20260928140124_password_setup_authorizations` and
+  `20261006175601_clipforge_projects_and_content_items`. Do not treat the older
+  18-migration snapshot as today's hosted inventory. Sprint 004 is
+  Production-complete. This branch adds one pending migration,
+  `20261007200200_clipforge_youtube_source_metadata`, which has not been applied
+  to Staging or Production. Do not apply it from this runbook.
 - Production records Phase 7 as
   `20260924151134_research_fact_checking`. The local source remains
   `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
@@ -139,9 +140,9 @@ This retained operator procedure is for a newly provisioned, isolated
 disposable project. Phase 7 historically left hosted Staging at 16 migrations.
 Staging later received `20260928140124_password_setup_authorizations` and, after
 a separate reviewed apply, `20261006175601_clipforge_projects_and_content_items`.
-The current hosted Staging project has 18 migrations, matching `main`.
-This branch has 19 local files because
-`20261006210730_clipforge_distribution_assets` is pending. There is no Staging
+Do not treat the older 18-migration snapshot as today's hosted inventory.
+Sprint 004 is Production-complete. This branch has one pending file,
+`20261007200200_clipforge_youtube_source_metadata`. There is no Staging
 write in this sprint. Do not rerun this generic procedure against the current hosted project.
 Use the read-only validation workflow for current Staging checks.
 
@@ -237,11 +238,13 @@ for the distinction between live catalog evidence and owner-reported UI evidence
 
 **Staging CI** reads `supabase_migrations.schema_migrations` and compares that
 ordered list with repository filenames. The invariant is exact equality, not a
-count and not a pending allowance. Staging and `main` both have 18
-versions, including `20260928140124_password_setup_authorizations` and
-`20261006175601_clipforge_projects_and_content_items`. This branch also has the
-pending `20261006210730_clipforge_distribution_assets` file, which has not been
-applied. The ClipForge projects migration
+count and not a pending allowance. Do not treat the older 18-migration snapshot
+as today's hosted inventory. Sprint 004 is Production-complete: one Production
+ClipForge project, 41 stored YouTube videos imported, 41 content items, 164
+platform posts, re-import idempotency verified, and duplicate external YouTube
+IDs = 0. This branch also has the pending
+`20261007200200_clipforge_youtube_source_metadata` file, which has not been
+applied to Staging or Production. The ClipForge projects migration
 was applied separately to Staging after review. The pending-migration helper
 remains for a future reviewed difference; the pull-request workflow uses exact
 equality and does not apply SQL. A mismatch blocks validation.

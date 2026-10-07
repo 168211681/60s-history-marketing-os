@@ -10,6 +10,7 @@ import {
   type PlatformStatus,
 } from "./distribution";
 import { escapeLike, type ContentInput, type ContentStatus, type ProjectInput } from "./model";
+import type { YoutubeSourceMetadata } from "@/components/youtube-source";
 
 export type ProjectRecord = {
   id: string;
@@ -216,6 +217,53 @@ export async function listContentItems(ownerId: string, filter: { projectId?: st
 export async function getContentItem(ownerId: string, id: string) {
   const result = await database().query<ContentRow>(`${contentSelect} and i.id = $2`, [ownerId, id]);
   return result.rows[0] ? content(result.rows[0]) : null;
+}
+
+type YoutubeSourceRow = {
+  title: string;
+  description: string;
+  thumbnail_url: string | null;
+  youtube_video_id: string;
+  published_at: Date | string | null;
+  duration_seconds: string | number | null;
+  default_language: string | null;
+  default_audio_language: string | null;
+  category_id: string | null;
+  privacy_status: string | null;
+  tags: string[] | null;
+};
+
+export async function getYoutubeSource(ownerId: string, contentItemId: string): Promise<YoutubeSourceMetadata | null> {
+  const result = await database().query<YoutubeSourceRow>(
+    `select v.title, v.description, v.thumbnail_url, v.youtube_video_id, v.published_at,
+            v.duration_seconds, v.default_language, v.default_audio_language,
+            v.category_id, v.privacy_status, v.tags
+       from public.platform_posts pp
+       join public.videos v on v.youtube_video_id = pp.platform_post_id
+       join public.channels c on c.id = v.channel_id and c.owner_id = pp.owner_id
+      where pp.owner_id = $1
+        and pp.content_item_id = $2
+        and pp.platform = 'youtube'
+        and pp.platform_post_id is not null
+      order by v.published_at nulls last, c.id
+      limit 1`,
+    [ownerId, contentItemId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    title: row.title,
+    description: row.description,
+    thumbnailUrl: row.thumbnail_url,
+    youtubeVideoId: row.youtube_video_id,
+    publishedAt: row.published_at ? iso(row.published_at) : null,
+    durationSeconds: row.duration_seconds === null ? null : String(row.duration_seconds),
+    defaultLanguage: row.default_language,
+    defaultAudioLanguage: row.default_audio_language,
+    categoryId: row.category_id,
+    privacyStatus: row.privacy_status,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+  };
 }
 
 async function ownedProject(client: PoolClient, ownerId: string, projectId: string) {

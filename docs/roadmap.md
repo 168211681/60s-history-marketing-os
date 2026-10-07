@@ -16,20 +16,19 @@ script draft. Internal rendering and publishing remain retired.
 ClipForge. Navigation exposes Dashboard, Projects, Library, Distribution, Calendar,
 Analytics, Archive, and Settings, while Videos, Insights, Scripts, and Research stay
 on their existing routes. Projects and Library were placeholders in this sprint and
-became owner records in Sprint 002. Distribution is a manual queue in Sprint 003
-on this branch. Calendar and Archive remain
+became owner records in Sprint 002. Distribution is a manual queue. Calendar and Archive remain
 placeholders. Staging and Production migration-history differences stay intentional.
 
 ## ClipForge Sprint 002 — projects and content items
 
-**Status: applied to Staging after review. Not applied to Production.**
+**Status: applied to Staging after review. Production now has the ClipForge project created by the Sprint 004 import. Do not reapply this migration.**
 `public.projects` and `public.content_items` are the first ClipForge records.
 A project has its own `owner_id` and does not require a channel. Content
 ownership follows the project. There are no asset, caption, post, or analytics
 snapshot tables in this sprint. The new migration was created with the Supabase
 CLI and is covered by the local database tests.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
-Staging after review. Do not reapply it, do not apply it to Production, and do
+Staging after review. Do not reapply it, and do
 not rewrite the earlier historical migrations to make histories match.
 
 ## ClipForge Sprint 002.5 — password setup authorizations
@@ -48,23 +47,44 @@ migration files were not rewritten.
 **Status: documentation and read-only CI correction. No migration applied by this sprint.**
 At that review, Staging had 17 migrations and this branch had 18. The only
 pending version was `20261006175601`. That migration was applied separately to
-Staging after review. Staging and `main` now both have 18 migrations.
+Staging after review. After that review, Staging and `main` both had 18 migrations.
+Later ClipForge sprints added distribution and the Production YouTube import.
+Do not treat 18 as the current hosted inventory.
 Pull-request validation requires exact local and remote equality and does not push
 SQL. `.github/workflows/apply-staging-phase7-research.yml` stays historical
 Phase 7 infrastructure and is not a ClipForge apply workflow.
 
 ## ClipForge Sprint 003 — assets and distribution matrix
 
-**Status: branch only. Not applied to Staging or Production.**
+**Status: on main. Production uses these tables for the Sprint 004 import. Do not reapply.**
 `20261006210730_clipforge_distribution_assets` adds `public.content_assets`,
 `public.platform_posts`, and a covering index on `content_items (project_id, owner_id)`.
 Master video and thumbnail bytes go to the private Cloudflare R2 bucket
 `clipforge-assets`, not Supabase Storage. Master upload is a direct multipart
 upload with bounded per-part retries. Asset metadata is immutable after insert.
-Platform rows record copy and status only. This branch adds that one pending
-migration and does not change the exact-equality gate. Do not open a pull request
-until the migration is reviewed and applied separately. Do not apply this file
-to Production.
+Platform rows record copy and status only. This file is not a pending migration
+on this branch. Do not reapply it. Sprint 004.1 does not change R2 or this file.
+
+## ClipForge Sprint 004 — legacy YouTube import
+
+**Status: Production-complete. Do not reapply.**
+Production has one ClipForge project. 41 stored YouTube videos were imported
+into 41 content items and 164 platform posts. Re-import idempotency was
+verified. Duplicate external YouTube IDs are 0. Format and production type stay
+unknown until a later editorial sprint. Do not rewrite
+`20261007143000_clipforge_legacy_youtube_import`.
+
+## ClipForge Sprint 004.1 — YouTube source metadata
+
+**Status: branch/pending. Not applied to Staging or Production.**
+`20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
+on `public.videos`: description, one HTTPS thumbnail URL, tags, category id,
+default language, default audio language, privacy status, and
+`metadata_synced_at`. It does not classify topic, format, or production type,
+and it does not create an R2 asset. Apply it to Staging only in a separate
+reviewed change. Do not apply it to Production from this branch. The
+pull-request gate remains exact migration equality, so this file stays pending
+until that Staging apply.
 
 ## Phase 0 — repository and security baseline
 

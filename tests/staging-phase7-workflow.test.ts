@@ -72,6 +72,7 @@ test("historical migrations stay immutable and later local files stay pinned", (
     "20261006175601_clipforge_projects_and_content_items.sql",
     "20261006210730_clipforge_distribution_assets.sql",
     "20261007143000_clipforge_legacy_youtube_import.sql",
+    "20261007200200_clipforge_youtube_source_metadata.sql",
   ]);
   assert.equal(existsSync(migrationPath), true);
   const digest = createHash("sha256").update(readFileSync(migrationPath)).digest("hex");

@@ -16,6 +16,13 @@ export type VideoMetadata = {
   title: string;
   publishedAt: string;
   durationSeconds: number;
+  description: string;
+  thumbnailUrl: string | null;
+  tags: string[];
+  categoryId: string | null;
+  defaultLanguage: string | null;
+  defaultAudioLanguage: string | null;
+  privacyStatus: "public" | "unlisted" | "private" | null;
 };
 export type MetricValues = {
   views: string | null;
@@ -178,11 +185,62 @@ export async function fetchUploadVideoIds(accessToken: string, expectedChannelId
   throw new YouTubeSyncError("VALIDATION", "Uploads playlist exceeded the safe pagination limit");
 }
 
+const thumbnailOrder = ["maxres", "standard", "high", "medium", "default"] as const;
+const privacyStatuses = ["public", "unlisted", "private"] as const;
+const sourceLanguagePattern = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
+
+function optionalSourceText(value: unknown, pattern: RegExp, message: string) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !pattern.test(value)) throw new YouTubeSyncError("VALIDATION", message);
+  return value;
+}
+
+function sourceDescription(value: unknown) {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string" || value.length > 5000) throw new YouTubeSyncError("VALIDATION", "Video description is invalid");
+  return value;
+}
+
+function sourceTags(value: unknown) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 30) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
+  return value.map((tag) => {
+    if (typeof tag !== "string" || tag.length < 1 || tag.length > 100) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
+    return tag;
+  });
+}
+
+function sourceThumbnail(value: unknown) {
+  if (value === undefined || value === null) return null;
+  const thumbnails = object(value);
+  for (const name of thumbnailOrder) {
+    const entry = thumbnails[name];
+    if (entry === undefined || entry === null) continue;
+    const url = object(entry).url;
+    if (url === undefined || url === null || url === "") continue;
+    if (typeof url !== "string" || url.length > 2000 || !/^https:\/\/\S+$/.test(url)) {
+      throw new YouTubeSyncError("VALIDATION", "Video thumbnail URL is invalid");
+    }
+    return url;
+  }
+  return null;
+}
+
+function sourcePrivacy(value: unknown) {
+  if (value === undefined || value === null) return null;
+  const status = object(value);
+  const privacy = status.privacyStatus;
+  if (privacy === undefined || privacy === null || privacy === "") return null;
+  if (typeof privacy !== "string" || !privacyStatuses.includes(privacy as typeof privacyStatuses[number])) {
+    throw new YouTubeSyncError("VALIDATION", "Video privacy status is invalid");
+  }
+  return privacy as VideoMetadata["privacyStatus"];
+}
 export async function fetchVideoMetadata(accessToken: string, expectedChannelId: string, ids: string[], options: ClientOptions = {}) {
   const videos: VideoMetadata[] = [];
   for (const batch of splitInto(ids, 50)) {
     const url = new URL(`${dataApi}/videos`);
-    url.searchParams.set("part", "snippet,contentDetails");
+    url.searchParams.set("part", "snippet,contentDetails,status");
     url.searchParams.set("id", batch.join(","));
     const payload = await getJson(url, accessToken, options);
     for (const raw of items(payload)) {
@@ -194,7 +252,19 @@ export async function fetchVideoMetadata(accessToken: string, expectedChannelId:
       if (snippet.channelId !== expectedChannelId || !title || title.length > 300 || !publishedAt || Number.isNaN(Date.parse(publishedAt))) {
         throw new YouTubeSyncError("VALIDATION", "Video metadata is invalid");
       }
-      videos.push({ youtubeVideoId: videoId(item.id), title, publishedAt, durationSeconds: durationSeconds(details.duration) });
+      videos.push({
+        youtubeVideoId: videoId(item.id),
+        title,
+        publishedAt,
+        durationSeconds: durationSeconds(details.duration),
+        description: sourceDescription(snippet.description),
+        thumbnailUrl: sourceThumbnail(snippet.thumbnails),
+        tags: sourceTags(snippet.tags),
+        categoryId: optionalSourceText(snippet.categoryId, /^[0-9]{1,8}$/, "Video category id is invalid"),
+        defaultLanguage: optionalSourceText(snippet.defaultLanguage, sourceLanguagePattern, "Video language is invalid"),
+        defaultAudioLanguage: optionalSourceText(snippet.defaultAudioLanguage, sourceLanguagePattern, "Video audio language is invalid"),
+        privacyStatus: sourcePrivacy(item.status),
+      });
     }
   }
   return videos;
