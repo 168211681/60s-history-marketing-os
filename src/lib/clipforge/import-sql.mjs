@@ -60,9 +60,10 @@ counts as (
          (select count(*) from usable u where not exists (
             select 1 from linked l where l.platform_post_id = u.youtube_video_id
          )) as new_items,
-         (select count(*) from source s where exists (
-            select 1 from linked l where l.platform_post_id = s.youtube_video_id
-         )) as already_imported
+         (select count(*) from usable u where exists (
+            select 1 from linked l where l.platform_post_id = u.youtube_video_id
+         )) as already_imported,
+         (select count(*) from source) - (select count(*) from usable) as invalid
 )
 select p.name as project_name,
        coalesce((
@@ -72,7 +73,7 @@ select p.name as project_name,
        counts.found,
        counts.new_items,
        counts.already_imported,
-       counts.found - counts.already_imported - counts.new_items as invalid
+       counts.invalid
   from project p
  cross join counts
 `;
@@ -113,7 +114,7 @@ inserted_items as (
     status, language_code, duration_seconds, notes
   )
   select f.content_id, p.id, $2::uuid, null, f.title, f.topic, 'unknown', 'unknown',
-         'published', 'en', f.duration_seconds, ''
+         'published', 'und', f.duration_seconds, ''
     from fresh f
    cross join project p
   returning id
@@ -177,19 +178,15 @@ select exists (select 1 from project) as project_found,
        (select count(*) from source) as found,
        (select count(*) from inserted_items) as created,
        (select count(*) from inserted_posts) as created_posts,
-       (select count(*) from source s where exists (
-          select 1 from linked l where l.platform_post_id = s.youtube_video_id
+       (select count(*) from usable u where exists (
+          select 1 from linked l where l.platform_post_id = u.youtube_video_id
        )) as already_linked,
        (select count(*) from (
           select content_item_id as id from updated_posts
           union
           select id from updated_durations
        ) changed) as updated,
-       (select count(*) from source)
-         - (select count(*) from source s where exists (
-              select 1 from linked l where l.platform_post_id = s.youtube_video_id
-           ))
-         - (select count(*) from fresh) as skipped
+       (select count(*) from source) - (select count(*) from usable) as skipped
 `;
 
 export function bindImportSql(statement, projectId, ownerId) {

@@ -28,6 +28,7 @@ test("manual content fields keep technical metadata out of the way", () => {
   assert.ok(advancedAt > 0 && keyAt > advancedAt && languageAt > advancedAt && durationAt > advancedAt);
   assert.doesNotMatch(html.slice(keyAt, keyAt + 180), /required/);
   assert.doesNotMatch(html.slice(languageAt, languageAt + 160), /required/);
+  assert.match(html, /name="languageCode"[^>]*value="und"|value="und"[^>]*name="languageCode"/);
   assert.doesNotMatch(html.slice(durationAt, durationAt + 200), /required/);
   const form = readFileSync("src/components/content-item-form.tsx", "utf8");
   assert.match(form, /Create content/);
@@ -109,6 +110,12 @@ test("YouTube import preview is counts only and import stays explicit", () => {
   assert.match(server, /previewYoutubeImport/);
   assert.doesNotMatch(server, /fetch\(|youtube\.googleapis|generateText|openai/);
   assert.doesNotMatch(`${youtubePreviewSql}\n${youtubeImportSql}`, /security definer|service_role/i);
+  assert.match(youtubeImportSql, /'published', 'und'/);
+  assert.doesNotMatch(youtubeImportSql, /'published', 'en'/);
+  assert.match(youtubePreviewSql, /from usable u where exists/);
+  assert.match(youtubeImportSql, /from usable u where exists/);
+  assert.match(youtubePreviewSql, /count\(\*\) from source\) - \(select count\(\*\) from usable\) as invalid/);
+  assert.match(youtubeImportSql, /count\(\*\) from source\) - \(select count\(\*\) from usable\) as skipped/);
   for (const platform of platforms) assert.match(youtubeImportSql, new RegExp(`'${platform}'`));
   assert.throws(() => bindImportSql(youtubeImportSql, "not-a-uuid", projectId), /invalid/i);
 });
@@ -118,6 +125,9 @@ test("the legacy import migration does not rewrite earlier ClipForge files", () 
   assert.match(migration, /platform_posts_owner_platform_post_id_idx/);
   assert.match(migration, /where platform_post_id is not null/);
   assert.match(migration, /'unknown'/);
+  assert.match(migration, /language_code = 'und'/);
+  assert.match(migration, /language_code set default 'und'/);
+  assert.match(migration, /\^\[a-z\]\{2\}/);
   assert.doesNotMatch(migration, /security definer|storage\.objects|drop table/i);
   const projects = createHash("sha256").update(readFileSync("supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql")).digest("hex");
   const assets = createHash("sha256").update(readFileSync("supabase/migrations/20261006210730_clipforge_distribution_assets.sql")).digest("hex");

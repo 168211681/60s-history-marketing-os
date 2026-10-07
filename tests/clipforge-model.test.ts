@@ -24,7 +24,11 @@ test("content input rejects unknown status and blank keys", () => {
   assert.equal(created?.status, "idea");
   assert.equal(created?.contentKey, null);
   assert.equal(created?.durationSeconds, null);
-  assert.equal(created?.languageCode, "en");
+  assert.equal(created?.languageCode, "und");
+  assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "und" })?.languageCode, "und");
+  assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "EN" })?.languageCode, "en");
+  assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "en-US" })?.languageCode, "en-us");
+  assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "eng" }), null);
   assert.equal(parseContentInput({ projectId, title: "Siege", format: "nope" }), null);
   assert.equal(parseContentInput({ projectId, title: "Siege", status: "viral" }), null);
   assert.equal(parseContentInput({ projectId: "not-a-uuid", title: "Siege" }), null);

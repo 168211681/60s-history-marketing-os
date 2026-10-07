@@ -76,7 +76,7 @@ export function ContentItemFields({
           </label>
           <label>
             Language
-            <input name="languageCode" maxLength={12} defaultValue={item?.languageCode ?? "en"} />
+            <input name="languageCode" maxLength={12} defaultValue={item?.languageCode ?? "und"} />
           </label>
           <label>
             Duration in seconds
