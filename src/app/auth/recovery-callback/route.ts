@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appOrigin, ownerId } from "@/lib/auth/config";
 import { clearRecoveryMarker, recoveryCookieSecure, writeRecoveryDecision } from "@/lib/auth/recovery-cookie";
-import { confirmRecoveryGrant } from "@/lib/auth/recovery";
+import { recoveryCallbackGrant } from "@/lib/auth/recovery";
 import { serverAuth } from "@/lib/auth/server";
 
 function finish(
@@ -26,18 +26,11 @@ export async function GET(request: NextRequest) {
     clearRecoveryMarker(response.cookies, recoveryCookieSecure(origin));
     return response;
   }
-  const tokenHash = request.nextUrl.searchParams.get("token_hash");
-  const type = request.nextUrl.searchParams.get("type");
-  const next = request.nextUrl.searchParams.get("next");
+  const code = request.nextUrl.searchParams.get("code");
   const response = NextResponse.redirect(new URL("/settings", origin));
   const client = await serverAuth(response);
   try {
-    const grant = await confirmRecoveryGrant(client ? client.auth : null, {
-      tokenHash,
-      type,
-      next,
-      ownerId: ownerId(),
-    });
+    const grant = await recoveryCallbackGrant(client ? client.auth : null, { code, ownerId: ownerId() });
     return finish(origin, grant.destination, grant.marker, response);
   } catch {
     return finish(origin, "/settings?auth_error=recovery", "clear", response);

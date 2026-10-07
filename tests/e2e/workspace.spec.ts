@@ -162,8 +162,8 @@ test("connection controls fail closed when credentials are absent", async ({
   expect(sync.status()).toBe(403);
   const callback = await request.get("/auth/callback?code=untrusted");
   expect(callback.status()).toBe(503);
-  const confirm = await request.get("/auth/confirm?token_hash=untrusted&type=recovery");
-  expect(confirm.status()).toBe(503);
+  const recovery = await request.get("/auth/recovery-callback?code=untrusted");
+  expect(recovery.status()).toBe(503);
 });
 test("password reset stays closed without a recovery session", async ({ page }) => {
   const response = await page.goto("/reset-password");

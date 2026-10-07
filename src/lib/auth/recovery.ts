@@ -20,36 +20,29 @@ export function callbackDestination(input: {
 }
 
 export function recoveryRedirect(origin: string) {
-  const url = new URL("/auth/confirm", origin);
-  url.searchParams.set("next", "/reset-password");
-  return url.toString();
+  return new URL("/auth/recovery-callback", origin).toString();
 }
 
-export function validRecoveryToken(token: string | null): token is string {
-  return Boolean(token && token.length <= 2048 && !/[\u0000\r\n]/.test(token));
-}
-
-export function recoveryConfirmNext(next: string | null) {
-  if (next === null || next === "/reset-password") return "/reset-password" as const;
-  return null;
+export function validAuthCode(code: string | null): code is string {
+  return Boolean(code && code.length <= 2048 && !/[\u0000\r\n]/.test(code));
 }
 
 const recoveryFailure = "/settings?auth_error=recovery" as const;
 
-export async function confirmRecoveryGrant(
+export async function recoveryCallbackGrant(
   auth: {
-    verifyOtp: (input: { token_hash: string; type: "recovery" }) => Promise<{ error: { message?: string } | null }>;
+    exchangeCodeForSession: (code: string) => Promise<{ error: { message?: string } | null }>;
     getUser: () => Promise<{ data: { user: { id: string } | null } }>;
     signOut: () => Promise<unknown>;
   } | null,
-  input: { tokenHash: string | null; type: string | null; next: string | null; ownerId: string | null },
+  input: { code: string | null; ownerId: string | null },
 ) {
-  if (input.type !== "recovery" || !validRecoveryToken(input.tokenHash) || !recoveryConfirmNext(input.next) || !auth || !input.ownerId) {
+  if (!validAuthCode(input.code) || !auth || !input.ownerId) {
     return { destination: recoveryFailure, marker: "clear" as const };
   }
   try {
-    const verified = await auth.verifyOtp({ token_hash: input.tokenHash, type: "recovery" });
-    if (verified.error) return { destination: recoveryFailure, marker: "clear" as const };
+    const exchanged = await auth.exchangeCodeForSession(input.code);
+    if (exchanged.error) return { destination: recoveryFailure, marker: "clear" as const };
     const { data } = await auth.getUser();
     const ownerMatches = Boolean(data.user && data.user.id.toLowerCase() === input.ownerId.toLowerCase());
     if (!ownerMatches) {
