@@ -3,43 +3,77 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { browserAuth } from "@/lib/auth/browser";
+import { passwordSignInMessage, recoveryRedirect, recoveryRequestMessage, signInFailureMessage } from "@/lib/auth/recovery";
 
 export function SignInButton() {
-  const [error, setError] = useState(false);
-  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState<"google" | "password" | "reset" | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   async function signIn() {
-    setPending(true);
-    setError(false);
-    const { error } = await browserAuth().auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setError(true);
-      setPending(false);
+    setPending("google");
+    setError(null);
+    setNotice(null);
+    try {
+      const { error: oauthError } = await browserAuth().auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (oauthError) {
+        setError(signInFailureMessage("setup"));
+        setPending(null);
+      }
+    } catch {
+      setError(signInFailureMessage("setup"));
+      setPending(null);
     }
   }
   async function signInWithPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setError(false);
-    const { error } = await browserAuth().auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(true);
-      setPending(false);
+    setPending("password");
+    setError(null);
+    setNotice(null);
+    try {
+      const { error: passwordError } = await browserAuth().auth.signInWithPassword({ email, password });
+      if (passwordError) {
+        setError(passwordSignInMessage(passwordError));
+        setPending(null);
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setError(signInFailureMessage("setup"));
+      setPending(null);
+    }
+  }
+  async function forgotPassword() {
+    setError(null);
+    setNotice(null);
+    const trimmed = email.trim();
+    if (!trimmed.includes("@") || trimmed.length > 320) {
+      setError("Enter an email address.");
       return;
     }
-    window.location.reload();
+    setPending("reset");
+    try {
+      await browserAuth().auth.resetPasswordForEmail(trimmed, {
+        redirectTo: recoveryRedirect(window.location.origin),
+      });
+      setNotice(recoveryRequestMessage());
+    } catch {
+      setError(signInFailureMessage("setup"));
+    } finally {
+      setPending(null);
+    }
   }
   return (
     <div>
-      <button className="button" type="button" onClick={signIn} disabled={pending}>
-        {pending ? "Opening Google…" : "Sign in with Google"}
+      <button className="button" type="button" onClick={signIn} disabled={pending !== null}>
+        {pending === "google" ? "Opening Google…" : "Sign in with Google"}
       </button>
       <p className="muted">Or use the email/password account created in Supabase.</p>
-      <form className="settings-actions" onSubmit={signInWithPassword}>
+      <form className="auth-form" onSubmit={signInWithPassword}>
         <label>
           Email
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
@@ -48,11 +82,15 @@ export function SignInButton() {
           Password
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" />
         </label>
-        <button className="button secondary" type="submit" disabled={pending}>
-          {pending ? "Signing in…" : "Sign in with email"}
+        <button className="button secondary" type="submit" disabled={pending !== null}>
+          {pending === "password" ? "Signing in…" : "Sign in with email"}
+        </button>
+        <button className="button secondary" type="button" onClick={() => void forgotPassword()} disabled={pending !== null}>
+          Forgot password?
         </button>
       </form>
-      {error ? <p role="alert">Sign-in could not start. Check the authentication setup.</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
     </div>
   );
 }

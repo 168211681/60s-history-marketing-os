@@ -162,6 +162,19 @@ test("connection controls fail closed when credentials are absent", async ({
   expect(sync.status()).toBe(403);
   const callback = await request.get("/auth/callback?code=untrusted");
   expect(callback.status()).toBe(503);
+  const recovery = await request.get("/auth/recovery-callback?code=untrusted");
+  expect(recovery.status()).toBe(503);
+});
+test("password reset stays closed without a recovery session", async ({ page }) => {
+  const response = await page.goto("/reset-password");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Choose a new password", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password reset is not configured" })).toBeVisible();
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Reset password" })).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
 });
 test("unknown route has a 404 and recovery link", async ({ page }) => {
   const response = await page.goto("/does-not-exist");
