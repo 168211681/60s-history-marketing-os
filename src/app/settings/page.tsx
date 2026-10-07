@@ -48,6 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       />
       {params.youtube && messages[params.youtube] ? <p className="settings-notice" role="status">{messages[params.youtube]}</p> : null}
       {params.auth === "failed" || params.auth_error === "callback" ? <p className="settings-notice" role="alert">Sign-in could not be completed. Please try again.</p> : null}
+      {params.auth_error === "recovery" ? <p className="settings-notice" role="alert">Password reset could not be completed. Request a new link and try again.</p> : null}
       {params.auth === "denied" ? <p className="settings-notice" role="alert">This account is not the configured owner.</p> : null}
       {params.password_reset === "success" ? <p className="settings-notice" role="status">Password updated. Sign in with your new password.</p> : null}
       <Panel title="Owner access" action={<span className="badge neutral">{isOwner ? "Owner signed in" : "Private"}</span>}>

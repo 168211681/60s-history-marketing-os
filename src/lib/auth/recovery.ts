@@ -1,5 +1,5 @@
 export const minPasswordLength = 12;
-const allowedNext = new Set(["/settings", "/reset-password"]);
+const allowedNext = new Set(["/settings"]);
 
 export function safeAuthNext(next: string | null | undefined) {
   if (next && allowedNext.has(next)) return next;
@@ -20,9 +20,46 @@ export function callbackDestination(input: {
 }
 
 export function recoveryRedirect(origin: string) {
-  const url = new URL("/auth/callback", origin);
+  const url = new URL("/auth/confirm", origin);
   url.searchParams.set("next", "/reset-password");
   return url.toString();
+}
+
+export function validRecoveryToken(token: string | null): token is string {
+  return Boolean(token && token.length <= 2048 && !/[\u0000\r\n]/.test(token));
+}
+
+export function recoveryConfirmNext(next: string | null) {
+  if (next === null || next === "/reset-password") return "/reset-password" as const;
+  return null;
+}
+
+const recoveryFailure = "/settings?auth_error=recovery" as const;
+
+export async function confirmRecoveryGrant(
+  auth: {
+    verifyOtp: (input: { token_hash: string; type: "recovery" }) => Promise<{ error: { message?: string } | null }>;
+    getUser: () => Promise<{ data: { user: { id: string } | null } }>;
+    signOut: () => Promise<unknown>;
+  } | null,
+  input: { tokenHash: string | null; type: string | null; next: string | null; ownerId: string | null },
+) {
+  if (input.type !== "recovery" || !validRecoveryToken(input.tokenHash) || !recoveryConfirmNext(input.next) || !auth || !input.ownerId) {
+    return { destination: recoveryFailure, marker: "clear" as const };
+  }
+  try {
+    const verified = await auth.verifyOtp({ token_hash: input.tokenHash, type: "recovery" });
+    if (verified.error) return { destination: recoveryFailure, marker: "clear" as const };
+    const { data } = await auth.getUser();
+    const ownerMatches = Boolean(data.user && data.user.id.toLowerCase() === input.ownerId.toLowerCase());
+    if (!ownerMatches) {
+      await auth.signOut();
+      return { destination: recoveryFailure, marker: "clear" as const };
+    }
+    return { destination: "/reset-password" as const, marker: "set" as const };
+  } catch {
+    return { destination: recoveryFailure, marker: "clear" as const };
+  }
 }
 
 export function recoveryRequestMessage() {

@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appOrigin, ownerId } from "@/lib/auth/config";
-import { applyRecoveryMarker, recoveryCookieSecure } from "@/lib/auth/recovery-cookie";
+import { clearRecoveryMarker, recoveryCookieSecure } from "@/lib/auth/recovery-cookie";
 import { callbackDestination } from "@/lib/auth/recovery";
 import { serverAuth } from "@/lib/auth/server";
 
 function redirectTo(origin: string, path: string, response = NextResponse.redirect(new URL(path, origin))) {
   response.headers.set("Location", new URL(path, origin).toString());
   response.headers.set("Cache-Control", "private, no-store");
-  applyRecoveryMarker(response.cookies, path, recoveryCookieSecure(origin));
+  clearRecoveryMarker(response.cookies, recoveryCookieSecure(origin));
   return response;
 }
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       status: 503,
       headers: { "Cache-Control": "private, no-store" },
     });
-    applyRecoveryMarker(response.cookies, "/settings", recoveryCookieSecure(origin));
+    clearRecoveryMarker(response.cookies, recoveryCookieSecure(origin));
     return response;
   }
   const code = request.nextUrl.searchParams.get("code");

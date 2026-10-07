@@ -38,6 +38,15 @@ export function applyRecoveryMarker(response: CookieWriter, destination: string,
   response.set(recoveryCookieName, set ? "1" : "", recoveryCookieOptions(secure, set ? recoveryCookieMaxAge : 0));
 }
 
+export function clearRecoveryMarker(response: CookieWriter, secure: boolean) {
+  response.set(recoveryCookieName, "", recoveryCookieOptions(secure, 0));
+}
+
+export function writeRecoveryDecision(response: CookieWriter, marker: "set" | "clear", secure: boolean) {
+  if (marker === "set") applyRecoveryMarker(response, "/reset-password", secure);
+  else clearRecoveryMarker(response, secure);
+}
+
 export function hasRecoveryMarker(value: string | null | undefined) {
   return value === "1";
 }

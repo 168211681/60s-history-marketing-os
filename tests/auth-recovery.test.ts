@@ -2,20 +2,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, test } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
+import { GET as confirmRecovery } from "../src/app/auth/confirm/route";
 import { GET } from "../src/app/auth/callback/route";
 import {
   applyRecoveryMarker,
+  clearRecoveryMarker,
   hasRecoveryMarker,
   recoveryCookieMaxAge,
   recoveryCookieName,
   recoveryCookieSecure,
   recoveryMarkerDecision,
   resetPasswordAccess,
+  writeRecoveryDecision,
 } from "../src/lib/auth/recovery-cookie";
 import {
   callbackDestination,
   changeOwnerPassword,
   completeOwnerPasswordReset,
+  confirmRecoveryGrant,
   passwordSignInMessage,
   recoveryRedirect,
   recoveryRequestMessage,
@@ -46,12 +50,16 @@ function locationPath(response: Response) {
   return `${url.pathname}${url.search}`;
 }
 
-test("callback accepts safe internal next=/reset-password", () => {
-  assert.equal(safeAuthNext("/reset-password"), "/reset-password");
+test("OAuth callback never authorizes password reset", () => {
+  assert.equal(safeAuthNext("/reset-password"), "/settings");
   assert.equal(safeAuthNext("/settings"), "/settings");
   assert.equal(
     callbackDestination({ code: "pkce-code", next: "/reset-password", exchanged: true, ownerMatches: true }),
-    "/reset-password",
+    "/settings",
+  );
+  assert.equal(
+    callbackDestination({ code: "pkce-code", next: null, exchanged: true, ownerMatches: true }),
+    "/settings",
   );
 });
 
@@ -101,6 +109,11 @@ test("missing callback code fails safely", async () => {
   assert.equal(locationPath(beforeExchange), "/settings?auth_error=callback");
   assert.doesNotMatch(beforeExchange.headers.get("location") ?? "", /evil/);
   assert.doesNotMatch(beforeExchange.headers.get("set-cookie") ?? "", /clipforge_recovery=1/);
+
+  const oauthReset = await GET(new NextRequest("http://localhost:3000/auth/callback?code=present&next=/reset-password"));
+  assert.equal(locationPath(oauthReset), "/settings?auth_error=callback");
+  assert.doesNotMatch(oauthReset.headers.get("location") ?? "", /reset-password/);
+  assert.doesNotMatch(oauthReset.headers.get("set-cookie") ?? "", /clipforge_recovery=1/);
 
   const mismatched = await GET(new NextRequest("http://evil.example/auth/callback?code=untrusted&next=//evil.example"));
   assert.equal(mismatched.status, 503);
@@ -237,18 +250,21 @@ test("failed password update shows a safe message", async () => {
   assert.match(stranger.error ?? "", /reset link/i);
 });
 
-test("forgot-password uses /auth/callback?next=/reset-password and does not reveal accounts", () => {
+test("forgot-password asks Supabase to email a confirm link and does not reveal accounts", () => {
   const redirect = new URL(recoveryRedirect("https://app.example"));
   assert.equal(redirect.origin, "https://app.example");
-  assert.equal(redirect.pathname, "/auth/callback");
+  assert.equal(redirect.pathname, "/auth/confirm");
   assert.equal(redirect.searchParams.get("next"), "/reset-password");
+  assert.equal(redirect.searchParams.get("token_hash"), null);
   assert.equal(recoveryRequestMessage(), "If that account exists, a password reset link has been sent.");
 
   const buttons = readFileSync(new URL("../src/components/auth-buttons.tsx", import.meta.url), "utf8");
+  assert.match(buttons, /resetPasswordForEmail\(trimmed, \{/);
   assert.match(buttons, /redirectTo: recoveryRedirect\(window\.location\.origin\)/);
   assert.match(buttons, /setNotice\(recoveryRequestMessage\(\)\)/);
   assert.doesNotMatch(buttons, /not found|does not exist|no account|user exists|error\.message/i);
   assert.match(buttons, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
+  assert.doesNotMatch(buttons, /\/auth\/callback\?next=\/reset-password/);
   assert.doesNotMatch(buttons, /NEXT_PUBLIC_OWNER_USER_ID/);
 });
 
@@ -263,6 +279,7 @@ test("password sign-in distinguishes credentials from setup failures", () => {
 test("proxy matcher includes reset-password and auth responses are not cached", () => {
   const proxy = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
   assert.match(proxy, /"\/auth\/callback"/);
+  assert.match(proxy, /"\/auth\/confirm"/);
   assert.match(proxy, /"\/reset-password"/);
   assert.match(proxy, /"\/settings"/);
   assert.match(proxy, /Cache-Control", "private, no-store"/);
@@ -299,8 +316,8 @@ test("callback sets the recovery marker only for an owner reset destination", ()
   assert.equal(recoveryCookieMaxAge, 600);
 
   const resetDestination = callbackDestination({ code: "pkce-code", next: "/reset-password", exchanged: true, ownerMatches: true });
-  assert.equal(resetDestination, "/reset-password");
-  assert.equal(recoveryMarkerDecision(resetDestination), "set");
+  assert.equal(resetDestination, "/settings");
+  assert.equal(recoveryMarkerDecision(resetDestination), "clear");
 
   const settingsDestination = callbackDestination({ code: "pkce-code", next: null, exchanged: true, ownerMatches: true });
   assert.equal(settingsDestination, "/settings");
@@ -342,7 +359,8 @@ test("callback sets the recovery marker only for an owner reset destination", ()
   assert.match(buttons, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
   assert.doesNotMatch(buttons, /clipforge_recovery|recoveryMarker/);
   const route = readFileSync(new URL("../src/app/auth/callback/route.ts", import.meta.url), "utf8");
-  assert.match(route, /applyRecoveryMarker\(response\.cookies, path, recoveryCookieSecure\(origin\)\)/);
+  assert.match(route, /clearRecoveryMarker\(response\.cookies, recoveryCookieSecure\(origin\)\)/);
+  assert.doesNotMatch(route, /applyRecoveryMarker|writeRecoveryDecision|\/reset-password/);
   assert.match(route, /redirectTo\(origin, callbackDestination\(/);
   const form = readFileSync(new URL("../src/components/reset-password-form.tsx", import.meta.url), "utf8");
   const updateAt = form.indexOf("completeOwnerPasswordReset(");
@@ -350,6 +368,131 @@ test("callback sets the recovery marker only for an owner reset destination", ()
   const redirectAt = form.indexOf("window.location.assign");
   assert.ok(updateAt > 0 && clearAt > updateAt && redirectAt > clearAt);
   assert.doesNotMatch(form, /clipforge_recovery|document\.cookie/);
+});
+
+test("recovery confirmation verifies the recovery token before setting the marker", async () => {
+  const token = "recovery-token-hash";
+  let verified: { token_hash?: string; type?: string } | null = null;
+  let signedOut = 0;
+  const success = await confirmRecoveryGrant(
+    {
+      verifyOtp: async (input) => {
+        verified = input;
+        return { error: null };
+      },
+      getUser: async () => ({ data: { user: { id: owner } } }),
+      signOut: async () => {
+        signedOut += 1;
+      },
+    },
+    { tokenHash: token, type: "recovery", next: "/reset-password", ownerId: owner },
+  );
+  assert.deepEqual(success, { destination: "/reset-password", marker: "set" });
+  assert.deepEqual(verified, { token_hash: token, type: "recovery" });
+  assert.equal(signedOut, 0);
+
+  const omittedNext = await confirmRecoveryGrant(
+    {
+      verifyOtp: async () => ({ error: null }),
+      getUser: async () => ({ data: { user: { id: owner.toUpperCase() } } }),
+      signOut: async () => undefined,
+    },
+    { tokenHash: token, type: "recovery", next: null, ownerId: owner },
+  );
+  assert.deepEqual(omittedNext, { destination: "/reset-password", marker: "set" });
+
+  const calls = { verify: 0 };
+  const auth = {
+    verifyOtp: async () => {
+      calls.verify += 1;
+      return { error: null };
+    },
+    getUser: async () => ({ data: { user: { id: owner } } }),
+    signOut: async () => undefined,
+  };
+  for (const input of [
+    { tokenHash: null, type: "recovery", next: "/reset-password" },
+    { tokenHash: "", type: "recovery", next: "/reset-password" },
+    { tokenHash: "bad\nhash", type: "recovery", next: "/reset-password" },
+    { tokenHash: token, type: "email", next: "/reset-password" },
+    { tokenHash: token, type: "invite", next: "/reset-password" },
+    { tokenHash: token, type: "recovery", next: "https://evil.example" },
+    { tokenHash: token, type: "recovery", next: "//evil.example" },
+  ]) {
+    const denied = await confirmRecoveryGrant(auth, { ...input, ownerId: owner });
+    assert.equal(denied.destination, "/settings?auth_error=recovery");
+    assert.equal(denied.marker, "clear");
+    assert.doesNotMatch(denied.destination, /evil|token/);
+  }
+  assert.equal(calls.verify, 0);
+
+  const leaked = "otp failed token_hash=super-secret";
+  const invalid = await confirmRecoveryGrant(
+    {
+      verifyOtp: async () => ({ error: { message: leaked } }),
+      getUser: async () => {
+        throw new Error("must not read user");
+      },
+      signOut: async () => undefined,
+    },
+    { tokenHash: token, type: "recovery", next: "/reset-password", ownerId: owner },
+  );
+  assert.equal(invalid.destination, "/settings?auth_error=recovery");
+  assert.equal(invalid.marker, "clear");
+  assert.doesNotMatch(JSON.stringify(invalid), /super-secret|token_hash=/);
+
+  let nonOwnerSignedOut = 0;
+  const nonOwner = await confirmRecoveryGrant(
+    {
+      verifyOtp: async () => ({ error: null }),
+      getUser: async () => ({ data: { user: { id: "20000000-0000-4000-8000-000000000002" } } }),
+      signOut: async () => {
+        nonOwnerSignedOut += 1;
+      },
+    },
+    { tokenHash: token, type: "recovery", next: "/reset-password", ownerId: owner },
+  );
+  assert.deepEqual(nonOwner, { destination: "/settings?auth_error=recovery", marker: "clear" });
+  assert.equal(nonOwnerSignedOut, 1);
+
+  const secure = NextResponse.redirect("https://app.example/reset-password");
+  writeRecoveryDecision(secure.cookies, success.marker, true);
+  const setHeader = secure.headers.get("set-cookie") ?? "";
+  assert.match(setHeader, /clipforge_recovery=1/);
+  assert.match(setHeader, /HttpOnly/i);
+  assert.match(setHeader, /SameSite=Lax/i);
+  assert.match(setHeader, /Max-Age=600/);
+  clearRecoveryMarker(secure.cookies, true);
+
+  process.env.APP_ORIGIN = "http://localhost:3000";
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const secret = "logged-token-hash-should-not-appear";
+  for (const query of [
+    `token_hash=${secret}&type=email&next=/reset-password`,
+    `token_hash=${secret}&type=invite&next=https://evil.example`,
+    "type=recovery&next=/reset-password",
+    `token_hash=${encodeURIComponent("bad\nhash")}&type=recovery`,
+  ]) {
+    const response = await confirmRecovery(new NextRequest(`http://localhost:3000/auth/confirm?${query}`));
+    assert.equal(response.status, 307);
+    assert.equal(locationPath(response), "/settings?auth_error=recovery");
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.doesNotMatch(response.headers.get("location") ?? "", /logged-token|evil/);
+    assert.doesNotMatch(response.headers.get("set-cookie") ?? "", /clipforge_recovery=1/);
+    assert.doesNotMatch(await response.text(), new RegExp(secret));
+  }
+  const mismatched = await confirmRecovery(new NextRequest("http://evil.example/auth/confirm?token_hash=untrusted&type=recovery"));
+  assert.equal(mismatched.status, 503);
+
+  const confirmSource = readFileSync(new URL("../src/app/auth/confirm/route.ts", import.meta.url), "utf8");
+  const recoverySource = readFileSync(new URL("../src/lib/auth/recovery.ts", import.meta.url), "utf8");
+  assert.match(confirmSource, /confirmRecoveryGrant\(/);
+  assert.match(confirmSource, /writeRecoveryDecision\(response\.cookies, marker/);
+  assert.match(confirmSource, /finish\(origin, grant\.destination, grant\.marker, response\)/);
+  assert.match(recoverySource, /verifyOtp\(\{ token_hash: input\.tokenHash, type: "recovery" \}\)/);
+  assert.doesNotMatch(confirmSource, /console\.(log|debug|info|warn|error|trace)/);
+  assert.doesNotMatch(recoverySource, /console\.(log|debug|info|warn|error|trace)/);
 });
 
 test("auth recovery code does not log tokens, codes, or passwords", () => {
@@ -360,6 +503,7 @@ test("auth recovery code does not log tokens, codes, or passwords", () => {
     "../src/lib/auth/server.ts",
     "../src/lib/auth/config.ts",
     "../src/app/auth/callback/route.ts",
+    "../src/app/auth/confirm/route.ts",
     "../src/app/reset-password/page.tsx",
     "../src/app/reset-password/actions.ts",
     "../src/components/auth-buttons.tsx",
