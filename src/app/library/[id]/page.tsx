@@ -4,8 +4,9 @@ import { AssetManager } from "@/components/asset-manager";
 import { ContentItemForm } from "@/components/content-item-form";
 import { PlatformMatrix } from "@/components/platform-matrix";
 import { PageHeading, Panel } from "@/components/ui";
+import { YoutubeSourceMetadataView } from "@/components/youtube-source";
 import { currentOwner } from "@/lib/auth/server";
-import { getContentItem, listAssets, listPlatformPosts, listProjects } from "@/lib/clipforge/data";
+import { getContentItem, getYoutubeSource, listAssets, listPlatformPosts, listProjects } from "@/lib/clipforge/data";
 import { distributionSummary } from "@/lib/clipforge/distribution";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
 import { isUuid } from "@/lib/clipforge/model";
@@ -27,12 +28,14 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   let projects;
   let assets;
   let posts;
+  let source;
   try {
-    [item, projects, assets, posts] = await Promise.all([
+    [item, projects, assets, posts, source] = await Promise.all([
       getContentItem(owner.id, id),
       listProjects(owner.id),
       listAssets(owner.id, id),
       listPlatformPosts(owner.id, id),
+      getYoutubeSource(owner.id, id),
     ]);
   } catch {
     return <Panel title="Content unavailable"><p role="alert">We could not load this content item. <Link href="/library">Back to library</Link>.</p></Panel>;
@@ -62,6 +65,9 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           <div><dt>Distribution</dt><dd>{progress.label}</dd></div>
         </dl>
         {item.notes ? <p className="pre-wrap">{item.notes}</p> : <p className="muted">No notes.</p>}
+      </Panel>
+      <Panel title="YouTube source metadata" description="Stored YouTube facts only. Nothing here is editable, and nothing here classifies format or production type.">
+        <YoutubeSourceMetadataView source={source ?? null} />
       </Panel>
       <Panel title="Edit metadata">
         <ContentItemForm key={item.updatedAt} item={item} projects={projects} />

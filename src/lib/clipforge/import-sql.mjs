@@ -23,6 +23,13 @@ source as materialized (
            then v.duration_seconds::integer
            else null
          end as duration_seconds,
+         case
+           when v.default_audio_language ~ '^[a-z]{2}(-[A-Za-z0-9]{2,8})?$'
+            and v.default_audio_language <> 'und' then v.default_audio_language
+           when v.default_language ~ '^[a-z]{2}(-[A-Za-z0-9]{2,8})?$'
+            and v.default_language <> 'und' then v.default_language
+           else null
+         end as source_language,
          row_number() over (
            partition by v.youtube_video_id
            order by v.published_at nulls last, c.id
@@ -114,7 +121,7 @@ inserted_items as (
     status, language_code, duration_seconds, notes
   )
   select f.content_id, p.id, $2::uuid, null, f.title, f.topic, 'unknown', 'unknown',
-         'published', 'und', f.duration_seconds, ''
+         'published', coalesce(f.source_language, 'und'), f.duration_seconds, ''
     from fresh f
    cross join project p
   returning id
@@ -173,6 +180,22 @@ updated_durations as (
      and i.duration_seconds is distinct from u.duration_seconds
      and exists (select 1 from project)
   returning i.id
+),
+updated_languages as (
+  update public.content_items i
+     set language_code = u.source_language
+    from usable u
+    join public.platform_posts pp
+      on pp.owner_id = $2::uuid
+     and pp.platform = 'youtube'
+     and pp.platform_post_id = u.youtube_video_id
+   where i.id = pp.content_item_id
+     and i.owner_id = $2::uuid
+     and i.language_code = 'und'
+     and u.source_language is not null
+     and i.language_code is distinct from u.source_language
+     and exists (select 1 from project)
+  returning i.id
 )
 select exists (select 1 from project) as project_found,
        (select count(*) from source) as found,
@@ -185,6 +208,8 @@ select exists (select 1 from project) as project_found,
           select content_item_id as id from updated_posts
           union
           select id from updated_durations
+          union
+          select id from updated_languages
        ) changed) as updated,
        (select count(*) from source) - (select count(*) from usable) as skipped
 `;

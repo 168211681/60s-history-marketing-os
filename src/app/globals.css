@@ -1036,6 +1036,21 @@ footer {
 .import-panel a {
   overflow-wrap: anywhere;
 }
+.youtube-source {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.youtube-source p,
+.youtube-source dd,
+.youtube-source a {
+  overflow-wrap: anywhere;
+}
+.youtube-source-thumb {
+  display: block;
+  max-width: min(100%, 320px);
+  height: auto;
+}
 .form-grid textarea {
   min-height: 88px;
   padding: 10px 12px;

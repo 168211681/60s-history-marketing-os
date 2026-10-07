@@ -949,3 +949,214 @@ test("legacy YouTube import of 1000 videos does not duplicate on the second run"
   assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${owner}'`), "4000");
   assert.ok(elapsed < 15000, `import took ${elapsed}ms`);
 });
+
+test("YouTube source metadata constraints stay server-owned and are not security definer", () => {
+  assert.equal(
+    sql("select count(*) from information_schema.columns where table_schema='public' and table_name='videos' and column_name in ('description','thumbnail_url','tags','category_id','default_language','default_audio_language','privacy_status','metadata_synced_at')"),
+    "8",
+  );
+  assert.equal(
+    sql("select prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='youtube_tags_are_source_bounded'"),
+    "f",
+  );
+  assert.equal(
+    sql("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prosecdef and n.nspname in ('public','private')"),
+    "0",
+  );
+  assert.equal(
+    sql(`select exists (
+      select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        cross join lateral aclexplode(p.proacl) a
+       where n.nspname = 'private'
+         and p.proname = 'youtube_tags_are_source_bounded'
+         and a.grantee = 0
+         and a.privilege_type = 'EXECUTE'
+    )::text`),
+    "false",
+  );
+  assert.equal(
+    sql(`select has_function_privilege('anon','private.youtube_tags_are_source_bounded(text[])','execute')::text
+      || '|' || has_function_privilege('authenticated','private.youtube_tags_are_source_bounded(text[])','execute')::text
+      || '|' || has_function_privilege('service_role','private.youtube_tags_are_source_bounded(text[])','execute')::text`),
+    "false|false|true",
+  );
+  assert.equal(
+    sql(`select (description = '') and (tags = '{}') and (metadata_synced_at is null) from public.videos where id='${videoA}'`),
+    "t",
+  );
+  asRole("authenticated", userA, `update public.videos set description='hacked' where id='${videoA}'`, "42501");
+  asRole("authenticated", userA, `update public.videos set tags=array['hack'] where id='${videoA}'`, "42501");
+  asRole("authenticated", userA, `update public.videos set metadata_synced_at=now() where id='${videoA}'`, "42501");
+  assert.equal(
+    asRole(
+      "service_role",
+      "",
+      `update public.videos set topic='keep topic' where id='${videoA}';
+       update public.videos set description='Exact source', thumbnail_url='https://i.ytimg.com/vi/test/maxres.jpg', tags=array['siege','logistics'], category_id='27', default_language='EN', default_audio_language='en-US', privacy_status='unlisted', metadata_synced_at=now() where id='${videoA}';
+       select topic || '|' || description || '|' || default_language || '|' || default_audio_language || '|' || privacy_status || '|' || category_id || '|' || case when metadata_synced_at is not null then 'synced' else 'missing' end || '|' || thumbnail_url from public.videos where id='${videoA}'`,
+    ),
+    "keep topic|Exact source|EN|en-US|unlisted|27|synced|https://i.ytimg.com/vi/test/maxres.jpg",
+  );
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, thumbnail_url) values ('${channelA}','badsource01','Bad','http://example.com/a.jpg')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, thumbnail_url) values ('${channelA}','badsource02','Bad','https://example.com/a b.jpg')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, privacy_status) values ('${channelA}','badsource03','Bad','friends')`, "23514");
+  const thirtyOne = Array.from({ length: 31 }, (_, index) => `'t${index}'`).join(",");
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags001','Good', array[${thirtyOne}]) returning tags[1] || '|' || tags[2] || '|' || tags[31] || '|' || cardinality(tags)::text`),
+    "t0|t1|t30|31",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags002','Good', array['Siege','  raw  ','World War']) returning tags[1] || '|' || tags[2] || '|' || tags[3]`),
+    "Siege|  raw  |World War",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags003','Good', array[repeat('a', 500)]) returning length(tags[1])::text`),
+    "500",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags004','Good', array['x ' || repeat('y', 496)]) returning length(tags[1])::text`),
+    "498",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags005','Good', array[repeat('c', 249), repeat('d', 250)]) returning (length(tags[1]) + length(tags[2]) + 1)::text`),
+    "500",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags006','Good', array[repeat('i', 101)]) returning length(tags[1])::text`),
+    "101",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags007','Good', array[repeat('👍', 500)]) returning length(tags[1])::text`),
+    "500",
+  );
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource04','Bad', array[repeat('e', 501)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource05','Bad', array['x ' || repeat('z', 497)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource11','Bad', array[repeat('g', 250), repeat('h', 250)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource12','Bad', array[''])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource13','Bad', array['ok', null]::text[])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource14','Bad', array[repeat('👍', 501)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, description) values ('${channelA}','badsource06','Bad','${"d".repeat(5001)}')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, category_id) values ('${channelA}','badsource07','Bad','abc')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource08','Bad','en-')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_audio_language) values ('${channelA}','badsource09','Bad','zh-123456789')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource10','Bad','${"abcdefgh-".repeat(8)}ab')`, "23514");
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language, default_audio_language) values ('${channelA}','goodlang001','Good','zh-Hans-CN','es-419') returning default_language || '|' || default_audio_language`),
+    "zh-Hans-CN|es-419",
+  );
+});
+
+test("import copies a safe YouTube language only onto und and leaves editorial fields", () => {
+  const owner = "11000000-0000-4000-8000-0000000000dd";
+  const channel = "21000000-0000-4000-8000-0000000000dd";
+  const project = "a2000000-0000-4000-8000-0000000000dd";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','source-meta','Source channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Source project')`);
+  sql(`insert into public.videos (
+         channel_id, youtube_video_id, title, topic, published_at, duration_seconds,
+         description, tags, category_id, default_language, default_audio_language, privacy_status
+       ) values
+       ('${channel}','thaudio0001','Audio wins','seed','2024-01-01T00:00:00Z',58,'','{}',null,'en','th','public'),
+       ('${channel}','enonly00001','English only','seed','2024-01-02T00:00:00Z',58,'','{}',null,'en',null,'public'),
+       ('${channel}','enuslang001','Region tag','seed','2024-01-03T00:00:00Z',58,'','{}',null,'en-US',null,'public'),
+       ('${channel}','nolang00001','No language','seed','2024-01-04T00:00:00Z',58,'','{}',null,null,null,null),
+       ('${channel}','undaudio001','Und audio','seed','2024-01-05T00:00:00Z',58,'','{}',null,'en','und','public'),
+       ('${channel}','bothund0001','Both und','seed','2024-01-06T00:00:00Z',58,'','{}',null,'und','und','public'),
+       ('${channel}','upperen0001','Upper EN','seed','2024-01-07T00:00:00Z',58,'','{}',null,'EN',null,'public'),
+       ('${channel}','threelang01','Three letter','seed','2024-01-08T00:00:00Z',58,'','{}',null,'eng',null,'public'),
+       ('${channel}','humankeep01','Human keep','seed topic','2024-01-09T00:00:00Z',58,'Source description','{alpha,beta}','22','en',null,'unlisted')`);
+  const first = importFields(project, owner);
+  assert.deepEqual(first, ["t", "9", "9", "36", "0", "0", "0"]);
+  const language = (videoId) => sql(`select i.language_code from public.content_items i join public.platform_posts p on p.content_item_id=i.id where p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='${videoId}'`);
+  assert.equal(language("thaudio0001"), "th");
+  assert.equal(language("enonly00001"), "en");
+  assert.equal(language("enuslang001"), "en-US");
+  assert.equal(language("nolang00001"), "und");
+  assert.equal(language("undaudio001"), "en");
+  assert.equal(language("bothund0001"), "und");
+  assert.equal(language("upperen0001"), "und");
+  assert.equal(language("threelang01"), "und");
+  assert.equal(language("humankeep01"), "en");
+  assert.equal(sql(`select default_language from public.videos where channel_id='${channel}' and youtube_video_id='upperen0001'`), "EN");
+  assert.equal(sql(`select default_language from public.videos where channel_id='${channel}' and youtube_video_id='threelang01'`), "eng");
+  assert.equal(
+    sql(`select caption || '|' || hashtags || '|' || topic from public.platform_posts p join public.content_items i on i.id=p.content_item_id where p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='humankeep01'`),
+    "||seed topic",
+  );
+  sql(`update public.content_items i set title='Curated keep', language_code='th', topic='owner topic', format='short_form', production_type='remaster', notes='keep me' from public.platform_posts p where p.content_item_id=i.id and p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='humankeep01'`);
+  sql(`update public.platform_posts set caption='human caption', hashtags='owner tags' where owner_id='${owner}' and platform='youtube' and platform_post_id='humankeep01'`);
+  sql(`update public.videos set description='Changed source description', tags=array['gamma','delta'], category_id='27', topic='source topic', title='Source title changed' where channel_id='${channel}' and youtube_video_id='humankeep01'`);
+  sql(`update public.videos set default_audio_language='th' where channel_id='${channel}' and youtube_video_id='nolang00001'`);
+  const refreshed = importFields(project, owner);
+  assert.deepEqual(refreshed, ["t", "9", "0", "0", "9", "2", "0"]);
+  assert.equal(language("nolang00001"), "th");
+  assert.equal(language("humankeep01"), "th");
+  assert.equal(language("upperen0001"), "und");
+  assert.equal(
+    sql(`select i.title || '|' || i.topic || '|' || i.notes || '|' || i.format || '|' || i.production_type || '|' || i.language_code || '|' || p.caption || '|' || p.hashtags || '|' || p.title from public.content_items i join public.platform_posts p on p.content_item_id=i.id where p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='humankeep01'`),
+    "Curated keep|owner topic|keep me|short_form|remaster|th|human caption|owner tags|Source title changed",
+  );
+  assert.equal(
+    sql(`select description || '|' || category_id || '|' || array_to_string(tags, ',') from public.videos where channel_id='${channel}' and youtube_video_id='humankeep01'`),
+    "Changed source description|27|gamma,delta",
+  );
+  const again = importFields(project, owner);
+  assert.deepEqual(again, ["t", "9", "0", "0", "9", "0", "0"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}'`), "9");
+  assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${owner}'`), "36");
+  assert.equal(
+    sql(`select count(*) from (select platform_post_id from public.platform_posts where owner_id='${owner}' and platform='youtube' group by platform_post_id having count(*) > 1) duplicates`),
+    "0",
+  );
+});
+
+test("multi-subtag YouTube languages stay raw and only a safe tag fills und", () => {
+  const owner = "11000000-0000-4000-8000-0000000000de";
+  const channel = "21000000-0000-4000-8000-0000000000de";
+  const project = "a2000000-0000-4000-8000-0000000000de";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','source-lang','Language channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Language project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, published_at, duration_seconds, default_language) values
+    ('${channel}','zhhans00001','Script tag','2024-02-01T00:00:00Z',58,'zh-Hans'),
+    ('${channel}','zhhanscn001','Region tag','2024-02-02T00:00:00Z',58,'zh-Hans-CN'),
+    ('${channel}','es419lang01','Numeric region','2024-02-03T00:00:00Z',58,'es-419')`);
+  assert.deepEqual(importFields(project, owner), ["t", "3", "3", "12", "0", "0", "0"]);
+  const language = (videoId) => sql(`select i.language_code || '|' || v.default_language from public.content_items i join public.platform_posts p on p.content_item_id=i.id join public.videos v on v.youtube_video_id=p.platform_post_id where p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='${videoId}'`);
+  assert.equal(language("zhhans00001"), "zh-Hans|zh-Hans");
+  assert.equal(language("zhhanscn001"), "und|zh-Hans-CN");
+  assert.equal(language("es419lang01"), "es-419|es-419");
+  const again = importFields(project, owner);
+  assert.deepEqual(again, ["t", "3", "0", "0", "3", "0", "0"]);
+});
+
+test("source tags stay exact and never become platform hashtags", () => {
+  const owner = "11000000-0000-4000-8000-0000000000df";
+  const channel = "21000000-0000-4000-8000-0000000000df";
+  const project = "a2000000-0000-4000-8000-0000000000df";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','source-tags','Tag channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Tag project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, published_at, duration_seconds, tags) values ('${channel}','taghash0001','Tagged source','2024-03-01T00:00:00Z',58, array['#History','World War','Siege'])`);
+  assert.deepEqual(importFields(project, owner), ["t", "1", "1", "4", "0", "0", "0"]);
+  assert.equal(
+    sql(`select hashtags from public.platform_posts where owner_id='${owner}' and platform='youtube' and platform_post_id='taghash0001'`),
+    "",
+  );
+  assert.equal(
+    sql(`select tags[1] || '|' || tags[2] || '|' || tags[3] from public.videos where channel_id='${channel}' and youtube_video_id='taghash0001'`),
+    "#History|World War|Siege",
+  );
+  assert.deepEqual(importFields(project, owner), ["t", "1", "0", "0", "1", "0", "0"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}'`), "1");
+  assert.equal(
+    sql(`select hashtags from public.platform_posts where owner_id='${owner}' and platform='youtube' and platform_post_id='taghash0001'`),
+    "",
+  );
+});

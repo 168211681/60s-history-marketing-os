@@ -1,6 +1,7 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { appOrigin, ownerId } from "../src/lib/auth/config";
 import { decryptToken, encryptToken, sameSecret, tokenEncryptionConfigured } from "../src/lib/youtube/crypto";
 import { authorizationUrl, exchangeCode, newOAuthState, ownerChannel, refreshAccessToken, revokeToken, youtubeScopes } from "../src/lib/youtube/google";
@@ -160,13 +161,195 @@ test("video metadata is batched and rejects a mismatched channel", async () => {
   };
   const fetcher = (async (input: URL | RequestInfo) => {
     const url = new URL(String(input));
-    assert.equal(url.searchParams.get("part"), "snippet,contentDetails");
+    assert.equal(url.searchParams.get("part"), "snippet,contentDetails,status");
     return Response.json({ items: [valid] });
   }) as typeof fetch;
   assert.deepEqual(await fetchVideoMetadata("access", expectedChannel, [valid.id], { fetcher }), [{
-    youtubeVideoId: valid.id, title: "A short history", publishedAt: "2026-09-01T12:00:00Z", durationSeconds: 59,
+    youtubeVideoId: valid.id,
+    title: "A short history",
+    publishedAt: "2026-09-01T12:00:00Z",
+    durationSeconds: 59,
+    description: "",
+    thumbnailUrl: null,
+    tags: [],
+    categoryId: null,
+    defaultLanguage: null,
+    defaultAudioLanguage: null,
+    privacyStatus: null,
   }]);
   await assert.rejects(fetchVideoMetadata("access", "UC" + "d".repeat(22), [valid.id], { fetcher }), YouTubeSyncError);
+});
+
+test("video source metadata prefers maxres, keeps exact text, and stays within 50 ids", async () => {
+  const expectedChannel = "UC" + "e".repeat(22);
+  const ids = Array.from({ length: 51 }, (_, index) => `s${String(index).padStart(10, "0")}`);
+  const batches: number[] = [];
+  const fetcher = (async (input: URL | RequestInfo) => {
+    const url = new URL(String(input));
+    assert.equal(url.searchParams.get("part"), "snippet,contentDetails,status");
+    const requested = (url.searchParams.get("id") ?? "").split(",");
+    batches.push(requested.length);
+    assert.ok(requested.length <= 50);
+    return Response.json({
+      items: requested.map((id) => ({
+        id,
+        snippet: {
+          channelId: expectedChannel,
+          title: "Source title",
+          description: "  keep spaces  ",
+          publishedAt: "2026-09-01T12:00:00Z",
+          categoryId: "27",
+          defaultLanguage: "en",
+          defaultAudioLanguage: "th",
+          tags: ["Siege", "  raw  "],
+          thumbnails: {
+            default: { url: "https://i.ytimg.com/vi/default.jpg" },
+            high: { url: "https://i.ytimg.com/vi/high.jpg" },
+            maxres: { url: "https://i.ytimg.com/vi/maxres.jpg" },
+          },
+        },
+        contentDetails: { duration: "PT59S" },
+        status: { privacyStatus: "unlisted" },
+      })),
+    });
+  }) as typeof fetch;
+  const videos = await fetchVideoMetadata("access", expectedChannel, ids, { fetcher });
+  assert.deepEqual(batches, [50, 1]);
+  assert.equal(videos[0]?.description, "  keep spaces  ");
+  assert.equal(videos[0]?.thumbnailUrl, "https://i.ytimg.com/vi/maxres.jpg");
+  assert.deepEqual(videos[0]?.tags, ["Siege", "  raw  "]);
+  assert.equal(videos[0]?.categoryId, "27");
+  assert.equal(videos[0]?.defaultLanguage, "en");
+  assert.equal(videos[0]?.defaultAudioLanguage, "th");
+  assert.equal(videos[0]?.privacyStatus, "unlisted");
+  assert.equal(videos.length, 51);
+});
+
+test("malformed source metadata fails validation instead of being truncated", async () => {
+  const expectedChannel = "UC" + "f".repeat(22);
+  const base = {
+    id: "fffffffffff",
+    snippet: {
+      channelId: expectedChannel,
+      title: "Source title",
+      description: "ok",
+      publishedAt: "2026-09-01T12:00:00Z",
+      tags: ["ok"],
+      categoryId: "27",
+      defaultLanguage: "en",
+      defaultAudioLanguage: "en-US",
+      thumbnails: { high: { url: "https://i.ytimg.com/vi/ok.jpg" } },
+    },
+    contentDetails: { duration: "PT1S" },
+    status: { privacyStatus: "public" },
+  };
+  async function reject(item: unknown) {
+    const fetcher = (async () => Response.json({ items: [item] })) as typeof fetch;
+    await assert.rejects(
+      fetchVideoMetadata("access", expectedChannel, ["fffffffffff"], { fetcher }),
+      (error: unknown) => error instanceof YouTubeSyncError && error.code === "VALIDATION",
+    );
+  }
+  await reject({
+    ...base,
+    snippet: { ...base.snippet, thumbnails: { maxres: { url: "http://i.ytimg.com/vi/a.jpg" }, high: { url: "https://i.ytimg.com/vi/ok.jpg" } } },
+  });
+  await reject({ ...base, status: { privacyStatus: "friends" } });
+  await reject({ ...base, snippet: { ...base.snippet, description: "x".repeat(5001) } });
+  await reject({ ...base, snippet: { ...base.snippet, categoryId: "abc" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "en-" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "zh-123456789" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultAudioLanguage: `${"abcdefgh-".repeat(8)}ab` } });
+  for (const tag of ["zh-Hans", "zh-Hans-CN", "es-419"]) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, defaultLanguage: tag, defaultAudioLanguage: tag } }],
+    })) as typeof fetch;
+    const [video] = await fetchVideoMetadata("access", expectedChannel, ["fffffffffff"], { fetcher });
+    assert.equal(video?.defaultLanguage, tag);
+    assert.equal(video?.defaultAudioLanguage, tag);
+  }
+  const accepted = {
+    ...base,
+    snippet: { ...base.snippet, defaultLanguage: "EN", defaultAudioLanguage: "th" },
+  };
+  const fetcher = (async () => Response.json({ items: [accepted] })) as typeof fetch;
+  const [video] = await fetchVideoMetadata("access", expectedChannel, ["fffffffffff"], { fetcher });
+  assert.equal(video?.defaultLanguage, "EN");
+  assert.equal(video?.defaultAudioLanguage, "th");
+});
+
+test("YouTube tags follow the provider 500-character budget", async () => {
+  const expectedChannel = "UC" + "g".repeat(22);
+  const base = {
+    id: "ggggggggggg",
+    snippet: {
+      channelId: expectedChannel,
+      title: "Source title",
+      description: "ok",
+      publishedAt: "2026-09-01T12:00:00Z",
+      categoryId: "27",
+      thumbnails: { high: { url: "https://i.ytimg.com/vi/ok.jpg" } },
+    },
+    contentDetails: { duration: "PT1S" },
+    status: { privacyStatus: "public" },
+  };
+  async function parsed(tags: unknown) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, tags } }],
+    })) as typeof fetch;
+    const [video] = await fetchVideoMetadata("access", expectedChannel, ["ggggggggggg"], { fetcher });
+    return video?.tags;
+  }
+  async function reject(tags: unknown) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, tags } }],
+    })) as typeof fetch;
+    await assert.rejects(
+      fetchVideoMetadata("access", expectedChannel, ["ggggggggggg"], { fetcher }),
+      (error: unknown) => error instanceof YouTubeSyncError && error.code === "VALIDATION",
+    );
+  }
+
+  const many = Array.from({ length: 31 }, (_, index) => `Tag${index}`);
+  assert.deepEqual(await parsed(many), many);
+  const exactText = ["Siege", "  raw  ", "World War"];
+  assert.deepEqual(await parsed(exactText), exactText);
+  assert.deepEqual(await parsed(["x".repeat(101)]), ["x".repeat(101)]);
+  assert.deepEqual(await parsed(["A".repeat(500)]), ["A".repeat(500)]);
+  const exactSpace = `A ${"B".repeat(496)}`;
+  assert.equal(Array.from(exactSpace).length, 498);
+  assert.deepEqual(await parsed([exactSpace]), [exactSpace]);
+  const left = "c".repeat(249);
+  const right = "d".repeat(250);
+  assert.deepEqual(await parsed([left, right]), [left, right]);
+  const emoji = "👍".repeat(500);
+  assert.equal(emoji.length, 1000);
+  assert.equal(Array.from(emoji).length, 500);
+  assert.deepEqual(await parsed([emoji]), [emoji]);
+  assert.deepEqual(await parsed(undefined), []);
+  assert.deepEqual(await parsed(null), []);
+  assert.deepEqual(await parsed([]), []);
+
+  await reject(["e".repeat(501)]);
+  const overSpace = `A ${"B".repeat(497)}`;
+  assert.equal(Array.from(overSpace).length, 499);
+  await reject([overSpace]);
+  await reject(["f".repeat(250), "g".repeat(250)]);
+  await reject(["👍".repeat(501)]);
+  await reject([null]);
+  await reject([1]);
+  await reject([""]);
+  await reject(["ok", ""]);
+  await reject(["ok", null]);
+  await reject("not-a-list");
+});
+
+test("the metadata upsert writes server time and does not replace topic", () => {
+  const store = readFileSync("src/lib/youtube/store.ts", "utf8");
+  assert.match(store, /metadata_synced_at = now\(\)/);
+  assert.doesNotMatch(store, /metadata_synced_at:/);
+  assert.match(store, /youtube-daily-v2-source-metadata:/);
+  assert.doesNotMatch(store, /youtube-daily-v1:/);
 });
 
 test("analytics parsing uses response headers, preserves missing rows, and batches 500 video filters", async () => {

@@ -44,12 +44,14 @@ and reviewed. Never rewrite, rename, or replay historical migrations. Never
 normalize Staging or Production migration history, and never repair the
 intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
 `20260928140124_password_setup_authorizations` and
-`20261006175601_clipforge_projects_and_content_items`. Staging and `main` have
-18 migrations. This branch has 19 because
-`20261006210730_clipforge_distribution_assets` is still pending. Do not apply
-it to Staging or Production from this branch. The pull-request gate remains
-exact equality, so do not open a pull request until a separate reviewed apply
-makes Staging match. The earlier ClipForge migration was applied separately
-after review. Do not reapply it, and do not
-apply it to Production. Production
-does not contain the password-setup migration and must not be normalized to add it.
+`20261006175601_clipforge_projects_and_content_items`. Do not treat the older
+18-migration snapshot as the current hosted inventory. Sprint 004 is
+Production-complete: one Production ClipForge project, 41 stored YouTube videos
+imported, 41 content items, 164 platform posts, re-import idempotency verified,
+and duplicate external YouTube IDs = 0.
+`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
+Staging. Production does not have this migration. Do not apply it to Production
+without separate explicit approval. The pull-request gate remains exact equality.
+Do not reapply earlier ClipForge migrations.
+Production does not contain the password-setup migration and must not be
+normalized to add it.
