@@ -25,6 +25,9 @@ test("content input rejects unknown status and blank keys", () => {
   assert.equal(created?.contentKey, null);
   assert.equal(created?.durationSeconds, null);
   assert.equal(created?.languageCode, "und");
+  assert.equal(created?.contentPillar, "");
+  assert.equal(parseContentInput({ projectId, title: "Siege", contentPillar: "x".repeat(81) }), null);
+  assert.equal(parseContentPatch({ contentPillar: "Hidden Engineering" })?.contentPillar, "Hidden Engineering");
   assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "und" })?.languageCode, "und");
   assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "EN" })?.languageCode, "en");
   assert.equal(parseContentInput({ projectId, title: "Siege", languageCode: "en-US" })?.languageCode, "en-us");

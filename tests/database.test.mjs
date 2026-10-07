@@ -138,13 +138,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "23",
+    "24",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "23",
+      "24",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -1159,4 +1159,81 @@ test("source tags stay exact and never become platform hashtags", () => {
     sql(`select hashtags from public.platform_posts where owner_id='${owner}' and platform='youtube' and platform_post_id='taghash0001'`),
     "",
   );
+});
+
+test("classification suggestions stay owner-readable and change canonical metadata only in an explicit review", () => {
+  const owner = "11000000-0000-4000-8000-0000000000e1";
+  const other = "11000000-0000-4000-8000-0000000000e2";
+  const project = "a2000000-0000-4000-8000-0000000000e1";
+  const item = "b2000000-0000-4000-8000-0000000000e1";
+  const suggestion = "c2000000-0000-4000-8000-0000000000e1";
+  const rejected = "c2000000-0000-4000-8000-0000000000e2";
+  const fingerprint = "a".repeat(64);
+  const otherFingerprint = "b".repeat(64);
+  assert.equal(
+    sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='content_classification_suggestions'"),
+    "t",
+  );
+  assert.equal(
+    sql("select prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='classification_accepted_fields_are_bounded'"),
+    "f",
+  );
+  assert.equal(
+    sql("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prosecdef and n.nspname in ('public','private')"),
+    "0",
+  );
+  assert.equal(
+    sql("select count(*) from pg_policies where schemaname='public' and tablename='content_classification_suggestions' and cmd <> 'SELECT'"),
+    "0",
+  );
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_classification_suggestions','select')"), "t");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_classification_suggestions','insert')"), "f");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_classification_suggestions','update')"), "f");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_classification_suggestions','delete')"), "f");
+  assert.equal(sql("select has_table_privilege('anon','public.content_classification_suggestions','select')"), "f");
+  assert.equal(sql("select has_table_privilege('service_role','public.content_classification_suggestions','insert')"), "t");
+  assert.equal(sql("select has_column_privilege('authenticated','public.content_items','content_pillar','update')"), "t");
+  sql(`insert into auth.users (id) values ('${owner}'), ('${other}')`);
+  sql(`insert into public.users (id) values ('${owner}'), ('${other}')`);
+  sql(`insert into public.projects (id, owner_id, name, code) values ('${project}','${owner}','History','H60')`);
+  sql(`insert into public.content_items (id, project_id, owner_id, title, topic, format, production_type, language_code) values ('${item}','${project}','${owner}','The siege','','unknown','unknown','und')`);
+  assert.equal(sql(`select content_pillar from public.content_items where id='${item}'`), "");
+  asRole("anon", "", "select * from public.content_classification_suggestions", "42501");
+  asRole("authenticated", owner, `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown','openai-compatible','test-model','clipforge-metadata-v1','${fingerprint}')`, "42501");
+  asRole("authenticated", owner, `update public.content_classification_suggestions set status='accepted'`, "42501");
+  asRole("authenticated", owner, "delete from public.content_classification_suggestions", "42501");
+  assert.equal(
+    asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown','openai-compatible','test-model','clipforge-metadata-v1','${fingerprint}') returning status`),
+    "pending",
+  );
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','short_form','openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23514");
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, topic_confidence, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown',1.1,'openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23514");
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, pillar_confidence, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown',-0.01,'openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23514");
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, accepted_fields, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown',array['format'],'openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23514");
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, accepted_fields, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown',array['topic','topic'],'openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23514");
+  asRole("service_role", "", `insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','unknown','openai-compatible','test-model','clipforge-metadata-v1','${"A".repeat(64)}')`, "23514");
+  sql(`insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${other}','unknown','openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`, "23503");
+  sql(`insert into public.content_classification_suggestions (id, content_item_id, owner_id, suggested_topic, suggested_content_pillar, suggested_production_type, topic_confidence, provider, model, prompt_version, source_fingerprint) values ('${rejected}','${item}','${owner}','Siege engineering','Hidden Engineering','unknown',0.8,'openai-compatible','test-model','clipforge-metadata-v1','${fingerprint}')`);
+  sql(`insert into public.content_classification_suggestions (content_item_id, owner_id, suggested_topic, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${item}','${owner}','Again','unknown','openai-compatible','test-model','clipforge-metadata-v1','${fingerprint}')`, "23505");
+  assert.equal(asRole("authenticated", other, `select count(*) from public.content_classification_suggestions where id='${rejected}'`), "0");
+  assert.equal(asRole("authenticated", owner, `select count(*) from public.content_classification_suggestions where id='${rejected}'`), "1");
+  assert.equal(
+    asRole("authenticated", owner, `update public.content_items set content_pillar='${"p".repeat(80)}' where id='${item}' returning length(content_pillar)`),
+    "80",
+  );
+  asRole("authenticated", owner, `update public.content_items set content_pillar='${"q".repeat(81)}' where id='${item}'`, "23514");
+  assert.equal(sql(`select content_pillar from public.content_items where id='${item}'`), "");
+  sql(`begin;
+    update public.content_classification_suggestions set status='rejected', reviewed_at=now() where id='${rejected}';
+    commit;`);
+  assert.equal(sql(`select status from public.content_classification_suggestions where id='${rejected}'`), "rejected");
+  assert.equal(sql(`select topic || '|' || content_pillar || '|' || format || '|' || production_type from public.content_items where id='${item}'`), "||unknown|unknown");
+  sql(`insert into public.content_classification_suggestions (id, content_item_id, owner_id, suggested_topic, suggested_content_pillar, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${suggestion}','${item}','${owner}','Siege engineering','Hidden Engineering','new','openai-compatible','test-model','clipforge-metadata-v1','${otherFingerprint}')`);
+  sql(`begin;
+    update public.content_items set topic='Siege engineering' where id='${item}' and owner_id='${owner}';
+    update public.content_classification_suggestions set status='accepted', accepted_fields=array['topic'], reviewed_at=now() where id='${suggestion}';
+    commit;`);
+  assert.equal(sql(`select topic || '|' || content_pillar || '|' || format || '|' || production_type from public.content_items where id='${item}'`), "Siege engineering||unknown|unknown");
+  assert.equal(sql(`select status || '|' || accepted_fields::text from public.content_classification_suggestions where id='${suggestion}'`), "accepted|{topic}");
+  assert.equal(sql(`select format || '|' || production_type from public.content_items where id='${item}'`), "unknown|unknown");
 });

@@ -20,6 +20,7 @@ export type ContentInput = {
   contentKey: string | null;
   title: string;
   topic: string;
+  contentPillar: string;
   format: ContentFormat;
   productionType: ProductionType;
   status: ContentStatus;
@@ -27,6 +28,13 @@ export type ContentInput = {
   durationSeconds: number | null;
   notes: string;
 };
+
+export class ContentInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ContentInputError";
+  }
+}
 
 const codePattern = /^[A-Z0-9][A-Z0-9-]{0,15}$/;
 const keyPattern = /^[A-Z0-9][A-Z0-9-]{0,31}$/;
@@ -99,13 +107,14 @@ export function parseContentInput(value: unknown): ContentInput | null {
   const contentKey = optionalToken(body.contentKey, keyPattern);
   const title = text(body.title);
   const topic = text(body.topic);
+  const contentPillar = text(body.contentPillar);
   const format = text(body.format || "unknown");
   const productionType = text(body.productionType || "unknown");
   const status = text(body.status || "idea");
   const languageCode = text(body.languageCode || "und").toLowerCase();
   const notes = text(body.notes);
   if (!isUuid(projectId) || contentKey === undefined) return null;
-  if (title.length < 1 || title.length > 200 || topic.length > 200 || notes.length > 8000) return null;
+  if (title.length < 1 || title.length > 200 || topic.length > 200 || contentPillar.length > 80 || notes.length > 8000) return null;
   if (!contentFormats.includes(format as ContentFormat)) return null;
   if (!productionTypes.includes(productionType as ProductionType)) return null;
   if (!contentStatuses.includes(status as ContentStatus)) return null;
@@ -121,6 +130,7 @@ export function parseContentInput(value: unknown): ContentInput | null {
     contentKey,
     title,
     topic,
+    contentPillar,
     format: format as ContentFormat,
     productionType: productionType as ProductionType,
     status: status as ContentStatus,
@@ -143,6 +153,7 @@ export function parseContentPatch(value: unknown): Partial<ContentInput> | null 
   if ("contentKey" in body) next.contentKey = parsed.contentKey;
   if ("title" in body) next.title = parsed.title;
   if ("topic" in body) next.topic = parsed.topic;
+  if ("contentPillar" in body) next.contentPillar = parsed.contentPillar;
   if ("format" in body) next.format = parsed.format;
   if ("productionType" in body) next.productionType = parsed.productionType;
   if ("status" in body) next.status = parsed.status;

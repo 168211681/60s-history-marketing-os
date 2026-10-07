@@ -1051,6 +1051,27 @@ footer {
   max-width: min(100%, 320px);
   height: auto;
 }
+.suggestion-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.suggestion-field {
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.suggestion-field p,
+.suggestion-panel p {
+  overflow-wrap: anywhere;
+}
+.suggestion-field label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .form-grid textarea {
   min-height: 88px;
   padding: 10px 12px;

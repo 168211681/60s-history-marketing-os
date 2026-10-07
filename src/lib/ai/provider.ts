@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { classificationResultSchema, classificationSystemInstruction, type ClassificationResult } from "@/lib/clipforge/classification";
 
 export type AiAnalysisInput = {
   channel: string;
@@ -33,9 +34,11 @@ export type AiScriptDraft = {
 
 export type MarketingAiProvider = {
   name: string;
+  model: string;
   configured: boolean;
   analyze(input: AiAnalysisInput): Promise<AiAnalysis>;
   draftScript(input: AiScriptInput): Promise<AiScriptDraft>;
+  classifyMetadata(input: unknown): Promise<ClassificationResult>;
 };
 
 const analysisSchema = z.object({
@@ -56,7 +59,7 @@ const scriptSchema = z.object({
 
 function unavailable(): MarketingAiProvider {
   const error = () => Promise.reject(new Error("AI_NOT_CONFIGURED"));
-  return { name: "unavailable", configured: false, analyze: error, draftScript: error };
+  return { name: "unavailable", model: "", configured: false, analyze: error, draftScript: error, classifyMetadata: error };
 }
 
 function jsonFromResponse(value: unknown) {
@@ -92,12 +95,16 @@ function compatibleProvider(): MarketingAiProvider {
 
   return {
     name: "openai-compatible",
+    model,
     configured: true,
     async analyze(input) {
       return analysisSchema.parse(await complete("Produce evidence-labeled observations, non-causal hypotheses, and testable experiments.", input));
     },
     async draftScript(input) {
       return scriptSchema.parse(await complete("Produce a historically responsible 60-second script draft. Keep research notes separate from spoken copy.", input));
+    },
+    async classifyMetadata(input) {
+      return classificationResultSchema.parse(await complete(classificationSystemInstruction, input));
     },
   };
 }

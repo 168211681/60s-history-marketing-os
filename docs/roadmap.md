@@ -76,15 +76,14 @@ unknown until a later editorial sprint. Do not rewrite
 
 ## ClipForge Sprint 004.1 — YouTube source metadata
 
-**Status: applied and verified on Staging. Production not applied.**
+**Status: applied and verified on Staging. The operator reports Production already includes this migration. Do not reapply it.**
 `20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
 on `public.videos`: description, one HTTPS thumbnail URL, exact tags bounded by
 YouTube's 500-character list budget, category id,
 default language, default audio language, privacy status, and
 `metadata_synced_at`. It does not classify topic, format, or production type,
-and it does not create an R2 asset. Do not apply it to Production without a
-separate explicit approval. Production migration history stays intentionally
-divergent. The pull-request gate remains exact migration equality.
+and it does not create an R2 asset. This branch does not modify that file.
+The pull-request gate remains exact migration equality.
 
 Verified on Staging:
 
@@ -109,7 +108,25 @@ Verified on Staging:
 - Format and production type remain unknown
 - Captions and hashtags remain untouched
 - No recent Staging runtime errors
-- Production remains untouched
+- The operator later reported Production includes Sprint 004.1. Do not reapply `20261007200200`
+
+## ClipForge Sprint 004.2 — metadata intelligence
+
+**Status: branch/local only. Not applied to Staging or Production. Do not claim hosted verification.**
+`20261008020000_clipforge_metadata_intelligence` adds `content_items.content_pillar`
+(text, at most 80 characters, default empty) and
+`public.content_classification_suggestions`. The classifier may suggest topic,
+content pillar, and production type only. A person must accept the selected
+fields before canonical metadata changes. Generation, rejection, and an
+unconfigured provider do not invent or overwrite canonical fields. Format,
+language, captions, hashtags, YouTube source facts, R2, and publishing stay
+untouched. There is no batch classification. History in 60s (`H60`) pillars are
+an application rule, not a global database enum. Do not apply this migration
+without a separate explicit approval.
+
+The operator reports the Production baseline this branch must not mutate:
+43 content items, topic empty, format unknown, and production type unknown.
+Sprint 004.1 is already complete in Production.
 
 ## Phase 0 — repository and security baseline
 
