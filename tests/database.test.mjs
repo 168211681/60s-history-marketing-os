@@ -1006,7 +1006,13 @@ test("YouTube source metadata constraints stay server-owned and are not security
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource05','Bad', array['${"a".repeat(101)}'])`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, description) values ('${channelA}','badsource06','Bad','${"d".repeat(5001)}')`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, category_id) values ('${channelA}','badsource07','Bad','abc')`, "23514");
-  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource08','Bad','english')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource08','Bad','en-')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_audio_language) values ('${channelA}','badsource09','Bad','zh-123456789')`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource10','Bad','${"abcdefgh-".repeat(8)}ab')`, "23514");
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language, default_audio_language) values ('${channelA}','goodlang001','Good','zh-Hans-CN','es-419') returning default_language || '|' || default_audio_language`),
+    "zh-Hans-CN|es-419",
+  );
 });
 
 test("import copies a safe YouTube language only onto und and leaves editorial fields", () => {
@@ -1073,4 +1079,25 @@ test("import copies a safe YouTube language only onto und and leaves editorial f
     sql(`select count(*) from (select platform_post_id from public.platform_posts where owner_id='${owner}' and platform='youtube' group by platform_post_id having count(*) > 1) duplicates`),
     "0",
   );
+});
+
+test("multi-subtag YouTube languages stay raw and only a safe tag fills und", () => {
+  const owner = "11000000-0000-4000-8000-0000000000de";
+  const channel = "21000000-0000-4000-8000-0000000000de";
+  const project = "a2000000-0000-4000-8000-0000000000de";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','source-lang','Language channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Language project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, published_at, duration_seconds, default_language) values
+    ('${channel}','zhhans00001','Script tag','2024-02-01T00:00:00Z',58,'zh-Hans'),
+    ('${channel}','zhhanscn001','Region tag','2024-02-02T00:00:00Z',58,'zh-Hans-CN'),
+    ('${channel}','es419lang01','Numeric region','2024-02-03T00:00:00Z',58,'es-419')`);
+  assert.deepEqual(importFields(project, owner), ["t", "3", "3", "12", "0", "0", "0"]);
+  const language = (videoId) => sql(`select i.language_code || '|' || v.default_language from public.content_items i join public.platform_posts p on p.content_item_id=i.id join public.videos v on v.youtube_video_id=p.platform_post_id where p.owner_id='${owner}' and p.platform='youtube' and p.platform_post_id='${videoId}'`);
+  assert.equal(language("zhhans00001"), "zh-Hans|zh-Hans");
+  assert.equal(language("zhhanscn001"), "und|zh-Hans-CN");
+  assert.equal(language("es419lang01"), "es-419|es-419");
+  const again = importFields(project, owner);
+  assert.deepEqual(again, ["t", "3", "0", "0", "3", "0", "0"]);
 });

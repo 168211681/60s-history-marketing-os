@@ -259,7 +259,17 @@ test("malformed source metadata fails validation instead of being truncated", as
   await reject({ ...base, snippet: { ...base.snippet, tags: Array.from({ length: 31 }, () => "tag") } });
   await reject({ ...base, snippet: { ...base.snippet, tags: ["x".repeat(101)] } });
   await reject({ ...base, snippet: { ...base.snippet, categoryId: "abc" } });
-  await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "english" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "en-" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "zh-123456789" } });
+  await reject({ ...base, snippet: { ...base.snippet, defaultAudioLanguage: `${"abcdefgh-".repeat(8)}ab` } });
+  for (const tag of ["zh-Hans", "zh-Hans-CN", "es-419"]) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, defaultLanguage: tag, defaultAudioLanguage: tag } }],
+    })) as typeof fetch;
+    const [video] = await fetchVideoMetadata("access", expectedChannel, ["fffffffffff"], { fetcher });
+    assert.equal(video?.defaultLanguage, tag);
+    assert.equal(video?.defaultAudioLanguage, tag);
+  }
   const accepted = {
     ...base,
     snippet: { ...base.snippet, defaultLanguage: "EN", defaultAudioLanguage: "th" },
@@ -274,7 +284,8 @@ test("the metadata upsert writes server time and does not replace topic", () => 
   const store = readFileSync("src/lib/youtube/store.ts", "utf8");
   assert.match(store, /metadata_synced_at = now\(\)/);
   assert.doesNotMatch(store, /metadata_synced_at:/);
-  assert.doesNotMatch(store, /topic = excluded\.topic/);
+  assert.match(store, /youtube-daily-v2-source-metadata:/);
+  assert.doesNotMatch(store, /youtube-daily-v1:/);
 });
 
 test("analytics parsing uses response headers, preserves missing rows, and batches 500 video filters", async () => {

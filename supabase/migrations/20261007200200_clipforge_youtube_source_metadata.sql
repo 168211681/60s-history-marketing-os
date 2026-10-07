@@ -57,11 +57,23 @@ alter table public.videos
 
 alter table public.videos
   add constraint videos_default_language_check
-  check (default_language is null or default_language ~ '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$');
+  check (
+    default_language is null
+    or (
+      length(default_language) <= 64
+      and default_language ~ '^[A-Za-z0-9]{1,8}(-[A-Za-z0-9]{1,8})*$'
+    )
+  );
 
 alter table public.videos
   add constraint videos_default_audio_language_check
-  check (default_audio_language is null or default_audio_language ~ '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$');
+  check (
+    default_audio_language is null
+    or (
+      length(default_audio_language) <= 64
+      and default_audio_language ~ '^[A-Za-z0-9]{1,8}(-[A-Za-z0-9]{1,8})*$'
+    )
+  );
 
 alter table public.videos
   add constraint videos_privacy_status_check
@@ -76,9 +88,9 @@ comment on column public.videos.tags is
 comment on column public.videos.category_id is
   'YouTube category id only. No category name is stored.';
 comment on column public.videos.default_language is
-  'Raw YouTube snippet.defaultLanguage when the tag fits the source constraint.';
+  'Raw YouTube snippet.defaultLanguage, including multi-subtag tags. Not rewritten to the content_items language format.';
 comment on column public.videos.default_audio_language is
-  'Raw YouTube snippet.defaultAudioLanguage when the tag fits the source constraint.';
+  'Raw YouTube snippet.defaultAudioLanguage, including multi-subtag tags. Not rewritten to the content_items language format.';
 comment on column public.videos.privacy_status is
   'YouTube status.privacyStatus: public, unlisted, or private.';
 comment on column public.videos.metadata_synced_at is

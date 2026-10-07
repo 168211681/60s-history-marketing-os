@@ -85,7 +85,7 @@ export type SyncJobStart =
   | { kind: "existing"; status: "running" | "succeeded" };
 
 export async function beginSyncJob(channelId: string, period: SyncPeriod): Promise<SyncJobStart> {
-  const key = `youtube-daily-v1:${period.start}:${period.end}`;
+  const key = `youtube-daily-v2-source-metadata:${period.start}:${period.end}`;
   const started = await database().query<{ id: string }>(
     `insert into private.analytics_sync_jobs as jobs
        (channel_id, idempotency_key, period_start, period_end, status, attempts, started_at)

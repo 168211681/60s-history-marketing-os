@@ -187,7 +187,15 @@ export async function fetchUploadVideoIds(accessToken: string, expectedChannelId
 
 const thumbnailOrder = ["maxres", "standard", "high", "medium", "default"] as const;
 const privacyStatuses = ["public", "unlisted", "private"] as const;
-const sourceLanguagePattern = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
+const sourceLanguagePattern = /^[A-Za-z0-9]{1,8}(-[A-Za-z0-9]{1,8})*$/;
+
+function sourceLanguage(value: unknown, message: string) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 64 || !sourceLanguagePattern.test(value)) {
+    throw new YouTubeSyncError("VALIDATION", message);
+  }
+  return value;
+}
 
 function optionalSourceText(value: unknown, pattern: RegExp, message: string) {
   if (value === undefined || value === null || value === "") return null;
@@ -261,8 +269,8 @@ export async function fetchVideoMetadata(accessToken: string, expectedChannelId:
         thumbnailUrl: sourceThumbnail(snippet.thumbnails),
         tags: sourceTags(snippet.tags),
         categoryId: optionalSourceText(snippet.categoryId, /^[0-9]{1,8}$/, "Video category id is invalid"),
-        defaultLanguage: optionalSourceText(snippet.defaultLanguage, sourceLanguagePattern, "Video language is invalid"),
-        defaultAudioLanguage: optionalSourceText(snippet.defaultAudioLanguage, sourceLanguagePattern, "Video audio language is invalid"),
+        defaultLanguage: sourceLanguage(snippet.defaultLanguage, "Video language is invalid"),
+        defaultAudioLanguage: sourceLanguage(snippet.defaultAudioLanguage, "Video audio language is invalid"),
         privacyStatus: sourcePrivacy(item.status),
       });
     }

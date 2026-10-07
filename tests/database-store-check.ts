@@ -7,10 +7,27 @@ const ownerId = "10000000-0000-4000-8000-000000000001";
 const channelId = "20000000-0000-4000-8000-000000000001";
 const youtubeVideoId = "syncvideo01";
 const period = { start: "2026-08-22", end: "2026-09-18" };
+const v1Key = `youtube-daily-v1:${period.start}:${period.end}`;
+const v2Key = `youtube-daily-v2-source-metadata:${period.start}:${period.end}`;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function main() {
   try {
+    await pool.query(
+      `insert into private.analytics_sync_jobs
+         (channel_id, idempotency_key, period_start, period_end, status, attempts, started_at, finished_at)
+       values ($1, $2, $3, $4, 'succeeded', 1, now(), now())`,
+      [channelId, v1Key, period.start, period.end],
+    );
+    const preserved = await pool.query(
+      `select id, status, attempts, idempotency_key, error_code
+         from private.analytics_sync_jobs
+        where channel_id = $1 and idempotency_key = $2`,
+      [channelId, v1Key],
+    );
+    assert.equal(preserved.rows.length, 1);
+    assert.equal(preserved.rows[0].status, "succeeded");
+
     const first = await beginSyncJob(channelId, period);
     assert.equal(first.kind, "started");
     if (first.kind !== "started") throw new Error("Expected a new sync job");
@@ -40,6 +57,18 @@ async function main() {
       }],
     });
     assert.deepEqual(await beginSyncJob(channelId, period), { kind: "existing", status: "succeeded" });
+    const v1After = await pool.query(
+      `select id, status, attempts, idempotency_key, error_code
+         from private.analytics_sync_jobs
+        where channel_id = $1 and idempotency_key = $2`,
+      [channelId, v1Key],
+    );
+    assert.deepEqual(v1After.rows, preserved.rows);
+    const v2 = await pool.query(
+      `select status, idempotency_key from private.analytics_sync_jobs where channel_id = $1 and idempotency_key = $2`,
+      [channelId, v2Key],
+    );
+    assert.deepEqual(v2.rows, [{ status: "succeeded", idempotency_key: v2Key }]);
 
     const result = await pool.query(
       `select j.status, c.last_synced_at is not null as synced, cm.views as channel_views,
@@ -86,7 +115,7 @@ async function main() {
     assert.equal(await foreignReader.getChannel(channelId), null);
     assert.deepEqual(await foreignReader.listVideos(channelId), []);
   } finally {
-    await pool.query("delete from private.analytics_sync_jobs where channel_id = $1 and idempotency_key = $2", [channelId, `youtube-daily-v1:${period.start}:${period.end}`]);
+    await pool.query("delete from private.analytics_sync_jobs where channel_id = $1 and idempotency_key = any($2::text[])", [channelId, [v1Key, v2Key]]);
     await pool.query("delete from public.channel_metrics where channel_id = $1 and metric_date = '2026-09-18'", [channelId]);
     await pool.query("delete from public.videos where channel_id = $1 and youtube_video_id = $2", [channelId, youtubeVideoId]);
     await pool.query("update public.channels set last_synced_at = null where id = $1", [channelId]);
