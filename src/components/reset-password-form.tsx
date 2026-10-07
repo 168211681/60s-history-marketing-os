@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { clearPasswordRecoveryMarker } from "@/app/reset-password/actions";
 import { browserAuth } from "@/lib/auth/browser";
-import { changeOwnerPassword, validateNewPassword } from "@/lib/auth/recovery";
+import { completeOwnerPasswordReset, validateNewPassword } from "@/lib/auth/recovery";
 
 export function ResetPasswordForm({ ownerId }: { ownerId: string }) {
   const [password, setPassword] = useState("");
@@ -21,7 +22,11 @@ export function ResetPasswordForm({ ownerId }: { ownerId: string }) {
     setMessage(null);
     try {
       const auth = browserAuth();
-      const result = await changeOwnerPassword(auth.auth, { password, confirm, ownerId });
+      const result = await completeOwnerPasswordReset(
+        auth.auth,
+        { password, confirm, ownerId },
+        () => clearPasswordRecoveryMarker(),
+      );
       if (!result.ok) {
         setMessage(result.error);
         setPending(false);

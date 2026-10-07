@@ -1,21 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appOrigin, ownerId } from "@/lib/auth/config";
+import { applyRecoveryMarker, recoveryCookieSecure } from "@/lib/auth/recovery-cookie";
 import { callbackDestination } from "@/lib/auth/recovery";
 import { serverAuth } from "@/lib/auth/server";
 
 function redirectTo(origin: string, path: string, response = NextResponse.redirect(new URL(path, origin))) {
   response.headers.set("Location", new URL(path, origin).toString());
   response.headers.set("Cache-Control", "private, no-store");
+  applyRecoveryMarker(response.cookies, path, recoveryCookieSecure(origin));
   return response;
 }
 
 export async function GET(request: NextRequest) {
   const origin = appOrigin();
   if (!origin || new URL(request.url).origin !== origin) {
-    return new Response("Authentication origin is not configured", {
+    const response = new NextResponse("Authentication origin is not configured", {
       status: 503,
       headers: { "Cache-Control": "private, no-store" },
     });
+    applyRecoveryMarker(response.cookies, "/settings", recoveryCookieSecure(origin));
+    return response;
   }
   const code = request.nextUrl.searchParams.get("code");
   const next = request.nextUrl.searchParams.get("next");

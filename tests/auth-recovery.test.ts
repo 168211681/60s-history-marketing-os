@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, test } from "node:test";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { GET } from "../src/app/auth/callback/route";
+import {
+  applyRecoveryMarker,
+  hasRecoveryMarker,
+  recoveryCookieMaxAge,
+  recoveryCookieName,
+  recoveryCookieSecure,
+  recoveryMarkerDecision,
+  resetPasswordAccess,
+} from "../src/lib/auth/recovery-cookie";
 import {
   callbackDestination,
   changeOwnerPassword,
+  completeOwnerPasswordReset,
   passwordSignInMessage,
   recoveryRedirect,
   recoveryRequestMessage,
@@ -83,11 +93,14 @@ test("missing callback code fails safely", async () => {
   assert.equal(missing.status, 307);
   assert.equal(locationPath(missing), "/settings?auth_error=callback");
   assert.equal(missing.headers.get("cache-control"), "private, no-store");
+  assert.match(missing.headers.get("set-cookie") ?? "", /clipforge_recovery=;/);
+  assert.doesNotMatch(missing.headers.get("set-cookie") ?? "", /clipforge_recovery=1/);
 
   const beforeExchange = await GET(new NextRequest("http://localhost:3000/auth/callback?code=present&next=https://evil.example"));
   assert.equal(beforeExchange.status, 307);
   assert.equal(locationPath(beforeExchange), "/settings?auth_error=callback");
   assert.doesNotMatch(beforeExchange.headers.get("location") ?? "", /evil/);
+  assert.doesNotMatch(beforeExchange.headers.get("set-cookie") ?? "", /clipforge_recovery=1/);
 
   const mismatched = await GET(new NextRequest("http://evil.example/auth/callback?code=untrusted&next=//evil.example"));
   assert.equal(mismatched.status, 503);
@@ -114,9 +127,6 @@ test("password mismatch and short passwords are rejected before any update", asy
       calls += 1;
       return { error: null };
     },
-    signOut: async () => {
-      calls += 1;
-    },
   };
   const mismatch = await changeOwnerPassword(auth, {
     password: "long-enough-password",
@@ -131,9 +141,8 @@ test("password mismatch and short passwords are rejected before any update", asy
   assert.equal(calls, 0);
 });
 
-test("successful password update signs out and redirects", async () => {
+test("successful password update returns the sign-in redirect without ending the session first", async () => {
   let updated = "";
-  let signedOut = 0;
   const result = await changeOwnerPassword(
     {
       getUser: async () => ({ data: { user: { id: owner.toUpperCase() } } }),
@@ -141,27 +150,72 @@ test("successful password update signs out and redirects", async () => {
         updated = password;
         return { error: null };
       },
-      signOut: async () => {
-        signedOut += 1;
-      },
     },
     { password: "a-new-password", confirm: "a-new-password", ownerId: owner },
   );
   assert.deepEqual(result, { ok: true, redirect: "/settings?password_reset=success" });
   assert.equal(updated, "a-new-password");
+});
+
+test("successful reset clears the recovery marker before signing out", async () => {
+  const order: string[] = [];
+  let cleared: { value: string; maxAge: number; httpOnly: boolean; sameSite: string; path: string; secure: boolean } | null = null;
+  const result = await completeOwnerPasswordReset(
+    {
+      getUser: async () => ({ data: { user: { id: owner } } }),
+      updateUser: async () => {
+        order.push("update");
+        return { error: null };
+      },
+      signOut: async () => {
+        order.push("signOut");
+      },
+    },
+    { password: "a-new-password", confirm: "a-new-password", ownerId: owner },
+    async () => {
+      order.push("clear");
+      applyRecoveryMarker(
+        {
+          set: (_name, value, options) => {
+            cleared = { value, maxAge: options.maxAge, httpOnly: options.httpOnly, sameSite: options.sameSite, path: options.path, secure: options.secure };
+          },
+        },
+        "/settings",
+        true,
+      );
+    },
+  );
+  assert.deepEqual(result, { ok: true, redirect: "/settings?password_reset=success" });
+  assert.deepEqual(order, ["update", "clear", "signOut"]);
+  assert.deepEqual(cleared, { value: "", maxAge: 0, httpOnly: true, sameSite: "lax", path: "/reset-password", secure: true });
+
+  const leaked = "marker clear failed token=recovery-secret";
+  let signedOut = 0;
+  const failedClear = await completeOwnerPasswordReset(
+    {
+      getUser: async () => ({ data: { user: { id: owner } } }),
+      updateUser: async () => ({ error: null }),
+      signOut: async () => {
+        signedOut += 1;
+      },
+    },
+    { password: "a-new-password", confirm: "a-new-password", ownerId: owner },
+    async () => {
+      throw new Error(leaked);
+    },
+  );
+  assert.equal(failedClear.ok, false);
+  assert.equal(failedClear.error, "The password could not be changed. Request a new reset link and try again.");
+  assert.doesNotMatch(failedClear.error ?? "", /token|secret/);
   assert.equal(signedOut, 1);
 });
 
 test("failed password update shows a safe message", async () => {
   const leaked = "provider failure token=recovery-secret access_token=abc";
-  let signedOut = 0;
   const result = await changeOwnerPassword(
     {
       getUser: async () => ({ data: { user: { id: owner } } }),
       updateUser: async () => ({ error: { message: leaked } }),
-      signOut: async () => {
-        signedOut += 1;
-      },
     },
     { password: "a-new-password", confirm: "a-new-password", ownerId: owner },
   );
@@ -169,7 +223,6 @@ test("failed password update shows a safe message", async () => {
   assert.equal(result.error, "The password could not be changed. Request a new reset link and try again.");
   assert.equal(result.error?.includes(leaked), false);
   assert.doesNotMatch(result.error ?? "", /token|provider|secret|access_token/i);
-  assert.equal(signedOut, 0);
 
   const stranger = await changeOwnerPassword(
     {
@@ -177,7 +230,6 @@ test("failed password update shows a safe message", async () => {
       updateUser: async () => {
         throw new Error("must not update");
       },
-      signOut: async () => undefined,
     },
     { password: "a-new-password", confirm: "a-new-password", ownerId: owner },
   );
@@ -216,14 +268,100 @@ test("proxy matcher includes reset-password and auth responses are not cached", 
   assert.match(proxy, /Cache-Control", "private, no-store"/);
 });
 
+test("reset page requires a recovery marker in addition to the owner session", () => {
+  assert.equal(resetPasswordAccess({ configured: true, owner: true, recoveryMarker: false }), "needs-link");
+  assert.equal(resetPasswordAccess({ configured: true, owner: true, recoveryMarker: true }), "form");
+  assert.equal(resetPasswordAccess({ configured: true, owner: false, recoveryMarker: true }), "needs-link");
+  assert.equal(resetPasswordAccess({ configured: false, owner: true, recoveryMarker: true }), "unconfigured");
+  assert.equal(hasRecoveryMarker("1"), true);
+  assert.equal(hasRecoveryMarker(undefined), false);
+  assert.equal(hasRecoveryMarker(""), false);
+  assert.equal(hasRecoveryMarker("true"), false);
+
+  const page = readFileSync(new URL("../src/app/reset-password/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /resetPasswordAccess\(/);
+  assert.match(page, /hasRecoveryMarker\(jar\.get\(recoveryCookieName\)\?\.value\)/);
+  assert.match(page, /access === "form" && owner \? \(/);
+  assert.match(page, /<ResetPasswordForm ownerId=\{owner\.id\} \/>/);
+  assert.doesNotMatch(page, /<ResetPasswordForm[^>]*\b(marker|recovery|cookie)=/);
+  const formAt = page.indexOf("<ResetPasswordForm");
+  const gateAt = page.indexOf('access === "form"');
+  assert.ok(gateAt > 0 && formAt > gateAt);
+});
+
+test("callback sets the recovery marker only for an owner reset destination", () => {
+  assert.equal(recoveryMarkerDecision("/reset-password"), "set");
+  assert.equal(recoveryMarkerDecision("/settings"), "clear");
+  assert.equal(recoveryMarkerDecision("/settings?auth=denied"), "clear");
+  assert.equal(recoveryMarkerDecision("/settings?auth_error=callback"), "clear");
+  assert.equal(recoveryCookieSecure("https://app.example"), true);
+  assert.equal(recoveryCookieSecure("http://localhost:3000"), false);
+  assert.equal(recoveryCookieMaxAge, 600);
+
+  const resetDestination = callbackDestination({ code: "pkce-code", next: "/reset-password", exchanged: true, ownerMatches: true });
+  assert.equal(resetDestination, "/reset-password");
+  assert.equal(recoveryMarkerDecision(resetDestination), "set");
+
+  const settingsDestination = callbackDestination({ code: "pkce-code", next: null, exchanged: true, ownerMatches: true });
+  assert.equal(settingsDestination, "/settings");
+  assert.equal(recoveryMarkerDecision(settingsDestination), "clear");
+
+  for (const next of ["https://evil.example/phish", "//evil.example", "/reset-password/extra"]) {
+    const destination = callbackDestination({ code: "pkce-code", next, exchanged: true, ownerMatches: true });
+    assert.equal(destination, "/settings");
+    assert.equal(recoveryMarkerDecision(destination), "clear");
+  }
+  const denied = callbackDestination({ code: "pkce-code", next: "/reset-password", exchanged: true, ownerMatches: false });
+  assert.equal(recoveryMarkerDecision(denied), "clear");
+
+  const secureReset = NextResponse.redirect("https://app.example/reset-password");
+  applyRecoveryMarker(secureReset.cookies, "/reset-password", true);
+  const setHeader = secureReset.headers.get("set-cookie") ?? "";
+  assert.match(setHeader, new RegExp(`${recoveryCookieName}=1`));
+  assert.match(setHeader, /HttpOnly/i);
+  assert.match(setHeader, /SameSite=Lax/i);
+  assert.match(setHeader, /Secure/i);
+  assert.match(setHeader, /Path=\/reset-password/);
+  assert.match(setHeader, /Max-Age=600/);
+
+  const settings = NextResponse.redirect("https://app.example/settings");
+  applyRecoveryMarker(settings.cookies, "/settings", true);
+  const clearHeader = settings.headers.get("set-cookie") ?? "";
+  assert.match(clearHeader, /clipforge_recovery=;/);
+  assert.doesNotMatch(clearHeader, /clipforge_recovery=1/);
+  assert.match(clearHeader, /HttpOnly/i);
+  assert.match(clearHeader, /SameSite=Lax/i);
+  assert.match(clearHeader, /Path=\/reset-password/);
+  assert.match(clearHeader, /Max-Age=0/);
+
+  const local = NextResponse.redirect("http://localhost:3000/reset-password");
+  applyRecoveryMarker(local.cookies, "/reset-password", recoveryCookieSecure("http://localhost:3000"));
+  assert.doesNotMatch(local.headers.get("set-cookie") ?? "", /Secure/i);
+
+  const buttons = readFileSync(new URL("../src/components/auth-buttons.tsx", import.meta.url), "utf8");
+  assert.match(buttons, /redirectTo: `\$\{window\.location\.origin\}\/auth\/callback`/);
+  assert.doesNotMatch(buttons, /clipforge_recovery|recoveryMarker/);
+  const route = readFileSync(new URL("../src/app/auth/callback/route.ts", import.meta.url), "utf8");
+  assert.match(route, /applyRecoveryMarker\(response\.cookies, path, recoveryCookieSecure\(origin\)\)/);
+  assert.match(route, /redirectTo\(origin, callbackDestination\(/);
+  const form = readFileSync(new URL("../src/components/reset-password-form.tsx", import.meta.url), "utf8");
+  const updateAt = form.indexOf("completeOwnerPasswordReset(");
+  const clearAt = form.indexOf("() => clearPasswordRecoveryMarker()");
+  const redirectAt = form.indexOf("window.location.assign");
+  assert.ok(updateAt > 0 && clearAt > updateAt && redirectAt > clearAt);
+  assert.doesNotMatch(form, /clipforge_recovery|document\.cookie/);
+});
+
 test("auth recovery code does not log tokens, codes, or passwords", () => {
   const files = [
     "../src/lib/auth/recovery.ts",
+    "../src/lib/auth/recovery-cookie.ts",
     "../src/lib/auth/browser.ts",
     "../src/lib/auth/server.ts",
     "../src/lib/auth/config.ts",
     "../src/app/auth/callback/route.ts",
     "../src/app/reset-password/page.tsx",
+    "../src/app/reset-password/actions.ts",
     "../src/components/auth-buttons.tsx",
     "../src/components/reset-password-form.tsx",
   ];
@@ -237,6 +375,6 @@ test("auth recovery code does not log tokens, codes, or passwords", () => {
   const destinationAt = route.indexOf("callbackDestination(");
   assert.ok(exchangeAt > 0 && destinationAt > exchangeAt);
   const form = readFileSync(new URL("../src/components/reset-password-form.tsx", import.meta.url), "utf8");
-  assert.match(form, /changeOwnerPassword\(auth\.auth/);
+  assert.match(form, /completeOwnerPasswordReset\(\s*auth\.auth/);
   assert.doesNotMatch(form, /fetch\(|\/api\//);
 });

@@ -52,7 +52,6 @@ export async function changeOwnerPassword(
   auth: {
     getUser: () => Promise<{ data: { user: { id: string } | null } }>;
     updateUser: (input: { password: string }) => Promise<{ error: { message?: string } | null }>;
-    signOut: () => Promise<unknown>;
   },
   input: { password: string; confirm: string; ownerId: string | null },
 ) {
@@ -66,10 +65,36 @@ export async function changeOwnerPassword(
   if (updated.error) {
     return { ok: false as const, error: "The password could not be changed. Request a new reset link and try again." };
   }
+  return { ok: true as const, redirect: "/settings?password_reset=success" as const };
+}
+
+const resetFailure = "The password could not be changed. Request a new reset link and try again.";
+
+export async function completeOwnerPasswordReset(
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string } | null } }>;
+    updateUser: (input: { password: string }) => Promise<{ error: { message?: string } | null }>;
+    signOut: () => Promise<unknown>;
+  },
+  input: { password: string; confirm: string; ownerId: string | null },
+  clearMarker: () => Promise<void>,
+) {
+  const updated = await changeOwnerPassword(auth, input);
+  if (!updated.ok) return updated;
+  try {
+    await clearMarker();
+  } catch {
+    try {
+      await auth.signOut();
+    } catch {
+      // The password is already changed. End the session even if the marker could not be cleared.
+    }
+    return { ok: false as const, error: resetFailure };
+  }
   try {
     await auth.signOut();
   } catch {
-    // The password is already changed. Leave the recovery page either way.
+    // The recovery marker is already cleared. Leave for a fresh sign-in either way.
   }
-  return { ok: true as const, redirect: "/settings?password_reset=success" as const };
+  return updated;
 }
