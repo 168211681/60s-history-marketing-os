@@ -16,11 +16,10 @@ reads `supabase_migrations.schema_migrations` with a SELECT-only query and
 compares the returned versions with local filenames. The comparison is exact
 equality of the ordered version lists, not a count and not a pending allowance.
 Do not treat the older 18-migration snapshot as today's hosted inventory.
-Sprint 004 is Production-complete. This branch has one pending local file,
-`20261007200200_clipforge_youtube_source_metadata`, which has not been applied
-to Staging or Production. A pull request opened before a separate reviewed apply
-will fail this exact-equality gate. That failure is intentional until the
-migration is reviewed.
+Sprint 004 is Production-complete.
+`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
+Staging. Production does not have this migration. The pull-request gate remains
+exact migration equality and does not push SQL.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
 Staging after review. The pending-migration helper remains in the repository for
 a future reviewed difference and is not this pull-request gate. This avoids relying

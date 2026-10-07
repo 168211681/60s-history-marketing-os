@@ -76,16 +76,40 @@ unknown until a later editorial sprint. Do not rewrite
 
 ## ClipForge Sprint 004.1 — YouTube source metadata
 
-**Status: branch/pending. Not applied to Staging or Production.**
+**Status: applied and verified on Staging. Production not applied.**
 `20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
 on `public.videos`: description, one HTTPS thumbnail URL, exact tags bounded by
 YouTube's 500-character list budget, category id,
 default language, default audio language, privacy status, and
 `metadata_synced_at`. It does not classify topic, format, or production type,
-and it does not create an R2 asset. Apply it to Staging only in a separate
-reviewed change. Do not apply it to Production from this branch. The
-pull-request gate remains exact migration equality, so this file stays pending
-until that Staging apply.
+and it does not create an R2 asset. Do not apply it to Production without a
+separate explicit approval. Production migration history stays intentionally
+divergent. The pull-request gate remains exact migration equality.
+
+Verified on Staging:
+
+- Migration version `20261007200200_clipforge_youtube_source_metadata`
+- Forced RLS preserved
+- Security-invoker tag helper
+- YouTube OAuth connected successfully
+- `youtube-daily-v2-source-metadata` sync succeeded
+- 43 YouTube videos synced
+- `metadata_synced_at` populated 43/43
+- 43 descriptions
+- 43 HTTPS thumbnails
+- 19 videos with tags
+- 42 default languages
+- 9 default audio languages
+- 43 privacy statuses
+- First ClipForge import created 43 content items and 172 platform posts
+- Second import created 0 and found 43 already linked
+- Duplicate external YouTube IDs = 0
+- Imported languages: 42 `en` and 1 `und`
+- Existing manual smoke item preserved
+- Format and production type remain unknown
+- Captions and hashtags remain untouched
+- No recent Staging runtime errors
+- Production remains untouched
 
 ## Phase 0 — repository and security baseline
 

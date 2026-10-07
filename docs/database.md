@@ -18,7 +18,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | --- | --- | --- |
 | `public.users` | Minimal identity referencing `auth.users`; no duplicated email/profile data | Read own row |
 | `public.channels` | Verified channel identity and `owner_id` | Read owned channels |
-| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from the pending Sprint 004.1 migration and are not an R2 asset | Read owned channel videos |
+| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from Sprint 004.1, applied and verified on Staging, and are not an R2 asset. Production does not have this migration | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
@@ -40,10 +40,11 @@ File bytes stay in the private Cloudflare R2 bucket `clipforge-assets`.
 That file is on `main` and is used by the Production Sprint 004 import. Do not reapply it.
 `supabase/migrations/20261007143000_clipforge_legacy_youtube_import.sql` is the
 Production-complete Sprint 004 import. Do not rewrite it.
-`supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` is the
-only pending migration on this branch. It stores YouTube source facts on
-`public.videos` and does not change R2. Do not apply it to Staging or Production
-until a separate review.
+`supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` is
+applied and verified on Staging. It stores YouTube source facts on
+`public.videos` and does not change R2. Production does not have this migration.
+Production migration history remains intentionally divergent. Do not apply it
+to Production without separate explicit approval.
 
 `private.password_setup_authorizations` is the original file
 `supabase/migrations/20260928140124_password_setup_authorizations.sql`.
@@ -57,10 +58,11 @@ token, and it has no `updated_at` trigger.
 Do not treat the older 18-migration snapshot as the current hosted inventory.
 Sprint 004 is Production-complete: one ClipForge project, 41 stored YouTube
 videos imported, 41 content items, 164 platform posts, re-import idempotency
-verified, and duplicate external YouTube IDs = 0. This branch adds one pending
-file, `20261007200200_clipforge_youtube_source_metadata`, which has not been
-applied to Staging or Production. Production migration history stays
-intentionally divergent and must not be normalized.
+verified, and duplicate external YouTube IDs = 0.
+`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
+Staging. Production does not have this migration. Production migration history
+stays intentionally divergent and must not be normalized. Do not apply it to
+Production without separate explicit approval.
 
 Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
 `updated_at` is maintained by a security-invoker trigger in `private`; no
@@ -145,9 +147,9 @@ cloud project was true when this foundation document was written; it is not the
 current cloud state. Current migration identities and verification are recorded in
 the [database transition runbook](database-transition.md). Do not treat the older
 18-migration snapshot as today's hosted inventory. Sprint 004 is
-Production-complete. This branch adds one pending file,
-`20261007200200_clipforge_youtube_source_metadata`, which has not been applied
-to Staging or Production. The ClipForge projects migration
+Production-complete. `20261007200200_clipforge_youtube_source_metadata` is
+applied and verified on Staging. Production does not have this migration.
+The ClipForge projects migration
 was applied separately to Staging after review. Production intentionally
 uses different historical versions for Phase 6 and Phase 7, and it does not
 contain the password-setup migration. Do not normalize Production history.

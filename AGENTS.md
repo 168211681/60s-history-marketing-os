@@ -48,9 +48,10 @@ intentional Phase 6 or Phase 7 timestamp divergence. Staging already contains
 18-migration snapshot as the current hosted inventory. Sprint 004 is
 Production-complete: one Production ClipForge project, 41 stored YouTube videos
 imported, 41 content items, 164 platform posts, re-import idempotency verified,
-and duplicate external YouTube IDs = 0. This branch adds one pending migration,
-`20261007200200_clipforge_youtube_source_metadata`, which has not been applied
-to Staging or Production. Do not apply it from this branch. The pull-request
-gate remains exact equality. Do not reapply earlier ClipForge migrations.
+and duplicate external YouTube IDs = 0.
+`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
+Staging. Production does not have this migration. Do not apply it to Production
+without separate explicit approval. The pull-request gate remains exact equality.
+Do not reapply earlier ClipForge migrations.
 Production does not contain the password-setup migration and must not be
 normalized to add it.

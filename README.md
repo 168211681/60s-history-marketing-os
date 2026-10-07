@@ -8,8 +8,8 @@ drafts, and prepares creative briefs for external editing tools.
 Sprint 001 changed the application shell. Sprint 002 adds owner-scoped projects
 and content items. Sprint 003 adds private Cloudflare R2 assets and a manual
 distribution queue. Sprint 004 imported the Production YouTube library into
-ClipForge. Sprint 004.1, on this branch only, stores YouTube source metadata
-and is not applied to Staging or Production yet. Calendar and Archive remain labeled
+ClipForge. Sprint 004.1 stores YouTube source metadata and is applied and
+verified on Staging. Production does not have this migration. Calendar and Archive remain labeled
 placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 
 Internal video rendering, provider inference, artifact storage, production workers,
