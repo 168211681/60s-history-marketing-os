@@ -17,6 +17,8 @@
     "verify:local": "npm run lint && npm run typecheck && npm test && npm run test:db && npm run build -- --webpack && npm run test:e2e"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1147.0",
+    "@aws-sdk/s3-request-presigner": "3.1147.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.116.0",
@@ -24,7 +26,6 @@
     "pg": "8.16.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "tus-js-client": "4.3.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

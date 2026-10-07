@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { database, transaction } from "@/lib/database";
-import { assetBucket, type AssetKind } from "./assets";
+import { assetBucket, storageProvider, type AssetKind } from "./assets";
 import {
   applyPlatformPatch,
   platforms,
@@ -392,10 +392,10 @@ export async function createAsset(
     if (owned.rowCount !== 1) return null;
     const result = await client.query<AssetRow>(
       `insert into public.content_assets (
-         content_item_id, owner_id, kind, storage_bucket, storage_path, original_filename, mime_type, size_bytes
-       ) values ($1,$2,$3,$4,$5,$6,$7,$8)
+         content_item_id, owner_id, kind, storage_provider, storage_bucket, storage_path, original_filename, mime_type, size_bytes
+       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        returning id, content_item_id, kind, storage_path, original_filename, mime_type, size_bytes, created_at`,
-      [contentItemId, ownerId, input.kind, assetBucket, input.storagePath, input.originalFilename, input.mimeType, input.sizeBytes],
+      [contentItemId, ownerId, input.kind, storageProvider, assetBucket, input.storagePath, input.originalFilename, input.mimeType, input.sizeBytes],
     );
     return asset(result.rows[0]);
   });

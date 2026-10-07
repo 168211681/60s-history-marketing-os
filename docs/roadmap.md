@@ -57,9 +57,10 @@ Phase 7 infrastructure and is not a ClipForge apply workflow.
 
 **Status: branch only. Not applied to Staging or Production.**
 `20261006210730_clipforge_distribution_assets` adds `public.content_assets`,
-`public.platform_posts`, a covering index on `content_items (project_id, owner_id)`,
-and the private `clipforge-assets` bucket. Master video upload is resumable.
-Platform rows record copy and status only. This branch adds that one pending
+`public.platform_posts`, and a covering index on `content_items (project_id, owner_id)`.
+Master video and thumbnail bytes go to the private Cloudflare R2 bucket
+`clipforge-assets`, not Supabase Storage. Master upload is a direct multipart
+upload. Platform rows record copy and status only. This branch adds that one pending
 migration and does not change the exact-equality gate. Do not open a pull request
 until the migration is reviewed and applied separately. Do not apply this file
 to Production.

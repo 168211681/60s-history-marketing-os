@@ -29,7 +29,7 @@ ClipForge is the private owner workspace. The shell navigation is Dashboard,
 Projects, Library, Distribution, Calendar, Analytics, Archive, and Settings.
 Projects and Library store owner-scoped project and content-item records.
 Distribution is a manual cross-post queue: private master video and thumbnail
-files, per-platform copy, and posting status. It does not publish to a platform.
+files in Cloudflare R2, per-platform copy, and posting status. It does not publish to a platform.
 Calendar and Archive remain unfinished placeholders and must not
 pretend to store or publish content. Videos, insights, scripts, research,
 settings, and YouTube analytics keep their existing routes.

@@ -14,6 +14,7 @@ create table public.content_assets (
   content_item_id uuid not null,
   owner_id uuid not null,
   kind text not null check (kind in ('master_video', 'thumbnail')),
+  storage_provider text not null default 'r2' check (storage_provider = 'r2'),
   storage_bucket text not null default 'clipforge-assets' check (storage_bucket = 'clipforge-assets'),
   storage_path text not null,
   original_filename text not null check (
@@ -43,7 +44,7 @@ create table public.content_assets (
 );
 create index content_assets_owner_item_idx on public.content_assets (owner_id, content_item_id);
 comment on table public.content_assets is
-  'Private ClipForge file pointer. Bytes live in the clipforge-assets bucket, not in Postgres.';
+  'Private ClipForge file pointer. Bytes live in Cloudflare R2 bucket clipforge-assets, not in Postgres.';
 
 create table public.platform_posts (
   id uuid primary key default gen_random_uuid(),
@@ -97,7 +98,7 @@ begin
 end $$;
 
 grant insert (
-  content_item_id, owner_id, kind, storage_bucket, storage_path, original_filename, mime_type, size_bytes
+  content_item_id, owner_id, kind, storage_provider, storage_bucket, storage_path, original_filename, mime_type, size_bytes
 ) on public.content_assets to authenticated;
 grant update (original_filename, mime_type, size_bytes) on public.content_assets to authenticated;
 grant delete on public.content_assets to authenticated;
@@ -139,56 +140,5 @@ create policy platform_posts_update_own on public.platform_posts for update to a
   );
 create policy platform_posts_delete_own on public.platform_posts for delete to authenticated
   using (owner_id = (select auth.uid()));
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'clipforge-assets',
-  'clipforge-assets',
-  false,
-  536870912,
-  array['video/mp4', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp']
-);
-
-alter table storage.objects enable row level security;
-grant usage on schema storage to authenticated;
-grant execute on function storage.foldername(text) to authenticated;
-grant select, insert, delete on table storage.objects to authenticated;
-
-create policy clipforge_assets_select on storage.objects for select to authenticated
-  using (
-    bucket_id = 'clipforge-assets'
-    and cardinality(storage.foldername(name)) = 3
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-    and (storage.foldername(name))[3] in ('master_video', 'thumbnail')
-    and exists (
-      select 1 from public.content_items item
-      where item.owner_id = (select auth.uid())
-        and item.id::text = (storage.foldername(name))[2]
-    )
-  );
-create policy clipforge_assets_insert on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'clipforge-assets'
-    and cardinality(storage.foldername(name)) = 3
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-    and (storage.foldername(name))[3] in ('master_video', 'thumbnail')
-    and exists (
-      select 1 from public.content_items item
-      where item.owner_id = (select auth.uid())
-        and item.id::text = (storage.foldername(name))[2]
-    )
-  );
-create policy clipforge_assets_delete on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'clipforge-assets'
-    and cardinality(storage.foldername(name)) = 3
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-    and (storage.foldername(name))[3] in ('master_video', 'thumbnail')
-    and exists (
-      select 1 from public.content_items item
-      where item.owner_id = (select auth.uid())
-        and item.id::text = (storage.foldername(name))[2]
-    )
-  );
 
 commit;

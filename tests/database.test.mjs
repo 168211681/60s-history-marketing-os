@@ -648,22 +648,11 @@ test("clipforge assets and platform posts stay private to the owning content ite
     "0",
   );
   assert.equal(
-    sql("select public::text || '|' || file_size_limit::text || '|' || allowed_mime_types::text from storage.buckets where id='clipforge-assets'"),
-    "false|536870912|{video/mp4,video/quicktime,image/jpeg,image/png,image/webp}",
+    sql("select column_default from information_schema.columns where table_schema='public' and table_name='content_assets' and column_name='storage_provider'"),
+    "'r2'::text",
   );
-  assert.equal(
-    sql("select string_agg(policyname || ':' || cmd, ',' order by policyname) from pg_policies where schemaname='storage' and tablename='objects'"),
-    "clipforge_assets_delete:DELETE,clipforge_assets_insert:INSERT,clipforge_assets_select:SELECT",
-  );
-  assert.equal(
-    sql("select count(*) from pg_policies where schemaname='storage' and tablename='objects' and position('clipforge-assets' in coalesce(qual,'') || coalesce(with_check,'')) = 0"),
-    "0",
-  );
-  assert.equal(sql("select has_table_privilege('anon','storage.objects','select')"), "f");
-  assert.equal(sql("select has_table_privilege('authenticated','storage.objects','insert')"), "t");
-  assert.equal(sql("select has_table_privilege('authenticated','storage.objects','update')"), "f");
-  assert.equal(sql("select has_table_privilege('authenticated','storage.objects','delete')"), "t");
-  for (const column of ["owner_id", "content_item_id", "kind", "storage_bucket", "storage_path", "created_at", "updated_at"]) {
+  assert.equal(sql("select count(*) from pg_policies where schemaname='storage' and policyname like 'clipforge%'"), "0");
+  for (const column of ["owner_id", "content_item_id", "kind", "storage_provider", "storage_bucket", "storage_path", "created_at", "updated_at"]) {
     assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','update')`), "f");
   }
   assert.equal(sql("select has_column_privilege('authenticated','public.content_assets','original_filename','update')"), "t");
@@ -674,22 +663,7 @@ test("clipforge assets and platform posts stay private to the owning content ite
   assert.equal(sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='content_assets'"), "t");
   assert.equal(sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='platform_posts'"), "t");
 
-  assert.equal(
-    asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${videoPath}') returning name`),
-    videoPath,
-  );
-  sql(`insert into storage.objects (bucket_id, name) values ('clipforge-assets','${videoPath}')`);
-  asRole("authenticated", userB, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${videoPath}')`, "42501");
-  asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${userB}/${itemA}/master_video/stolen.mp4')`, "42501");
-  asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${userA}/${itemB}/master_video/other.mp4')`, "42501");
-  asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('other-bucket','${videoPath}')`, "42501");
-  asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${userA}/${itemA}/../clip.mp4')`, "42501");
-  asRole("authenticated", userA, `insert into storage.objects (bucket_id, name) values ('clipforge-assets','${userA}/${itemA}/master_video/../clip.mp4')`, "42501");
-  asRole("anon", "", `select * from storage.objects`, "42501");
-  asRole("authenticated", userA, `update storage.objects set name='changed.mp4' where name='${videoPath}'`, "42501");
-  assert.equal(asRole("authenticated", userB, `select count(*) from storage.objects where name='${videoPath}'`), "0");
-  assert.equal(asRole("authenticated", userA, `select count(*) from storage.objects where name='${videoPath}'`), "1");
-
+  sql(`insert into public.content_assets (content_item_id, owner_id, kind, storage_provider, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','s3','${videoPath}','clip.mp4','video/mp4',1024)`, "23514");
   assert.equal(
     asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','${videoPath}','clip final.mp4','video/mp4',1024) returning kind`),
     "master_video",
@@ -754,7 +728,6 @@ test("clipforge assets and platform posts stay private to the owning content ite
   assert.equal(sql(`select count(*) from public.content_assets where content_item_id='${itemA}'`), "0");
   assert.equal(sql(`select count(*) from public.platform_posts where content_item_id='${itemA}'`), "0");
   assert.equal(sql(`select count(*) from public.content_items where id='${itemB}'`), "1");
-  sql(`delete from storage.objects where bucket_id='clipforge-assets'`);
   sql(`delete from public.projects where id in ('${projectA}','${projectB}')`);
 });
 test("password setup authorizations stay server-only and reject invalid grants", () => {

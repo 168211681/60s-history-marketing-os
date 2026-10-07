@@ -6,7 +6,7 @@ calculates evidence-backed insights, supports experiments and reviewed script
 drafts, and prepares creative briefs for external editing tools.
 
 Sprint 001 changed the application shell. Sprint 002 adds owner-scoped projects
-and content items. Sprint 003, on this branch only, adds a private asset bucket
+and content items. Sprint 003, on this branch only, adds private Cloudflare R2 assets
 and a manual distribution queue. Calendar and Archive remain labeled
 placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 

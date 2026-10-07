@@ -29,15 +29,16 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
 | `public.projects` | ClipForge workspace name, optional code, description, and active/archived status. Owned directly by `owner_id`; not a YouTube channel | Read/create/edit/delete own projects |
 | `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
-| `public.content_assets` | Pointer to one private master video or thumbnail in bucket `clipforge-assets` | Read/create/delete own pointers; cannot retarget owner, path, kind, or bucket |
+| `public.content_assets` | Pointer to one private master video or thumbnail in Cloudflare R2 bucket `clipforge-assets`. Bytes are not in Postgres or Supabase Storage | Read/create/delete own pointers; cannot retarget owner, path, kind, provider, or bucket |
 | `public.platform_posts` | Manual YouTube, Facebook, TikTok, and Instagram copy and status | Read/create/edit/delete own rows; cannot retarget owner or platform |
 
 The ClipForge project and content tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.
 That migration was applied separately to Staging after review. Do not reapply it,
 and do not apply it to Production from this branch.
 `supabase/migrations/20261006210730_clipforge_distribution_assets.sql` adds the
-asset and platform tables, the `(project_id, owner_id)` covering index, and the
-private `clipforge-assets` bucket. It is pending on this branch. Do not apply it
+asset and platform tables and the `(project_id, owner_id)` covering index.
+File bytes stay in the private Cloudflare R2 bucket `clipforge-assets`.
+It is pending on this branch. Do not apply it
 to Staging or Production until a separate review.
 
 `private.password_setup_authorizations` is the original file

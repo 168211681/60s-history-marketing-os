@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PlatformCopyButtons } from "../src/components/platform-matrix";
-import { buildAssetPath, isScopedAssetPath, resumableUploadEndpoint } from "../src/lib/clipforge/assets";
+import {
+  buildAssetPath,
+  isAllowedPart,
+  isScopedAssetPath,
+  maxAssetBytes,
+  multipartPlan,
+  partBytes,
+  uploadAllowed,
+  validMultipartParts,
+} from "../src/lib/clipforge/assets";
+import { commitUploadedAsset } from "../src/lib/clipforge/commit-asset";
+import { r2Configured, signPutObject, startMultipartUpload } from "../src/lib/clipforge/r2";
 import {
   applyPlatformPatch,
   distributionSummary,
@@ -39,9 +51,21 @@ test("storage paths stay inside the owner and content item", () => {
   assert.equal(isScopedAssetPath(`${owner}\\${item}\\master_video\\file.mp4`, owner, item, "master_video"), false);
   assert.equal(isScopedAssetPath(`${owner}/${item}/master_video/%2e%2e.mp4`, owner, item, "master_video"), false);
   assert.equal(buildAssetPath("not-a-uuid", item, "thumbnail", "cover.jpg"), null);
-  assert.equal(resumableUploadEndpoint("https://haqpqifxlqpihkmhkwdu.supabase.co"), "https://haqpqifxlqpihkmhkwdu.storage.supabase.co/storage/v1/upload/resumable");
-  assert.equal(resumableUploadEndpoint("https://evil.example/storage"), null);
-  assert.equal(resumableUploadEndpoint("not a url"), null);
+  assert.equal(uploadAllowed("master_video", "video/mp4", maxAssetBytes), true);
+  assert.equal(uploadAllowed("master_video", "video/mp4", maxAssetBytes + 1), false);
+  assert.equal(uploadAllowed("thumbnail", "video/mp4", 100), false);
+  assert.equal(uploadAllowed("master_video", "image/png", 100), false);
+  assert.equal(uploadAllowed("thumbnail", "image/webp", 2048), true);
+  assert.equal(multipartPlan(partBytes + 1)?.partCount, 2);
+  assert.equal(multipartPlan(maxAssetBytes)?.partCount, 64);
+  assert.equal(multipartPlan(maxAssetBytes + 1), null);
+  assert.equal(isAllowedPart(1, 100), true);
+  assert.equal(isAllowedPart(2, 100), false);
+  assert.equal(isAllowedPart(65, maxAssetBytes), false);
+  const parts = validMultipartParts([{ partNumber: 1, etag: "a".repeat(32) }], 100);
+  assert.equal(parts?.[0]?.etag, `"${"a".repeat(32)}"`);
+  assert.equal(validMultipartParts([{ partNumber: 2, etag: "a".repeat(32) }], 100), null);
+  assert.equal(validMultipartParts([{ partNumber: 1, etag: "not-an-etag" }], 100), null);
 });
 
 test("platform copy rejects unsafe URLs and missing schedule times", () => {
@@ -103,4 +127,77 @@ test("copy controls render title, caption, hashtags, and combined text", () => {
   assert.match(detail, /Not yet implemented/);
   assert.match(detail, /AssetManager/);
   assert.match(detail, /PlatformMatrix/);
+});
+
+test("the pending migration does not touch Supabase Storage", () => {
+  const migration = readFileSync("supabase/migrations/20261006210730_clipforge_distribution_assets.sql", "utf8");
+  assert.doesNotMatch(migration, /storage\.objects/);
+  assert.doesNotMatch(migration, /storage\.buckets/);
+  assert.doesNotMatch(migration, /storage\.foldername/);
+  assert.doesNotMatch(migration, /alter table storage/i);
+  assert.match(migration, /storage_provider text not null default 'r2'/);
+  assert.match(migration, /check \(storage_bucket = 'clipforge-assets'\)/);
+});
+
+test("browser code never receives R2 credentials", () => {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(path);
+    }
+  };
+  walk("src");
+  const clients = files.filter((file) => /["']use client["']/.test(readFileSync(file, "utf8")));
+  assert.ok(clients.length > 0);
+  for (const file of clients) {
+    const source = readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /R2_SECRET_ACCESS_KEY|R2_ACCESS_KEY_ID|R2_ACCOUNT_ID/);
+  }
+  const manager = readFileSync("src/components/asset-manager.tsx", "utf8");
+  assert.doesNotMatch(manager, /tus-js-client|getSession|supabase\.storage/);
+  assert.match(manager, /assets\/upload\/part/);
+  assert.match(manager, /type="file"/);
+});
+
+test("stored metadata is recorded only after the object size matches", async () => {
+  const removed: string[] = [];
+  const saved = await commitUploadedAsset({
+    async size() { return 12; },
+    async remove(key) { removed.push(key); return true; },
+  }, "owned/key", 12, async () => ({ id: "asset-1" }));
+  assert.deepEqual(saved, { ok: true, id: "asset-1" });
+  const mismatch = await commitUploadedAsset({
+    async size() { return 11; },
+    async remove(key) { removed.push(key); return true; },
+  }, "owned/key", 12, async () => ({ id: "nope" }));
+  assert.equal(mismatch.ok, false);
+  assert.deepEqual(removed, ["owned/key"]);
+  await assert.rejects(commitUploadedAsset({
+    async size() { return 12; },
+    async remove() { return true; },
+  }, "owned/key", 12, async () => { throw new Error("db"); }));
+  const orphan = await commitUploadedAsset({
+    async size() { return 12; },
+    async remove() { return false; },
+  }, "orphan-key", 12, async () => { throw new Error("db"); });
+  assert.equal(orphan.ok, false);
+  if (!orphan.ok) assert.match(orphan.error, /orphan-key/);
+});
+
+test("R2 signing does nothing unless server credentials and a scoped key exist", async () => {
+  const keys = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"] as const;
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  for (const key of keys) delete process.env[key];
+  try {
+    assert.equal(r2Configured(), false);
+    assert.equal(await startMultipartUpload(`${owner}/${item}/master_video/file.mp4`, "video/mp4"), null);
+    assert.equal(await signPutObject("../escape", "image/jpeg", 10), null);
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });

@@ -9,7 +9,7 @@ import { getContentItem, listAssets, listPlatformPosts, listProjects } from "@/l
 import { distributionSummary } from "@/lib/clipforge/distribution";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
 import { isUuid } from "@/lib/clipforge/model";
-import { signStoredObjects } from "@/lib/clipforge/storage";
+import { signStoredObjects } from "@/lib/clipforge/r2";
 import { databaseConfigured } from "@/lib/database";
 
 const unfinished = [
@@ -66,7 +66,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       <Panel title="Edit metadata">
         <ContentItemForm key={item.updatedAt} item={item} projects={projects} />
       </Panel>
-      <Panel title="Assets" description="Files stay in the private clipforge-assets bucket. Links expire and are not stored.">
+      <Panel title="Assets" description="Files stay in private R2 storage. Links expire and are not stored.">
         <AssetManager contentItemId={item.id} assets={assets} signedUrls={signedUrls} />
       </Panel>
       <Panel title="Platform distribution" description="Copy is saved here. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.">

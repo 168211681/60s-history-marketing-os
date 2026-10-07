@@ -5,7 +5,7 @@ import { listDistribution, listProjects } from "@/lib/clipforge/data";
 import { distributionSummary, isPlatform, platforms, platformStatuses, queueMembership, type Platform, type PlatformStatus } from "@/lib/clipforge/distribution";
 import { clipforgeLabel } from "@/lib/clipforge/labels";
 import { isUuid } from "@/lib/clipforge/model";
-import { signStoredObjects } from "@/lib/clipforge/storage";
+import { signStoredObjects } from "@/lib/clipforge/r2";
 import { databaseConfigured } from "@/lib/database";
 
 export const metadata = { title: "Distribution" };

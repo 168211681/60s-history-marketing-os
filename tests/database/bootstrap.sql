@@ -11,11 +11,10 @@ set search_path = ''
 as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
--- Minimal test-only Supabase Storage contract used by archived artifact
--- migrations and the ClipForge asset migration. The real `storage` schema is
--- supplied by Supabase. This fake catalog is TEST-ONLY and must never be
--- applied to a hosted project. storage.foldername matches the hosted helper:
--- every path segment except the object filename.
+-- Minimal test-only Supabase Storage catalog used by the archived artifact
+-- migration. ClipForge asset bytes are not stored here. The real `storage`
+-- schema is supplied by Supabase. This fake catalog is TEST-ONLY and must
+-- never be applied to a hosted project.
 create schema storage;
 create table storage.buckets (
   id text primary key,

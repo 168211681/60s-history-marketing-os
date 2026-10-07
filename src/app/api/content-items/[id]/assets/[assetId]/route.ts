@@ -3,7 +3,7 @@ import { appOrigin } from "@/lib/auth/config";
 import { currentOwner } from "@/lib/auth/server";
 import { deleteAsset, getAsset } from "@/lib/clipforge/data";
 import { isUuid } from "@/lib/clipforge/model";
-import { removeStoredObject, signStoredObjects } from "@/lib/clipforge/storage";
+import { r2Configured, removeStoredObject, signStoredObjects } from "@/lib/clipforge/r2";
 import { databaseConfigured } from "@/lib/database";
 
 async function ownedAsset(request: NextRequest, params: Promise<{ id: string; assetId: string }>, write: boolean) {
@@ -13,6 +13,7 @@ async function ownedAsset(request: NextRequest, params: Promise<{ id: string; as
   const owner = await currentOwner();
   if (!owner) return { error: new Response("Unauthorized", { status: 401 }) };
   if (!databaseConfigured()) return { error: new Response("Database is not configured", { status: 503 }) };
+  if (!r2Configured()) return { error: NextResponse.json({ error: "Private file storage is not configured." }, { status: 503 }) };
   const { id, assetId } = await params;
   if (!isUuid(id) || !isUuid(assetId)) return { error: NextResponse.json({ error: "Asset was not found." }, { status: 404 }) };
   const asset = await getAsset(owner.id, id, assetId);
