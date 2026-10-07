@@ -17,8 +17,15 @@ compares the returned versions with local filenames. The comparison is exact
 equality of the ordered version lists, not a count and not a pending allowance.
 Do not treat the older 18-migration snapshot as today's hosted inventory.
 Sprint 004 is Production-complete.
-`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
-Staging. Production does not have this migration. The pull-request gate remains
+Sprint 004.1 is applied and verified on Staging and on Production. Production
+has 43 YouTube videos, 43 rows with metadata synced, 43 ClipForge content items,
+172 platform posts, duplicate external IDs = 0, and a successful v2 sync.
+Production's remote migration version is `20261007190850`
+`clipforge_youtube_source_metadata`. The repository filename remains
+`20261007200200_clipforge_youtube_source_metadata.sql`. That version difference
+is intentional. Do not normalize migration history. Sprint 004.2
+(`20261008020000_clipforge_metadata_intelligence`) is branch/local only and is
+not applied to Staging or Production. The pull-request gate remains
 exact migration equality and does not push SQL.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
 Staging after review. The pending-migration helper remains in the repository for

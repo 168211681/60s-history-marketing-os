@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { database, transaction } from "@/lib/database";
 import { assetBucket, storageProvider, type AssetKind } from "./assets";
 import { assertContentPillar } from "./classification-store";
+import { effectiveContentPillar } from "./pillars";
 import {
   applyPlatformPatch,
   platforms,
@@ -301,13 +302,19 @@ export async function createContentItem(ownerId: string, input: ContentInput) {
 export async function updateContentItem(ownerId: string, id: string, input: Partial<ContentInput>) {
   return transaction(async (client) => {
     if (input.projectId && !(await ownedProject(client, ownerId, input.projectId))) return null;
-    const pillarProjectId = input.projectId;
-    if (input.contentPillar !== undefined) {
-      const current = pillarProjectId
-        ? pillarProjectId
-        : (await client.query<{ project_id: string }>("select project_id from public.content_items where id = $1 and owner_id = $2", [id, ownerId])).rows[0]?.project_id;
-      if (!current) return null;
-      await assertContentPillar(client, ownerId, current, input.contentPillar);
+    if (input.projectId !== undefined || input.contentPillar !== undefined) {
+      const current = await client.query<{ project_id: string; content_pillar: string }>(
+        "select project_id, content_pillar from public.content_items where id = $1 and owner_id = $2",
+        [id, ownerId],
+      );
+      const row = current.rows[0];
+      if (!row) return null;
+      await assertContentPillar(
+        client,
+        ownerId,
+        input.projectId ?? row.project_id,
+        effectiveContentPillar(row.content_pillar, input.contentPillar),
+      );
     }
     const values: unknown[] = [];
     const sets: string[] = [];

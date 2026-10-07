@@ -10,6 +10,7 @@ import {
   reviewClassification,
   suggestionIsStale,
   type ClassificationField,
+  type ClassificationResult,
   type ClassificationSource,
   type ClassificationYoutube,
 } from "./classification";
@@ -257,15 +258,59 @@ async function insertSuggestion(client: PoolClient, ownerId: string, contentItem
   return inserted.rows[0];
 }
 
+export async function commitClassificationResult(
+  client: PoolClient,
+  input: {
+    ownerId: string;
+    contentItemId: string;
+    inputFingerprint: string;
+    parsed: ClassificationResult;
+    providerName: string;
+    model: string;
+    reload: (client: PoolClient) => Promise<{ source: ClassificationSource; fingerprint: string } | null>;
+  },
+) {
+  const current = await input.reload(client);
+  if (!current) return { kind: "missing" as const };
+  if (current.fingerprint !== input.inputFingerprint) return { kind: "input_changed" as const };
+  const again = await findByFingerprint(client, input.ownerId, input.contentItemId, current.fingerprint);
+  if (again) {
+    const row = await reopenSuperseded(client, input.ownerId, input.contentItemId, current.fingerprint, again);
+    return { kind: "suggestion" as const, suggestion: suggestion(row, current.fingerprint) };
+  }
+  await client.query("savepoint classification_insert");
+  try {
+    const row = await insertSuggestion(
+      client,
+      input.ownerId,
+      input.contentItemId,
+      current.source,
+      current.fingerprint,
+      input.parsed,
+      input.providerName,
+      input.model,
+    );
+    await client.query("release savepoint classification_insert");
+    return row ? { kind: "suggestion" as const, suggestion: suggestion(row, current.fingerprint) } : { kind: "missing" as const };
+  } catch (error) {
+    await client.query("rollback to savepoint classification_insert");
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "23505") throw error;
+    const winner = await findByFingerprint(client, input.ownerId, input.contentItemId, current.fingerprint);
+    return winner ? { kind: "suggestion" as const, suggestion: suggestion(winner, current.fingerprint) } : { kind: "missing" as const };
+  }
+}
+
 export async function classifyContentItem(ownerId: string, contentItemId: string) {
   const provider = aiProvider();
   const context = await transaction(async (client) => loadContext(client, ownerId, contentItemId));
   if (!context) return { kind: "missing" as const };
-  const existing = await transaction(async (client) => findByFingerprint(client, ownerId, contentItemId, context.fingerprint));
+  const inputFingerprint = context.fingerprint;
+  const existing = await transaction(async (client) => findByFingerprint(client, ownerId, contentItemId, inputFingerprint));
   const step = classificationStep(Boolean(existing), provider.configured);
   if (step === "reuse" && existing) {
-    const row = await transaction(async (client) => reopenSuperseded(client, ownerId, contentItemId, context.fingerprint, existing));
-    return { kind: "suggestion" as const, suggestion: suggestion(row, context.fingerprint) };
+    const row = await transaction(async (client) => reopenSuperseded(client, ownerId, contentItemId, inputFingerprint, existing));
+    return { kind: "suggestion" as const, suggestion: suggestion(row, inputFingerprint) };
   }
   if (step === "unavailable") return { kind: "unconfigured" as const };
   let parsed;
@@ -275,26 +320,18 @@ export async function classifyContentItem(ownerId: string, contentItemId: string
     if (error instanceof Error && error.message === "AI_NOT_CONFIGURED") return { kind: "unconfigured" as const };
     throw error;
   }
-  const created = await transaction(async (client) => {
-      const current = await loadContext(client, ownerId, contentItemId);
-      if (!current) return null;
-      const again = await findByFingerprint(client, ownerId, contentItemId, current.fingerprint);
-      if (again) return suggestion(await reopenSuperseded(client, ownerId, contentItemId, current.fingerprint, again), current.fingerprint);
-      await client.query("savepoint classification_insert");
-      try {
-        const row = await insertSuggestion(client, ownerId, contentItemId, current.source, current.fingerprint, parsed, provider.name, provider.model);
-        await client.query("release savepoint classification_insert");
-        return row ? suggestion(row, current.fingerprint) : null;
-      } catch (error) {
-        await client.query("rollback to savepoint classification_insert");
-        const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-        if (code !== "23505") throw error;
-        const winner = await findByFingerprint(client, ownerId, contentItemId, current.fingerprint);
-        return winner ? suggestion(winner, current.fingerprint) : null;
-      }
-  });
-  if (!created) return { kind: "missing" as const };
-  return { kind: "suggestion" as const, suggestion: created };
+  return transaction((client) => commitClassificationResult(client, {
+    ownerId,
+    contentItemId,
+    inputFingerprint,
+    parsed,
+    providerName: provider.name,
+    model: provider.model,
+    reload: async (db) => {
+      const current = await loadContext(db, ownerId, contentItemId);
+      return current ? { source: current.source, fingerprint: current.fingerprint } : null;
+    },
+  }));
 }
 
 export async function reviewContentSuggestion(ownerId: string, contentItemId: string, suggestionId: string, action: "accept" | "reject", fields: readonly string[]) {
@@ -363,7 +400,8 @@ export async function reviewContentSuggestion(ownerId: string, contentItemId: st
     }
     const saved = await client.query<SuggestionRow>(`${suggestionSelect} where id = $1`, [suggestionId]);
     if (!saved.rows[0]) return { kind: "missing" as const };
-    return { kind: "suggestion" as const, suggestion: suggestion(saved.rows[0], context.fingerprint) };
+    const reviewed = await loadContext(client, ownerId, contentItemId);
+    return { kind: "suggestion" as const, suggestion: suggestion(saved.rows[0], reviewed?.fingerprint ?? context.fingerprint) };
   });
 }
 

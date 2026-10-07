@@ -6,6 +6,33 @@ import type { SuggestionRecord } from "@/lib/clipforge/classification-store";
 
 type SuggestionView = SuggestionRecord;
 
+export function suggestionPanelState(input: {
+  hasSuggestion: boolean;
+  unavailable: boolean;
+  generating: boolean;
+  status: SuggestionRecord["status"] | null;
+  stale: boolean;
+}) {
+  if (input.generating) return "Generating";
+  if (input.unavailable && !input.hasSuggestion) return "AI provider unavailable";
+  if (!input.hasSuggestion || !input.status) return "Not generated";
+  if (input.status === "accepted") return "Accepted";
+  if (input.status === "rejected") return "Rejected";
+  if (input.status === "superseded") return "Superseded";
+  if (input.stale) return "Stale";
+  return "Pending review";
+}
+
+export function canRegenerateSuggestion(input: {
+  hasSuggestion: boolean;
+  status: SuggestionRecord["status"] | null;
+  stale: boolean;
+}) {
+  if (!input.hasSuggestion) return true;
+  if (input.stale) return true;
+  return input.status === "superseded";
+}
+
 function confidenceLabel(value: number | null) {
   return value === null ? "No confidence score" : value.toFixed(2);
 }
@@ -62,7 +89,18 @@ export function MetadataSuggestionPanel({
   const [selected, setSelected] = useState<string[]>([]);
   const stale = Boolean(suggestion?.stale);
   const pending = suggestion?.status === "pending" && !stale;
-  const canGenerate = !suggestion || stale || suggestion.status === "superseded";
+  const canGenerate = canRegenerateSuggestion({
+    hasSuggestion: Boolean(suggestion),
+    status: suggestion?.status ?? null,
+    stale,
+  });
+  const state = suggestionPanelState({
+    hasSuggestion: Boolean(suggestion),
+    unavailable,
+    generating: busy === "generate",
+    status: suggestion?.status ?? null,
+    stale,
+  });
 
   function toggle(name: string, checked: boolean) {
     setSelected((current) => checked ? [...current, name] : current.filter((field) => field !== name));
@@ -77,6 +115,10 @@ export function MetadataSuggestionPanel({
     if (payload?.error === "AI_NOT_CONFIGURED") {
       setUnavailable(true);
       setMessage("The AI provider is not configured. No suggestion was stored.");
+      return;
+    }
+    if (payload?.error === "CLASSIFICATION_INPUT_CHANGED") {
+      setMessage("Source metadata changed while classification was running. Generate again.");
       return;
     }
     if (!response.ok) {
@@ -106,20 +148,14 @@ export function MetadataSuggestionPanel({
     router.refresh();
   }
 
-  let state = "Not generated";
-  if (unavailable && !suggestion) state = "AI provider unavailable";
-  else if (busy === "generate") state = "Generating";
-  else if (suggestion?.status === "accepted" && !stale) state = "Accepted";
-  else if (suggestion?.status === "rejected" && !stale) state = "Rejected";
-  else if (suggestion?.status === "superseded" && !stale) state = "Superseded";
-  else if (stale) state = "Stale";
-  else if (suggestion?.status === "pending") state = "Pending review";
-
   return (
     <div className="suggestion-panel">
       <p className="badge neutral">AI suggestion · not a source fact</p>
       <p>{state}</p>
       {unavailable && !suggestion ? <p>No classifier is configured, so nothing was invented.</p> : null}
+      {suggestion && (suggestion.status === "accepted" || suggestion.status === "rejected") && stale ? (
+        <p className="muted">Current metadata has changed since this decision. The suggestion stays {state.toLowerCase()}.</p>
+      ) : null}
       {suggestion ? (
         <>
           <Field name="topic" label="Topic" value={suggestion.suggestedTopic} confidence={suggestion.topicConfidence} rationale={suggestion.topicRationale} disabled={!pending} checked={selected.includes("topic")} onChange={toggle} />

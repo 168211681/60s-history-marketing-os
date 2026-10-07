@@ -18,7 +18,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | --- | --- | --- |
 | `public.users` | Minimal identity referencing `auth.users`; no duplicated email/profile data | Read own row |
 | `public.channels` | Verified channel identity and `owner_id` | Read owned channels |
-| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from Sprint 004.1. The operator reports that migration is already in Production. They are not an R2 asset | Read owned channel videos |
+| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from Sprint 004.1, applied and verified on Staging and Production. Production's remote version is `20261007190850`; the repository file remains `20261007200200_clipforge_youtube_source_metadata.sql`. They are not an R2 asset | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
@@ -42,9 +42,10 @@ That file is on `main` and is used by the Production Sprint 004 import. Do not r
 `supabase/migrations/20261007143000_clipforge_legacy_youtube_import.sql` is the
 Production-complete Sprint 004 import. Do not rewrite it.
 `supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` stores
-YouTube source facts on `public.videos` and does not change R2. It was applied
-and verified on Staging. The operator reports Production already includes it.
-Do not reapply it.
+YouTube source facts on `public.videos` and does not change R2. It is applied
+and verified on Staging and Production. Production's remote version is
+`20261007190850` `clipforge_youtube_source_metadata`. Do not normalize that
+version onto the repository filename, and do not reapply the file.
 `supabase/migrations/20261008020000_clipforge_metadata_intelligence.sql` is
 Sprint 004.2 and is branch/local only. It is not applied to Staging or
 Production. Do not apply it from this branch, and do not claim hosted
@@ -63,8 +64,11 @@ Do not treat the older 18-migration snapshot as the current hosted inventory.
 Sprint 004 is Production-complete: one ClipForge project, 41 stored YouTube
 videos imported, 41 content items, 164 platform posts, re-import idempotency
 verified, and duplicate external YouTube IDs = 0.
-`20261007200200_clipforge_youtube_source_metadata` was applied and verified on
-Staging. The operator reports Production already includes it. Do not reapply it.
+`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
+Staging and Production. Production has 43 YouTube videos, 43 metadata synced,
+43 ClipForge content items, 172 platform posts, duplicate external IDs = 0, and
+a successful v2 sync. Its remote version is `20261007190850`. Do not normalize
+that history. Do not reapply the repository file.
 Production migration history for Phase 6 and Phase 7 stays intentionally
 divergent and must not be normalized. Do not apply
 `20261008020000_clipforge_metadata_intelligence` to Staging or Production from
@@ -155,9 +159,9 @@ cloud project was true when this foundation document was written; it is not the
 current cloud state. Current migration identities and verification are recorded in
 the [database transition runbook](database-transition.md). Do not treat the older
 18-migration snapshot as today's hosted inventory. Sprint 004 is
-Production-complete. `20261007200200_clipforge_youtube_source_metadata` was
-applied and verified on Staging. The operator reports Production already
-includes Sprint 004.1. Do not reapply it.
+Production-complete. `20261007200200_clipforge_youtube_source_metadata` is
+applied and verified on Staging and Production. Production's remote version is
+`20261007190850`. Do not normalize it or reapply the repository file.
 `20261008020000_clipforge_metadata_intelligence` is branch/local only and is
 not applied to Staging or Production.
 The ClipForge projects migration

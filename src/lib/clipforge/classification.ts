@@ -71,6 +71,7 @@ export type ClassificationUpdates = {
 const remasterEvidence = /\bremaster(?:ed|ing)?\b|\bre-?edited\b|\brestored (?:cut|version|edition)\b/i;
 const newEvidence = /\b(?:newly (?:produced|filmed|shot)|original production|new production)\b/i;
 const repurposeEvidence = /\brepurpose[d]?\b|\badapted from\b|\brecut from\b/i;
+const otherEvidence = /\bother production\b|\bproduction type:\s*other\b/i;
 const insufficientProductionRationale = "Source data does not establish how the clip was produced.";
 
 function blankToNull(value: string | null) {
@@ -83,14 +84,15 @@ function evidenceText(source: ClassificationSource) {
   return [source.youtube?.description ?? "", ...(source.youtube?.tags ?? [])].join("\n");
 }
 
-export function constrainProductionType(suggested: ProductionType, source: ClassificationSource, rationale: string): ProductionType {
+export function constrainProductionType(suggested: ProductionType, source: ClassificationSource): ProductionType {
   if (suggested === "unknown") return "unknown";
   if (suggested === source.productionType) return suggested;
   const evidence = evidenceText(source);
   if (suggested === "remaster") return remasterEvidence.test(evidence) ? suggested : "unknown";
   if (suggested === "new") return newEvidence.test(evidence) ? suggested : "unknown";
   if (suggested === "repurpose") return repurposeEvidence.test(evidence) ? suggested : "unknown";
-  return rationale.trim() ? suggested : "unknown";
+  if (suggested === "other") return otherEvidence.test(evidence) ? suggested : "unknown";
+  return "unknown";
 }
 
 export function finalizeClassification(value: unknown, source: ClassificationSource): ClassificationResult {
@@ -100,7 +102,7 @@ export function finalizeClassification(value: unknown, source: ClassificationSou
   if (source.projectCode === h60ProjectCode && pillar !== null && !isH60Pillar(pillar)) {
     throw new Error("AI_INVALID_RESPONSE");
   }
-  const productionType = constrainProductionType(parsed.productionType, source, parsed.rationale.productionType);
+  const productionType = constrainProductionType(parsed.productionType, source);
   return {
     ...parsed,
     topic,
@@ -146,6 +148,7 @@ export function classificationFingerprint(source: ClassificationSource) {
   const record = classificationDocument(source).untrustedRecord;
   const canonical = {
     productionType: record.productionType,
+    projectCode: source.projectCode,
     title: record.title,
     topic: record.topic,
     version: 1,

@@ -76,7 +76,7 @@ unknown until a later editorial sprint. Do not rewrite
 
 ## ClipForge Sprint 004.1 — YouTube source metadata
 
-**Status: applied and verified on Staging. The operator reports Production already includes this migration. Do not reapply it.**
+**Status: applied and verified on Staging and Production. Do not reapply it.**
 `20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
 on `public.videos`: description, one HTTPS thumbnail URL, exact tags bounded by
 YouTube's 500-character list budget, category id,
@@ -108,7 +108,10 @@ Verified on Staging:
 - Format and production type remain unknown
 - Captions and hashtags remain untouched
 - No recent Staging runtime errors
-- The operator later reported Production includes Sprint 004.1. Do not reapply `20261007200200`
+- Production remote version `20261007190850` `clipforge_youtube_source_metadata`
+- Repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`
+- That version difference is intentional. Do not normalize migration history
+- Production: 43 YouTube videos, 43 metadata synced, 43 content items, 172 platform posts, duplicate external IDs = 0, v2 sync succeeded
 
 ## ClipForge Sprint 004.2 — metadata intelligence
 
@@ -124,9 +127,9 @@ untouched. There is no batch classification. History in 60s (`H60`) pillars are
 an application rule, not a global database enum. Do not apply this migration
 without a separate explicit approval.
 
-The operator reports the Production baseline this branch must not mutate:
-43 content items, topic empty, format unknown, and production type unknown.
-Sprint 004.1 is already complete in Production.
+The Production baseline this branch must not mutate is 43 content items, topic
+empty, format unknown, and production type unknown. Sprint 004.1 is already
+complete in Production. Sprint 004.2 is not applied there.
 
 ## Phase 0 — repository and security baseline
 

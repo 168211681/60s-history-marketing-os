@@ -29,9 +29,14 @@ current branch inventory. Staging later gained
 `20260928140124_password_setup_authorizations` and, after a separate reviewed
 apply, `20261006175601_clipforge_projects_and_content_items`. Do not treat that
 18-migration snapshot as today's hosted inventory. Sprint 004 is
-Production-complete. `20261007200200_clipforge_youtube_source_metadata` is
-applied and verified on Staging. Production does not have this migration.
-Production does not contain the
+Production-complete. Sprint 004.1 is applied and verified on Staging and on
+Production: 43 YouTube videos, 43 metadata synced, 43 ClipForge content items,
+172 platform posts, duplicate external IDs = 0, and a successful v2 sync.
+Production's remote migration version is `20261007190850`
+`clipforge_youtube_source_metadata`. The repository filename remains
+`20261007200200_clipforge_youtube_source_metadata.sql`. That version difference
+is intentional and must not be normalized. Sprint 004.2 is branch/local only
+and is not applied to Staging or Production. Production does not contain the
 password-setup migration and remains intentionally divergent.
 
 ## Evidence matrix

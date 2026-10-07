@@ -19,3 +19,7 @@ export function pillarAllowed(projectCode: string | null, pillar: string) {
   if (projectCode !== h60ProjectCode) return true;
   return pillar === "" || isH60Pillar(pillar);
 }
+
+export function effectiveContentPillar(currentPillar: string, patchPillar: string | undefined) {
+  return patchPillar !== undefined ? patchPillar : currentPillar;
+}

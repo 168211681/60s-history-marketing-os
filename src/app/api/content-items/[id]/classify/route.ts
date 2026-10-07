@@ -18,6 +18,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (result.kind === "unconfigured") {
       return NextResponse.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
     }
+    if (result.kind === "input_changed") {
+      return NextResponse.json({ error: "CLASSIFICATION_INPUT_CHANGED" }, { status: 409 });
+    }
     return NextResponse.json({ suggestion: result.suggestion });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
