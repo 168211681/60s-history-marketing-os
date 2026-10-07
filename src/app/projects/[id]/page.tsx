@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
 import { ContentItemForm } from "@/components/content-item-form";
 import { ProjectForm } from "@/components/project-form";
+import { YoutubeImportPanel } from "@/components/youtube-import";
 import { currentOwner } from "@/lib/auth/server";
 import { getProject, listContentItems } from "@/lib/clipforge/data";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
@@ -34,6 +35,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <Panel title="Project details" description={`Status ${clipforgeLabel(project.status)} · Updated ${clipforgeTime(project.updatedAt)} UTC`}>
         <ProjectForm key={project.updatedAt} project={project} />
       </Panel>
+      <Panel title="Import / Sync content" description="Bring in videos already stored from YouTube. The import does not upload or publish anything.">
+        <YoutubeImportPanel projectId={project.id} projectName={project.name} />
+      </Panel>
       <Panel title="Content in this project" description="These are saved content items, not files." action={<Link className="text-link" href={`/library?project=${project.id}`}>Library filter →</Link>}>
         {items.length ? (
           <ul className="content-cards">
@@ -48,10 +52,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             ))}
           </ul>
         ) : (
-          <EmptyState title="No content items yet"><p>Create the first item for this project below.</p></EmptyState>
+          <EmptyState title="No content items yet"><p>Preview a YouTube import above, or add one manually below.</p></EmptyState>
         )}
       </Panel>
-      <Panel title="Add content" description="The item stays in this project unless you later move it to another project you own.">
+      <Panel title="Add content" description="Use this only when the item is not already in a connected source. Advanced metadata is optional.">
         <ContentItemForm projects={[project]} defaultProjectId={project.id} />
       </Panel>
     </>

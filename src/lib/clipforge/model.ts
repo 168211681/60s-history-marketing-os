@@ -1,7 +1,7 @@
 export const projectStatuses = ["active", "archived"] as const;
 export const contentStatuses = ["idea", "generating", "editing", "ready", "scheduled", "published", "archived"] as const;
-export const contentFormats = ["short_form", "long_form", "other"] as const;
-export const productionTypes = ["new", "remaster", "repurpose", "other"] as const;
+export const contentFormats = ["unknown", "short_form", "long_form", "other"] as const;
+export const productionTypes = ["unknown", "new", "remaster", "repurpose", "other"] as const;
 
 export type ProjectStatus = (typeof projectStatuses)[number];
 export type ContentStatus = (typeof contentStatuses)[number];
@@ -99,8 +99,8 @@ export function parseContentInput(value: unknown): ContentInput | null {
   const contentKey = optionalToken(body.contentKey, keyPattern);
   const title = text(body.title);
   const topic = text(body.topic);
-  const format = text(body.format || "short_form");
-  const productionType = text(body.productionType || "new");
+  const format = text(body.format || "unknown");
+  const productionType = text(body.productionType || "unknown");
   const status = text(body.status || "idea");
   const languageCode = text(body.languageCode || "en").toLowerCase();
   const notes = text(body.notes);

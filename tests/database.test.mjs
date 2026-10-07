@@ -11,6 +11,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { deleteResearchProjectSql } from "../src/lib/research/delete-query.mjs";
+import { bindImportSql, youtubeImportSql, youtubePreviewSql } from "../src/lib/clipforge/import-sql.mjs";
 
 // Only a newly created local cluster is used. DATABASE_URL and all PG* variables
 // are ignored so tests can never reset or connect to an existing database.
@@ -717,7 +718,7 @@ test("clipforge assets and platform posts stay private to the owning content ite
   asRole("authenticated", userA, `insert into public.platform_posts (content_item_id, owner_id, platform) values ('${itemA}','${userA}','x')`, "23514");
   asRole("authenticated", userA, `update public.platform_posts set status='viral' where content_item_id='${itemA}' and platform='youtube'`, "23514");
   asRole("authenticated", userA, `update public.platform_posts set status='scheduled' where content_item_id='${itemA}' and platform='youtube'`, "23514");
-  asRole("authenticated", userA, `update public.platform_posts set status='published' where content_item_id='${itemA}' and platform='facebook'`, "23514");
+  assert.equal(asRole("authenticated", userA, `update public.platform_posts set status='published' where content_item_id='${itemA}' and platform='facebook' returning (published_at is null)`), "t");
   asRole("authenticated", userA, `update public.platform_posts set post_url='http://example.com/post' where content_item_id='${itemA}' and platform='tiktok'`, "23514");
   asRole("authenticated", userA, `update public.platform_posts set platform_post_id='has space' where content_item_id='${itemA}' and platform='instagram'`, "23514");
   assert.equal(asRole("authenticated", userA, `update public.platform_posts set status='scheduled', scheduled_at=now() where content_item_id='${itemA}' and platform='youtube' returning status`), "scheduled");
@@ -805,4 +806,140 @@ test("password setup authorizations stay server-only and reject invalid grants",
   );
   sql(`delete from private.password_setup_authorizations where token_hash in ('${recovery}','${invite}')`);
   assert.equal(sql("select count(*) from private.password_setup_authorizations"), "0");
+});
+
+function importFields(project, owner) {
+  const parts = sql(bindImportSql(youtubeImportSql, project, owner)).split("|");
+  assert.equal(parts.length, 7);
+  return parts;
+}
+
+test("legacy YouTube import is idempotent and does not cross owners", () => {
+  const ownerA = "11000000-0000-4000-8000-0000000000aa";
+  const ownerB = "11000000-0000-4000-8000-0000000000bb";
+  const channelA = "21000000-0000-4000-8000-0000000000aa";
+  const channelA2 = "21000000-0000-4000-8000-0000000000a2";
+  const channelB = "21000000-0000-4000-8000-0000000000bb";
+  const projectA = "a2000000-0000-4000-8000-0000000000aa";
+  const projectB = "a2000000-0000-4000-8000-0000000000bb";
+  const longTitle = "T".repeat(250);
+  assert.match(
+    sql("select indexdef from pg_indexes where schemaname='public' and indexname='platform_posts_owner_platform_post_id_idx'"),
+    /owner_id, platform, platform_post_id[\s\S]*platform_post_id IS NOT NULL/,
+  );
+  sql(`insert into auth.users (id) values ('${ownerA}'), ('${ownerB}')`);
+  sql(`insert into public.users (id) values ('${ownerA}'), ('${ownerB}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values
+    ('${channelA}','${ownerA}','legacy-channel-a','History in 60s'),
+    ('${channelA2}','${ownerA}','legacy-channel-a2','Second channel'),
+    ('${channelB}','${ownerB}','legacy-channel-b','Other channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values
+    ('${projectA}','${ownerA}','History in 60s'),
+    ('${projectB}','${ownerB}','Other project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, topic, published_at, duration_seconds) values
+    ('${channelA}','aaaaaaaaaaa','Siege logistics','medieval','2024-06-01T00:00:00Z',58),
+    ('${channelA}','bbbbbbbbbbb','Same title',null,null,120),
+    ('${channelA}','ccccccccccc','Same title','other','2024-07-01T00:00:00Z',59.5),
+    ('${channelA}','ddddddddddd','${longTitle}',null,null,10),
+    ('${channelA}','short','Too short an id',null,null,10),
+    ('${channelA2}','aaaaaaaaaaa','Duplicate row',null,null,10),
+    ('${channelB}','eeeeeeeeeee','Foreign clip','secret',null,40)`);
+  const preview = sql(bindImportSql(youtubePreviewSql, projectA, ownerA)).split("|");
+  assert.equal(preview.length, 6);
+  assert.equal(preview[0], "History in 60s");
+  assert.match(preview[1], /History in 60s/);
+  assert.match(preview[1], /Second channel/);
+  assert.deepEqual(preview.slice(2), ["6", "3", "0", "3"]);
+  assert.equal(sql(bindImportSql(youtubePreviewSql, projectB, ownerA)), "");
+  const first = importFields(projectA, ownerA);
+  assert.deepEqual(first, ["t", "6", "3", "12", "0", "0", "3"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerA}'`), "3");
+  assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${ownerA}'`), "12");
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerA}' and title='Same title'`), "2");
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerA}' and title='Foreign clip'`), "0");
+  const siege = sql(`select i.id from public.content_items i join public.platform_posts p on p.content_item_id=i.id where p.owner_id='${ownerA}' and p.platform='youtube' and p.platform_post_id='aaaaaaaaaaa'`);
+  assert.match(siege, /^[0-9a-f-]{36}$/);
+  assert.equal(
+    sql(`select format || '|' || production_type || '|' || status || '|' || (content_key is null) || '|' || topic || '|' || duration_seconds || '|' || (notes = '') from public.content_items where id='${siege}'`),
+    "unknown|unknown|published|true|medieval|58|true",
+  );
+  assert.equal(
+    sql(`select status || '|' || platform_post_id || '|' || post_url || '|' || (published_at = '2024-06-01T00:00:00Z') || '|' || (scheduled_at is null) || '|' || title from public.platform_posts where content_item_id='${siege}' and platform='youtube'`),
+    "published|aaaaaaaaaaa|https://www.youtube.com/watch?v=aaaaaaaaaaa|true|true|Siege logistics",
+  );
+  const undated = sql(`select i.id from public.content_items i join public.platform_posts p on p.content_item_id=i.id where p.owner_id='${ownerA}' and p.platform_post_id='bbbbbbbbbbb'`);
+  assert.equal(
+    sql(`select p.status || '|' || (p.published_at is null) || '|' || (p.scheduled_at is null) || '|' || i.topic || '|' || i.duration_seconds from public.platform_posts p join public.content_items i on i.id=p.content_item_id where p.content_item_id='${undated}' and p.platform='youtube'`),
+    "published|true|true||120",
+  );
+  assert.equal(sql(`select format from public.content_items where id='${undated}'`), "unknown");
+  const fractional = sql(`select duration_seconds is null from public.content_items i join public.platform_posts p on p.content_item_id=i.id where p.platform_post_id='ccccccccccc'`);
+  assert.equal(fractional, "t");
+  for (const platform of ["facebook", "tiktok", "instagram"]) {
+    assert.equal(
+      sql(`select status || '|' || (platform_post_id is null) || '|' || (post_url is null) || '|' || (published_at is null) || '|' || (scheduled_at is null) || '|' || title || '|' || caption from public.platform_posts where content_item_id='${siege}' and platform='${platform}'`),
+      "not_started|true|true|true|true||",
+    );
+  }
+  assert.equal(sql(`select count(*) from public.content_items where project_id='${projectB}'`), "0");
+  const foreign = importFields(projectB, ownerA);
+  assert.equal(foreign[0], "f");
+  assert.equal(sql(`select count(*) from public.content_items where project_id='${projectB}'`), "0");
+  const second = importFields(projectA, ownerA);
+  assert.deepEqual(second, ["t", "6", "0", "0", "4", "0", "2"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerA}'`), "3");
+  assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${ownerA}'`), "12");
+  sql(`update public.content_items set title='Curated siege', topic='owner topic', notes='keep me', production_type='remaster', format='short_form' where id='${siege}'`);
+  sql(`update public.platform_posts set caption='human caption', title='Hand edited platform title' where content_item_id='${siege}' and platform='youtube'`);
+  sql(`update public.videos set title='Source title changed', topic='source topic', duration_seconds=61, published_at='2024-08-01T00:00:00Z' where channel_id='${channelA}' and youtube_video_id='aaaaaaaaaaa'`);
+  const refreshed = importFields(projectA, ownerA);
+  assert.equal(refreshed[2], "0");
+  assert.equal(refreshed[5], "1");
+  assert.equal(
+    sql(`select title || '|' || topic || '|' || notes || '|' || production_type || '|' || format || '|' || duration_seconds from public.content_items where id='${siege}'`),
+    "Curated siege|owner topic|keep me|remaster|short_form|61",
+  );
+  assert.equal(
+    sql(`select title || '|' || caption || '|' || post_url || '|' || (published_at = '2024-08-01T00:00:00Z') from public.platform_posts where content_item_id='${siege}' and platform='youtube'`),
+    "Source title changed|human caption|https://www.youtube.com/watch?v=aaaaaaaaaaa|true",
+  );
+  const ownedAgain = "b2000000-0000-4000-8000-0000000000aa";
+  sql(`insert into public.content_items (id, project_id, owner_id, title) values ('${ownedAgain}','${projectA}','${ownerA}','Manual duplicate')`);
+  sql(`insert into public.platform_posts (content_item_id, owner_id, platform, platform_post_id) values ('${ownedAgain}','${ownerA}','youtube','aaaaaaaaaaa')`, "23505");
+  sql(`update public.platform_posts set status='scheduled' where content_item_id='${undated}' and platform='youtube'`, "23514");
+  const other = importFields(projectB, ownerB);
+  assert.deepEqual(other.slice(0, 4), ["t", "1", "1", "4"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerB}' and title='Foreign clip'`), "1");
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerB}' and title='Siege logistics'`), "0");
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${ownerA}'`), "4");
+});
+
+test("legacy YouTube import of 1000 videos does not duplicate on the second run", () => {
+  const owner = "11000000-0000-4000-8000-0000000000cc";
+  const channel = "21000000-0000-4000-8000-0000000000cc";
+  const project = "a2000000-0000-4000-8000-0000000000cc";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','legacy-scale','Scale channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Scale project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, topic, published_at, duration_seconds)
+       select '${channel}', 'yt' || lpad(i::text, 9, '0'), 'Legacy clip ' || i,
+              case when i % 2 = 0 then 'topic ' || i else null end,
+              case when i % 5 = 0 then null else timestamptz '2020-01-01' + (i || ' minutes')::interval end,
+              case when i % 7 = 0 then null else 58 end
+         from generate_series(1, 1000) as i`);
+  const started = Date.now();
+  const first = importFields(project, owner);
+  const elapsed = Date.now() - started;
+  console.log(`YOUTUBE_IMPORT_1000_MS ${elapsed}`);
+  assert.deepEqual(first, ["t", "1000", "1000", "4000", "0", "0", "0"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}'`), "1000");
+  assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${owner}'`), "4000");
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}' and format='unknown' and production_type='unknown' and content_key is null and status='published'`), "1000");
+  assert.equal(sql(`select count(distinct platform_post_id) from public.platform_posts where owner_id='${owner}' and platform='youtube'`), "1000");
+  const second = importFields(project, owner);
+  assert.deepEqual(second, ["t", "1000", "0", "0", "1000", "0", "0"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}'`), "1000");
+  assert.equal(sql(`select count(*) from public.platform_posts where owner_id='${owner}'`), "4000");
+  assert.ok(elapsed < 15000, `import took ${elapsed}ms`);
 });

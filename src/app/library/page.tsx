@@ -95,7 +95,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
         )}
       </Panel>
       {projects.length ? (
-        <Panel title="Create content item" description="Four platform rows are created with the item. Nothing is published.">
+        <Panel title="Create content" description="Title and project are enough. Four empty platform rows are created with the item. Nothing is published.">
           <ContentItemForm projects={projects} defaultProjectId={projectId} />
         </Panel>
       ) : null}

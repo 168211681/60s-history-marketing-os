@@ -12,6 +12,7 @@ const labels: Record<string, string> = {
   short_form: "Short form",
   long_form: "Long form",
   other: "Other",
+  unknown: "Unknown",
   new: "New",
   remaster: "Remaster",
   repurpose: "Repurpose",

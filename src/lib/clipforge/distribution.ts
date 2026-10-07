@@ -99,11 +99,9 @@ export function parsePlatformPostPatch(value: unknown): PlatformPostPatch | null
   return Object.keys(next).length ? next : null;
 }
 
-export function applyPlatformPatch(current: PlatformPostInput, patch: PlatformPostPatch, nowIso: string): PlatformPostInput | null {
+export function applyPlatformPatch(current: PlatformPostInput, patch: PlatformPostPatch): PlatformPostInput | null {
   const next: PlatformPostInput = { ...current, ...patch };
-  if (next.status === "published" && !next.publishedAt) next.publishedAt = nowIso;
   if (next.status === "scheduled" && !next.scheduledAt) return null;
-  if (next.status === "published" && !next.publishedAt) return null;
   if (next.postUrl && !isHttpsUrl(next.postUrl)) return null;
   if (next.title.length > 200 || next.caption.length > 5000 || next.hashtags.length > 500) return null;
   return next;

@@ -18,6 +18,14 @@ test("project input accepts owner-entered names and normalizes codes", () => {
 test("content input rejects unknown status and blank keys", () => {
   const projectId = "a1000000-0000-4000-8000-000000000001";
   assert.equal(parseContentInput({ projectId, title: "Siege", contentKey: "h60-0042", durationSeconds: "58" })?.contentKey, "H60-0042");
+  const created = parseContentInput({ projectId, title: "Siege" });
+  assert.equal(created?.format, "unknown");
+  assert.equal(created?.productionType, "unknown");
+  assert.equal(created?.status, "idea");
+  assert.equal(created?.contentKey, null);
+  assert.equal(created?.durationSeconds, null);
+  assert.equal(created?.languageCode, "en");
+  assert.equal(parseContentInput({ projectId, title: "Siege", format: "nope" }), null);
   assert.equal(parseContentInput({ projectId, title: "Siege", status: "viral" }), null);
   assert.equal(parseContentInput({ projectId: "not-a-uuid", title: "Siege" }), null);
   assert.deepEqual(parseContentPatch({ status: "archived" }), { status: "archived" });
