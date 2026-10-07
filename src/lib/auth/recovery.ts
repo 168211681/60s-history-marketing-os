@@ -1,0 +1,75 @@
+export const minPasswordLength = 12;
+const allowedNext = new Set(["/settings", "/reset-password"]);
+
+export function safeAuthNext(next: string | null | undefined) {
+  if (next && allowedNext.has(next)) return next;
+  return "/settings";
+}
+
+export function callbackDestination(input: {
+  code: string | null;
+  next: string | null;
+  exchanged: boolean;
+  ownerMatches: boolean;
+}) {
+  if (!input.code || input.code.length > 2048 || /[\u0000\r\n]/.test(input.code)) return "/settings?auth_error=callback";
+  if (!input.exchanged || !input.ownerMatches) {
+    return input.exchanged ? "/settings?auth=denied" : "/settings?auth_error=callback";
+  }
+  return safeAuthNext(input.next);
+}
+
+export function recoveryRedirect(origin: string) {
+  const url = new URL("/auth/callback", origin);
+  url.searchParams.set("next", "/reset-password");
+  return url.toString();
+}
+
+export function recoveryRequestMessage() {
+  return "If that account exists, a password reset link has been sent.";
+}
+
+export function signInFailureMessage(kind: "credentials" | "setup") {
+  return kind === "credentials"
+    ? "Email or password is incorrect."
+    : "Sign-in could not start. Check the authentication setup.";
+}
+
+export function passwordSignInMessage(error: { code?: string; message?: string }) {
+  const code = error.code ?? "";
+  const message = (error.message ?? "").toLowerCase();
+  if (code === "invalid_credentials" || message === "invalid login credentials") return signInFailureMessage("credentials");
+  return signInFailureMessage("setup");
+}
+
+export function validateNewPassword(password: string, confirm: string) {
+  if (password.length < minPasswordLength) return `Use at least ${minPasswordLength} characters.`;
+  if (password !== confirm) return "Passwords do not match.";
+  return null;
+}
+
+export async function changeOwnerPassword(
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string } | null } }>;
+    updateUser: (input: { password: string }) => Promise<{ error: { message?: string } | null }>;
+    signOut: () => Promise<unknown>;
+  },
+  input: { password: string; confirm: string; ownerId: string | null },
+) {
+  const invalid = validateNewPassword(input.password, input.confirm);
+  if (invalid) return { ok: false as const, error: invalid };
+  const { data } = await auth.getUser();
+  if (!data.user || !input.ownerId || data.user.id.toLowerCase() !== input.ownerId.toLowerCase()) {
+    return { ok: false as const, error: "Open the password reset link again, then choose a new password." };
+  }
+  const updated = await auth.updateUser({ password: input.password });
+  if (updated.error) {
+    return { ok: false as const, error: "The password could not be changed. Request a new reset link and try again." };
+  }
+  try {
+    await auth.signOut();
+  } catch {
+    // The password is already changed. Leave the recovery page either way.
+  }
+  return { ok: true as const, redirect: "/settings?password_reset=success" as const };
+}
