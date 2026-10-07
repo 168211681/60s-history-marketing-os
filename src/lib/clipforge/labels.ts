@@ -7,12 +7,20 @@ const labels: Record<string, string> = {
   ready: "Ready",
   scheduled: "Scheduled",
   published: "Published",
+  skipped: "Skipped",
+  not_started: "Not started",
   short_form: "Short form",
   long_form: "Long form",
   other: "Other",
   new: "New",
   remaster: "Remaster",
   repurpose: "Repurpose",
+  youtube: "YouTube",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  instagram: "Instagram",
+  master_video: "Master video",
+  thumbnail: "Thumbnail",
 };
 
 export function clipforgeLabel(value: string) {

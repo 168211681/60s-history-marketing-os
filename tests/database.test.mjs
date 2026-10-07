@@ -137,13 +137,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "21",
+    "23",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "21",
+      "23",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -171,7 +171,7 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
       "f",
     );
   }
-  for (const table of ["projects", "content_items"]) {
+  for (const table of ["projects", "content_items", "content_assets", "platform_posts"]) {
     assert.equal(sql(`select has_table_privilege('anon','public.${table}','select')`), "f");
     assert.equal(sql(`select has_table_privilege('authenticated','public.${table}','truncate')`), "f");
     assert.equal(sql(`select has_table_privilege('service_role','public.${table}','truncate')`), "f");
@@ -617,6 +617,129 @@ test("clipforge projects and content items stay inside the owning account", () =
   sql(`delete from public.projects where id='${projectA}'`);
   assert.equal(sql(`select count(*) from public.content_items where project_id='${projectA}' or id='${itemA}'`), "0");
   assert.equal(sql(`select count(*) from public.projects where id='${projectB}'`), "1");
+});
+test("clipforge assets and platform posts stay private to the owning content item", () => {
+  const projectA = "c1000000-0000-4000-8000-000000000011";
+  const projectB = "c1000000-0000-4000-8000-000000000012";
+  const itemA = "d1000000-0000-4000-8000-000000000011";
+  const itemB = "d1000000-0000-4000-8000-000000000012";
+  const videoPath = `${userA}/${itemA}/master_video/clip-final.mp4`;
+  const imagePath = `${userA}/${itemA}/thumbnail/cover.jpg`;
+  sql(`insert into public.projects (id, owner_id, name) values
+    ('${projectA}','${userA}','Asset project'),
+    ('${projectB}','${userB}','Other asset project')`);
+  sql(`insert into public.content_items (id, project_id, owner_id, title) values
+    ('${itemA}','${projectA}','${userA}','Asset clip'),
+    ('${itemB}','${projectB}','${userB}','Other clip')`);
+  assert.match(
+    sql("select indexdef from pg_indexes where schemaname='public' and indexname='content_items_project_id_owner_id_idx'"),
+    /\(project_id, owner_id\)/,
+  );
+  assert.equal(
+    sql("select count(*) from pg_constraint where conname='content_items_id_owner_id_key' and contype='u'"),
+    "1",
+  );
+  assert.equal(
+    sql("select count(*) from pg_trigger where tgrelid='public.content_items'::regclass and not tgisinternal and tgname <> 'set_updated_at'"),
+    "0",
+  );
+  assert.equal(
+    sql("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prosecdef and n.nspname in ('public','private','storage')"),
+    "0",
+  );
+  assert.equal(
+    sql("select column_default from information_schema.columns where table_schema='public' and table_name='content_assets' and column_name='storage_provider'"),
+    "'r2'::text",
+  );
+  assert.equal(sql("select count(*) from pg_policies where schemaname='storage' and policyname like 'clipforge%'"), "0");
+  for (const column of ["owner_id", "content_item_id", "kind", "storage_provider", "storage_bucket", "storage_path", "original_filename", "mime_type", "size_bytes", "created_at", "updated_at"]) {
+    assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','update')`), "f", column);
+  }
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','update')"), "f");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','select')"), "t");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','delete')"), "t");
+  for (const column of ["content_item_id", "owner_id", "kind", "storage_provider", "storage_bucket", "storage_path", "original_filename", "mime_type", "size_bytes"]) {
+    assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','insert')`), "t", column);
+  }
+  assert.equal(sql("select count(*) from pg_policies where schemaname='public' and tablename='content_assets' and cmd='UPDATE'"), "0");
+  for (const column of ["owner_id", "content_item_id", "platform", "created_at", "updated_at"]) {
+    assert.equal(sql(`select has_column_privilege('authenticated','public.platform_posts','${column}','update')`), "f");
+  }
+  assert.equal(sql("select has_column_privilege('authenticated','public.platform_posts','status','update')"), "t");
+  assert.equal(sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='content_assets'"), "t");
+  assert.equal(sql("select c.relrowsecurity and c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='platform_posts'"), "t");
+
+  sql(`insert into public.content_assets (content_item_id, owner_id, kind, storage_provider, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','s3','${videoPath}','clip.mp4','video/mp4',1024)`, "23514");
+  assert.equal(
+    asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','${videoPath}','clip final.mp4','video/mp4',1024) returning kind`),
+    "master_video",
+  );
+  sql(`insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','${videoPath}','clip final.mp4','video/mp4',1024)`);
+  asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','master_video','${userA}/${itemA}/master_video/second.mp4','second.mp4','video/mp4',1024)`, "23505");
+  asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${imagePath}','cover.jpg','image/jpeg',536870913)`, "23514");
+  asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${userA}/${itemA}/thumbnail/bad.jpg','bad.jpg','image/gif',2048)`, "23514");
+  asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${userA}/${itemA}/thumbnail/../bad.jpg','bad.jpg','image/jpeg',2048)`, "23514");
+  assert.equal(
+    asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${imagePath}','cover.jpg','image/jpeg',2048) returning kind`),
+    "thumbnail",
+  );
+  sql(`insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${imagePath}','cover.jpg','image/jpeg',2048)`);
+  asRole("authenticated", userA, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userA}','thumbnail','${userA}/${itemA}/thumbnail/two.jpg','two.jpg','image/png',2048)`, "23505");
+  assert.equal(asRole("authenticated", userB, `select count(*) from public.content_assets where content_item_id='${itemA}'`), "0");
+  asRole("authenticated", userB, `insert into public.content_assets (content_item_id, owner_id, kind, storage_path, original_filename, mime_type, size_bytes) values ('${itemA}','${userB}','master_video','${userB}/${itemA}/master_video/steal.mp4','steal.mp4','video/mp4',1024)`, "42501");
+  asRole("anon", "", "select * from public.content_assets", "42501");
+  asRole("authenticated", userA, `update public.content_assets set owner_id='${userB}' where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set storage_path='${userA}/${itemB}/master_video/clip-final.mp4' where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set kind='thumbnail' where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set storage_bucket='public' where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set created_at=now() where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set updated_at=now() where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set original_filename='renamed.mp4' where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set mime_type='video/quicktime' where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set size_bytes=2048 where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  assert.equal(sql(`select original_filename from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "clip final.mp4");
+  assert.equal(sql(`select mime_type from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "video/mp4");
+  assert.equal(sql(`select size_bytes from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "1024");
+  sql(`update public.content_assets set owner_id='${userB}' where content_item_id='${itemA}' and kind='master_video'`, "23514");
+
+  for (const platform of ["youtube", "facebook", "tiktok", "instagram"]) {
+    assert.equal(
+      asRole("authenticated", userA, `insert into public.platform_posts (content_item_id, owner_id, platform) values ('${itemA}','${userA}','${platform}') returning platform`),
+      platform,
+    );
+  }
+  sql(`insert into public.platform_posts (content_item_id, owner_id, platform) values
+    ('${itemA}','${userA}','youtube'),
+    ('${itemA}','${userA}','facebook'),
+    ('${itemA}','${userA}','tiktok'),
+    ('${itemA}','${userA}','instagram')`);
+  asRole("authenticated", userA, `insert into public.platform_posts (content_item_id, owner_id, platform) values ('${itemA}','${userA}','youtube')`, "23505");
+  asRole("authenticated", userA, `insert into public.platform_posts (content_item_id, owner_id, platform) values ('${itemA}','${userA}','x')`, "23514");
+  asRole("authenticated", userA, `update public.platform_posts set status='viral' where content_item_id='${itemA}' and platform='youtube'`, "23514");
+  asRole("authenticated", userA, `update public.platform_posts set status='scheduled' where content_item_id='${itemA}' and platform='youtube'`, "23514");
+  asRole("authenticated", userA, `update public.platform_posts set status='published' where content_item_id='${itemA}' and platform='facebook'`, "23514");
+  asRole("authenticated", userA, `update public.platform_posts set post_url='http://example.com/post' where content_item_id='${itemA}' and platform='tiktok'`, "23514");
+  asRole("authenticated", userA, `update public.platform_posts set platform_post_id='has space' where content_item_id='${itemA}' and platform='instagram'`, "23514");
+  assert.equal(asRole("authenticated", userA, `update public.platform_posts set status='scheduled', scheduled_at=now() where content_item_id='${itemA}' and platform='youtube' returning status`), "scheduled");
+  assert.equal(asRole("authenticated", userA, `update public.platform_posts set status='published', published_at=now(), post_url='https://youtu.be/abc123' where content_item_id='${itemA}' and platform='facebook' returning post_url`), "https://youtu.be/abc123");
+  assert.equal(asRole("authenticated", userA, `update public.platform_posts set status='skipped' where content_item_id='${itemA}' and platform='tiktok' returning status`), "skipped");
+  assert.equal(asRole("authenticated", userB, `select count(*) from public.platform_posts where content_item_id='${itemA}'`), "0");
+  assert.equal(asRole("authenticated", userB, `update public.platform_posts set title='Stolen' where content_item_id='${itemA}' returning id`), "");
+  asRole("authenticated", userB, `insert into public.platform_posts (content_item_id, owner_id, platform) values ('${itemA}','${userB}','youtube')`, "42501");
+  asRole("anon", "", "select * from public.platform_posts", "42501");
+  asRole("authenticated", userA, `update public.platform_posts set owner_id='${userB}' where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.platform_posts set platform='tiktok' where content_item_id='${itemA}' and platform='instagram'`, "42501");
+  asRole("authenticated", userA, `update public.platform_posts set created_at=now() where content_item_id='${itemA}'`, "42501");
+  asRole("authenticated", userA, `update public.platform_posts set updated_at=now() where content_item_id='${itemA}'`, "42501");
+  assert.equal(asRole("authenticated", userA, `update public.platform_posts set title='Ready title' where content_item_id='${itemA}' and platform='instagram' returning title`), "Ready title");
+  asRole("authenticated", userA, `update public.content_items set owner_id='${userB}' where id='${itemA}'`, "42501");
+  sql(`update public.content_items set owner_id='${userB}' where id='${itemA}'`, "23503");
+
+  sql(`delete from public.content_items where id='${itemA}'`);
+  assert.equal(sql(`select count(*) from public.content_assets where content_item_id='${itemA}'`), "0");
+  assert.equal(sql(`select count(*) from public.platform_posts where content_item_id='${itemA}'`), "0");
+  assert.equal(sql(`select count(*) from public.content_items where id='${itemB}'`), "1");
+  sql(`delete from public.projects where id in ('${projectA}','${projectB}')`);
 });
 test("password setup authorizations stay server-only and reject invalid grants", () => {
   const recovery = "ab".repeat(32);

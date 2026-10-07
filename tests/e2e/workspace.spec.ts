@@ -8,7 +8,7 @@ const routes = [
   ["/scripts", "Script drafts"],
   ["/settings", "Settings & connections"],
 ] as const;
-const placeholders = ["/distribution", "/calendar", "/archive"] as const;
+const placeholders = ["/calendar", "/archive"] as const;
 for (const route of placeholders) {
   test(`${route} is labeled unfinished and does not overflow`, async ({ page }) => {
     const response = await page.goto(route);
@@ -56,6 +56,17 @@ for (const [route, heading] of routes) {
     expect(errors).toEqual([]);
   });
 }
+test("distribution is a private queue and does not overflow", async ({ page }) => {
+  const response = await page.goto("/distribution");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Cross-post queue", exact: true })).toBeVisible();
+  await expect(page.getByText("Sign in as the channel owner to see what still needs posting.")).toBeVisible();
+  await expect(page.getByText("Not yet implemented")).toHaveCount(0);
+  await expect(page.locator('nav [aria-current="page"]')).toHaveAttribute("href", "/distribution");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
+});
 test("projects and library stay private without an owner session", async ({ page }) => {
   for (const route of ["/projects", "/library"]) {
     const response = await page.goto(route);

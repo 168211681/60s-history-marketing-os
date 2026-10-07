@@ -15,7 +15,10 @@ same project. The token is project-scoped, so the workflow does not call
 reads `supabase_migrations.schema_migrations` with a SELECT-only query and
 compares the returned versions with local filenames. The comparison is exact
 equality of the ordered version lists, not a count and not a pending allowance.
-Staging and this branch both have 18 migrations.
+Staging and `main` both have 18 migrations. This branch has 19 local files
+because `20261006210730_clipforge_distribution_assets` is pending and was not
+applied. A pull request opened before a separate reviewed apply will fail this
+exact-equality gate. That failure is intentional until the migration is reviewed.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
 Staging after review. The pending-migration helper remains in the repository for
 a future reviewed difference and is not this pull-request gate. This avoids relying
@@ -87,8 +90,10 @@ in `validate-staging-db.yml`.
 The rehearsal completed successfully in run `36001809750`. That record showed
 Staging version `20260924041349` in a 16-version history. Staging later received
 `20260928140124` and, after a separate reviewed apply,
-`20261006175601_clipforge_projects_and_content_items`. Staging now has 18
-versions, matching this branch. The validation workflow must not apply SQL.
+`20261006175601_clipforge_projects_and_content_items`. Staging and `main` now have 18
+versions. This branch has one additional pending migration,
+`20261006210730_clipforge_distribution_assets`, which this workflow must not apply.
+The validation workflow must not apply SQL.
 Hosted catalog inspection at the Phase 7
 rehearsal confirmed the four research tables, RLS/FORCE RLS, expected read
 policies, indexes, foreign keys, and timestamp triggers. This workflow does not

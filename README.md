@@ -6,8 +6,9 @@ calculates evidence-backed insights, supports experiments and reviewed script
 drafts, and prepares creative briefs for external editing tools.
 
 Sprint 001 changed the application shell. Sprint 002 adds owner-scoped projects
-and content items. Distribution, Calendar, and Archive remain labeled
-placeholders. They do not upload media or publish.
+and content items. Sprint 003, on this branch only, adds private Cloudflare R2 assets
+and a manual distribution queue. Calendar and Archive remain labeled
+placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 
 Internal video rendering, provider inference, artifact storage, production workers,
 YouTube upload, and public publishing remain retired. Historical production rows
@@ -40,9 +41,9 @@ The optional database and browser checks are `npm run test:db` and `npm run test
 | --- | --- |
 | `/` | Channel overview, metrics, recent videos and trend |
 | `/projects` | Owner projects. Create, edit, archive, and open a project |
-| `/library` | Owner content items. Filter, create, edit, and archive metadata |
+| `/library` | Owner content items, private files, and manual platform copy |
 | `/videos` | Video search and performance exploration |
-| `/distribution` | Placeholder. No platform posting |
+| `/distribution` | Manual cross-post queue. Does not publish |
 | `/calendar` | Placeholder. No schedule |
 | `/analytics` | Channel analytics and metric definitions |
 | `/archive` | Placeholder. Does not move or restore content |
