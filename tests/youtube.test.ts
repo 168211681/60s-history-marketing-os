@@ -256,8 +256,6 @@ test("malformed source metadata fails validation instead of being truncated", as
   });
   await reject({ ...base, status: { privacyStatus: "friends" } });
   await reject({ ...base, snippet: { ...base.snippet, description: "x".repeat(5001) } });
-  await reject({ ...base, snippet: { ...base.snippet, tags: Array.from({ length: 31 }, () => "tag") } });
-  await reject({ ...base, snippet: { ...base.snippet, tags: ["x".repeat(101)] } });
   await reject({ ...base, snippet: { ...base.snippet, categoryId: "abc" } });
   await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "en-" } });
   await reject({ ...base, snippet: { ...base.snippet, defaultLanguage: "zh-123456789" } });
@@ -278,6 +276,72 @@ test("malformed source metadata fails validation instead of being truncated", as
   const [video] = await fetchVideoMetadata("access", expectedChannel, ["fffffffffff"], { fetcher });
   assert.equal(video?.defaultLanguage, "EN");
   assert.equal(video?.defaultAudioLanguage, "th");
+});
+
+test("YouTube tags follow the provider 500-character budget", async () => {
+  const expectedChannel = "UC" + "g".repeat(22);
+  const base = {
+    id: "ggggggggggg",
+    snippet: {
+      channelId: expectedChannel,
+      title: "Source title",
+      description: "ok",
+      publishedAt: "2026-09-01T12:00:00Z",
+      categoryId: "27",
+      thumbnails: { high: { url: "https://i.ytimg.com/vi/ok.jpg" } },
+    },
+    contentDetails: { duration: "PT1S" },
+    status: { privacyStatus: "public" },
+  };
+  async function parsed(tags: unknown) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, tags } }],
+    })) as typeof fetch;
+    const [video] = await fetchVideoMetadata("access", expectedChannel, ["ggggggggggg"], { fetcher });
+    return video?.tags;
+  }
+  async function reject(tags: unknown) {
+    const fetcher = (async () => Response.json({
+      items: [{ ...base, snippet: { ...base.snippet, tags } }],
+    })) as typeof fetch;
+    await assert.rejects(
+      fetchVideoMetadata("access", expectedChannel, ["ggggggggggg"], { fetcher }),
+      (error: unknown) => error instanceof YouTubeSyncError && error.code === "VALIDATION",
+    );
+  }
+
+  const many = Array.from({ length: 31 }, (_, index) => `Tag${index}`);
+  assert.deepEqual(await parsed(many), many);
+  const exactText = ["Siege", "  raw  ", "World War"];
+  assert.deepEqual(await parsed(exactText), exactText);
+  assert.deepEqual(await parsed(["x".repeat(101)]), ["x".repeat(101)]);
+  assert.deepEqual(await parsed(["A".repeat(500)]), ["A".repeat(500)]);
+  const exactSpace = `A ${"B".repeat(496)}`;
+  assert.equal(Array.from(exactSpace).length, 498);
+  assert.deepEqual(await parsed([exactSpace]), [exactSpace]);
+  const left = "c".repeat(249);
+  const right = "d".repeat(250);
+  assert.deepEqual(await parsed([left, right]), [left, right]);
+  const emoji = "👍".repeat(500);
+  assert.equal(emoji.length, 1000);
+  assert.equal(Array.from(emoji).length, 500);
+  assert.deepEqual(await parsed([emoji]), [emoji]);
+  assert.deepEqual(await parsed(undefined), []);
+  assert.deepEqual(await parsed(null), []);
+  assert.deepEqual(await parsed([]), []);
+
+  await reject(["e".repeat(501)]);
+  const overSpace = `A ${"B".repeat(497)}`;
+  assert.equal(Array.from(overSpace).length, 499);
+  await reject([overSpace]);
+  await reject(["f".repeat(250), "g".repeat(250)]);
+  await reject(["👍".repeat(501)]);
+  await reject([null]);
+  await reject([1]);
+  await reject([""]);
+  await reject(["ok", ""]);
+  await reject(["ok", null]);
+  await reject("not-a-list");
 });
 
 test("the metadata upsert writes server time and does not replace topic", () => {

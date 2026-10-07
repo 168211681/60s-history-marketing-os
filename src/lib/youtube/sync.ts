@@ -209,13 +209,26 @@ function sourceDescription(value: unknown) {
   return value;
 }
 
+function sourceCharacterLength(value: string) {
+  return Array.from(value).length;
+}
+
 function sourceTags(value: unknown) {
   if (value === undefined || value === null) return [];
-  if (!Array.isArray(value) || value.length > 30) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
-  return value.map((tag) => {
-    if (typeof tag !== "string" || tag.length < 1 || tag.length > 100) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
-    return tag;
-  });
+  if (!Array.isArray(value)) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
+  let providerLength = 0;
+  const tags: string[] = [];
+  for (const tag of value) {
+    if (typeof tag !== "string" || sourceCharacterLength(tag) < 1) {
+      throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
+    }
+    providerLength += sourceCharacterLength(tag);
+    if (tag.includes(" ")) providerLength += 2;
+    if (tags.length > 0) providerLength += 1;
+    if (providerLength > 500) throw new YouTubeSyncError("VALIDATION", "Video tags are invalid");
+    tags.push(tag);
+  }
+  return tags;
 }
 
 function sourceThumbnail(value: unknown) {

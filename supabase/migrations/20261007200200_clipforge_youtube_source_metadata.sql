@@ -10,9 +10,20 @@ security invoker
 set search_path = ''
 as $$
   select tags is not null
-    and pg_catalog.cardinality(tags) <= 30
     and coalesce((
-      select pg_catalog.bool_and(tag is not null and pg_catalog.length(tag) between 1 and 100)
+      select pg_catalog.bool_and(tag is not null and pg_catalog.length(tag) >= 1)
+        and (
+          (
+            coalesce(pg_catalog.sum(
+              pg_catalog.length(tag)
+              + case when pg_catalog.strpos(tag, ' ') > 0 then 2 else 0 end
+            ), 0)
+            + case
+                when pg_catalog.count(*) > 0 then pg_catalog.count(*) - 1
+                else 0
+              end
+          ) <= 500
+        )
         from pg_catalog.unnest(tags) as tag
     ), true);
 $$;
@@ -21,7 +32,7 @@ revoke all on function private.youtube_tags_are_source_bounded(text[]) from publ
 grant execute on function private.youtube_tags_are_source_bounded(text[]) to service_role;
 
 comment on function private.youtube_tags_are_source_bounded(text[]) is
-  'Constraint helper for source YouTube tags. Not an RPC. Executes as the calling role.';
+  'Constraint helper for source YouTube tags. Counts character length, two quotes when a tag contains a space, and commas between tags, and allows at most 500. Not an RPC. Executes as the calling role.';
 
 alter table public.videos
   add column description text not null default '',
@@ -84,7 +95,7 @@ comment on column public.videos.description is
 comment on column public.videos.thumbnail_url is
   'One HTTPS YouTube thumbnail URL. Not an R2 asset.';
 comment on column public.videos.tags is
-  'Source YouTube tags. Not hashtags and not a topic.';
+  'Exact source YouTube tags. Not hashtags and not a topic. The whole list must fit YouTube''s 500-character tag budget, including commas and quotes around tags that contain a space.';
 comment on column public.videos.category_id is
   'YouTube category id only. No category name is stored.';
 comment on column public.videos.default_language is

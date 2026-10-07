@@ -1002,8 +1002,41 @@ test("YouTube source metadata constraints stay server-owned and are not security
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, thumbnail_url) values ('${channelA}','badsource01','Bad','http://example.com/a.jpg')`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, thumbnail_url) values ('${channelA}','badsource02','Bad','https://example.com/a b.jpg')`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, privacy_status) values ('${channelA}','badsource03','Bad','friends')`, "23514");
-  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource04','Bad', array[${Array.from({ length: 31 }, (_, index) => `'t${index}'`).join(",")}])`, "23514");
-  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource05','Bad', array['${"a".repeat(101)}'])`, "23514");
+  const thirtyOne = Array.from({ length: 31 }, (_, index) => `'t${index}'`).join(",");
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags001','Good', array[${thirtyOne}]) returning tags[1] || '|' || tags[2] || '|' || tags[31] || '|' || cardinality(tags)::text`),
+    "t0|t1|t30|31",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags002','Good', array['Siege','  raw  ','World War']) returning tags[1] || '|' || tags[2] || '|' || tags[3]`),
+    "Siege|  raw  |World War",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags003','Good', array[repeat('a', 500)]) returning length(tags[1])::text`),
+    "500",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags004','Good', array['x ' || repeat('y', 496)]) returning length(tags[1])::text`),
+    "498",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags005','Good', array[repeat('c', 249), repeat('d', 250)]) returning (length(tags[1]) + length(tags[2]) + 1)::text`),
+    "500",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags006','Good', array[repeat('i', 101)]) returning length(tags[1])::text`),
+    "101",
+  );
+  assert.equal(
+    asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','goodtags007','Good', array[repeat('👍', 500)]) returning length(tags[1])::text`),
+    "500",
+  );
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource04','Bad', array[repeat('e', 501)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource05','Bad', array['x ' || repeat('z', 497)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource11','Bad', array[repeat('g', 250), repeat('h', 250)])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource12','Bad', array[''])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource13','Bad', array['ok', null]::text[])`, "23514");
+  asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, tags) values ('${channelA}','badsource14','Bad', array[repeat('👍', 501)])`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, description) values ('${channelA}','badsource06','Bad','${"d".repeat(5001)}')`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, category_id) values ('${channelA}','badsource07','Bad','abc')`, "23514");
   asRole("service_role", "", `insert into public.videos (channel_id, youtube_video_id, title, default_language) values ('${channelA}','badsource08','Bad','en-')`, "23514");
@@ -1100,4 +1133,30 @@ test("multi-subtag YouTube languages stay raw and only a safe tag fills und", ()
   assert.equal(language("es419lang01"), "es-419|es-419");
   const again = importFields(project, owner);
   assert.deepEqual(again, ["t", "3", "0", "0", "3", "0", "0"]);
+});
+
+test("source tags stay exact and never become platform hashtags", () => {
+  const owner = "11000000-0000-4000-8000-0000000000df";
+  const channel = "21000000-0000-4000-8000-0000000000df";
+  const project = "a2000000-0000-4000-8000-0000000000df";
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','source-tags','Tag channel')`);
+  sql(`insert into public.projects (id, owner_id, name) values ('${project}','${owner}','Tag project')`);
+  sql(`insert into public.videos (channel_id, youtube_video_id, title, published_at, duration_seconds, tags) values ('${channel}','taghash0001','Tagged source','2024-03-01T00:00:00Z',58, array['#History','World War','Siege'])`);
+  assert.deepEqual(importFields(project, owner), ["t", "1", "1", "4", "0", "0", "0"]);
+  assert.equal(
+    sql(`select hashtags from public.platform_posts where owner_id='${owner}' and platform='youtube' and platform_post_id='taghash0001'`),
+    "",
+  );
+  assert.equal(
+    sql(`select tags[1] || '|' || tags[2] || '|' || tags[3] from public.videos where channel_id='${channel}' and youtube_video_id='taghash0001'`),
+    "#History|World War|Siege",
+  );
+  assert.deepEqual(importFields(project, owner), ["t", "1", "0", "0", "1", "0", "0"]);
+  assert.equal(sql(`select count(*) from public.content_items where owner_id='${owner}'`), "1");
+  assert.equal(
+    sql(`select hashtags from public.platform_posts where owner_id='${owner}' and platform='youtube' and platform_post_id='taghash0001'`),
+    "",
+  );
 });

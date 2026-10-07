@@ -18,7 +18,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | --- | --- | --- |
 | `public.users` | Minimal identity referencing `auth.users`; no duplicated email/profile data | Read own row |
 | `public.channels` | Verified channel identity and `owner_id` | Read owned channels |
-| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, tags, category id, languages, privacy, `metadata_synced_at`). Source columns come from the pending Sprint 004.1 migration and are not an R2 asset | Read owned channel videos |
+| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from the pending Sprint 004.1 migration and are not an R2 asset | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |

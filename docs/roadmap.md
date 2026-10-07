@@ -78,7 +78,8 @@ unknown until a later editorial sprint. Do not rewrite
 
 **Status: branch/pending. Not applied to Staging or Production.**
 `20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
-on `public.videos`: description, one HTTPS thumbnail URL, tags, category id,
+on `public.videos`: description, one HTTPS thumbnail URL, exact tags bounded by
+YouTube's 500-character list budget, category id,
 default language, default audio language, privacy status, and
 `metadata_synced_at`. It does not classify topic, format, or production type,
 and it does not create an R2 asset. Apply it to Staging only in a separate

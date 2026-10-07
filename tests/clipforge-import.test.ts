@@ -116,6 +116,7 @@ test("YouTube import preview is counts only and import stays explicit", () => {
   assert.match(youtubeImportSql, /i\.language_code = 'und'/);
   assert.doesNotMatch(youtubeImportSql, /'published', 'en'/);
   assert.doesNotMatch(youtubeImportSql, /v\.description|v\.tags|v\.category_id|v\.privacy_status|v\.thumbnail_url/);
+  assert.doesNotMatch(youtubeImportSql, /hashtags\s*=/);
   assert.match(youtubePreviewSql, /from usable u where exists/);
   assert.match(youtubeImportSql, /from usable u where exists/);
   assert.match(youtubePreviewSql, /count\(\*\) from source\) - \(select count\(\*\) from usable\) as invalid/);
