@@ -24,6 +24,41 @@ export function PlatformCopyButtons({
   );
 }
 
+export function PlatformTimingFields({
+  status,
+  scheduledAt,
+  publishedAt,
+  savedPublishedAt,
+  onScheduledAt,
+  onPublishedAt,
+}: {
+  status: PlatformStatus;
+  scheduledAt: string;
+  publishedAt: string;
+  savedPublishedAt: string | null;
+  onScheduledAt?: (value: string) => void;
+  onPublishedAt?: (value: string) => void;
+}) {
+  if (status === "scheduled") {
+    return (
+      <label>Scheduled time
+        <input type="datetime-local" value={scheduledAt} onChange={(event) => onScheduledAt?.(event.target.value)} />
+      </label>
+    );
+  }
+  if (status === "published") {
+    return (
+      <>
+        <label>Published at
+          <input type="datetime-local" value={publishedAt} onChange={(event) => onPublishedAt?.(event.target.value)} />
+        </label>
+        <p className="muted">Leave this blank when the date is unknown. Saved published time: <LocalTime value={savedPublishedAt} /></p>
+      </>
+    );
+  }
+  return null;
+}
+
 function localInput(value: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -121,14 +156,14 @@ function PlatformCard({ contentItemId, post }: { contentItemId: string; post: Pl
         <label>Hashtags
           <input value={hashtags} maxLength={500} onChange={(event) => setHashtags(event.target.value)} />
         </label>
-        <label>Scheduled time
-          <input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} />
-        </label>
-        <p className="muted">Saved scheduled time: <LocalTime value={post.scheduledAt} /></p>
-        <label>Published time
-          <input type="datetime-local" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} />
-        </label>
-        <p className="muted">Saved published time: <LocalTime value={post.publishedAt} /></p>
+        <PlatformTimingFields
+          status={status}
+          scheduledAt={scheduledAt}
+          publishedAt={publishedAt}
+          savedPublishedAt={post.publishedAt}
+          onScheduledAt={setScheduledAt}
+          onPublishedAt={setPublishedAt}
+        />
         <label>Post URL
           <input type="url" inputMode="url" value={postUrl} maxLength={2000} placeholder="https://" onChange={(event) => setPostUrl(event.target.value)} />
         </label>

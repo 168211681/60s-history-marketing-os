@@ -82,6 +82,15 @@ test("projects and library stay private without an owner session", async ({ page
   const detail = await page.goto("/library/00000000-0000-4000-8000-000000000001");
   expect(detail?.status()).toBe(200);
   await expect(page.getByText("Sign in as the channel owner to view content.")).toBeVisible();
+  const project = await page.goto("/projects/00000000-0000-4000-8000-000000000001");
+  expect(project?.status()).toBe(200);
+  await expect(page.getByText("Sign in as the channel owner to manage projects.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import / Sync content" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Preview import" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Import \d+ videos/ })).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
 });
 test("research workspace stays private without an owner session", async ({ page, request }) => {
   const response = await page.goto("/research");
@@ -164,6 +173,14 @@ test("connection controls fail closed when credentials are absent", async ({
   expect(callback.status()).toBe(503);
   const recovery = await request.get("/auth/recovery-callback?code=untrusted");
   expect(recovery.status()).toBe(503);
+  const preview = await request.post("/api/projects/00000000-0000-4000-8000-000000000001/youtube-import/preview", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(preview.status()).toBe(403);
+  const importer = await request.post("/api/projects/00000000-0000-4000-8000-000000000001/youtube-import", {
+    headers: { Origin: "http://127.0.0.1:3000" },
+  });
+  expect(importer.status()).toBe(403);
 });
 test("password reset stays closed without a recovery session", async ({ page }) => {
   const response = await page.goto("/reset-password");

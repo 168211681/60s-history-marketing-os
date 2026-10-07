@@ -90,10 +90,11 @@ test("platform copy rejects unsafe URLs and missing schedule times", () => {
   assert.equal(parsePlatformPostPatch({ postUrl: "http://example.com" }), null);
   assert.equal(parsePlatformPostPatch({ status: "viral" }), null);
   assert.equal(parsePlatformPostPatch({}), null);
-  assert.equal(applyPlatformPatch(blank, { status: "scheduled" }, "2026-10-07T00:00:00.000Z"), null);
-  const published = applyPlatformPatch(blank, { status: "published" }, "2026-10-07T00:00:00.000Z");
-  assert.equal(published?.publishedAt, "2026-10-07T00:00:00.000Z");
-  const ready = applyPlatformPatch(blank, { status: "ready", postUrl: "https://example.com/post" }, "2026-10-07T00:00:00.000Z");
+  assert.equal(applyPlatformPatch(blank, { status: "scheduled" }), null);
+  const published = applyPlatformPatch(blank, { status: "published" });
+  assert.equal(published?.status, "published");
+  assert.equal(published?.publishedAt, null);
+  const ready = applyPlatformPatch(blank, { status: "ready", postUrl: "https://example.com/post" });
   assert.equal(ready?.status, "ready");
   assert.equal(ready?.postUrl, "https://example.com/post");
 });

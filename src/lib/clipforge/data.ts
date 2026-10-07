@@ -451,7 +451,7 @@ export async function updatePlatformPost(ownerId: string, contentItemId: string,
     );
     const row = current.rows[0];
     if (!row) return null;
-    const next = applyPlatformPatch(post(row), patch, new Date().toISOString());
+    const next = applyPlatformPatch(post(row), patch);
     if (!next) return undefined;
     const result = await client.query<PostRow>(
       `update public.platform_posts

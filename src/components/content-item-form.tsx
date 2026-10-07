@@ -4,6 +4,90 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ContentRecord, ProjectRecord } from "@/lib/clipforge/data";
 
+export function ContentItemFields({
+  item,
+  projects,
+  defaultProjectId,
+}: {
+  item?: ContentRecord;
+  projects: readonly Pick<ProjectRecord, "id" | "name" | "code">[];
+  defaultProjectId?: string;
+}) {
+  return (
+    <>
+      <label>
+        Project
+        <select name="projectId" required defaultValue={item?.projectId ?? defaultProjectId ?? ""}>
+          <option value="" disabled>Select a project</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>{project.code ? `${project.code} · ` : ""}{project.name}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Title
+        <input name="title" required maxLength={200} defaultValue={item?.title ?? ""} />
+      </label>
+      <label>
+        Topic
+        <input name="topic" maxLength={200} defaultValue={item?.topic ?? ""} placeholder="Optional" />
+      </label>
+      <label>
+        Format
+        <select name="format" defaultValue={item?.format ?? "unknown"}>
+          <option value="unknown">Unknown</option>
+          <option value="short_form">Short form</option>
+          <option value="long_form">Long form</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>
+        Production type
+        <select name="productionType" defaultValue={item?.productionType ?? "unknown"}>
+          <option value="unknown">Unknown</option>
+          <option value="new">New</option>
+          <option value="remaster">Remaster</option>
+          <option value="repurpose">Repurpose</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>
+        Status
+        <select name="status" defaultValue={item?.status ?? "idea"}>
+          <option value="idea">Idea</option>
+          <option value="generating">Generating</option>
+          <option value="editing">Editing</option>
+          <option value="ready">Ready</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="published">Published</option>
+          <option value="archived">Archived</option>
+        </select>
+      </label>
+      <label>
+        Notes
+        <textarea name="notes" maxLength={8000} rows={4} defaultValue={item?.notes ?? ""} placeholder="Optional" />
+      </label>
+      <details className="advanced-fields">
+        <summary>Advanced metadata</summary>
+        <div className="form-grid">
+          <label>
+            Content key
+            <input name="contentKey" maxLength={32} defaultValue={item?.contentKey ?? ""} placeholder="Optional" autoCapitalize="characters" />
+          </label>
+          <label>
+            Language
+            <input name="languageCode" maxLength={12} defaultValue={item?.languageCode ?? "und"} />
+          </label>
+          <label>
+            Duration in seconds
+            <input name="durationSeconds" inputMode="numeric" min={0} max={86400} defaultValue={item?.durationSeconds ?? ""} placeholder="Leave blank if unknown" />
+          </label>
+        </div>
+      </details>
+    </>
+  );
+}
+
 export function ContentItemForm({
   item,
   projects,
@@ -57,70 +141,9 @@ export function ContentItemForm({
   }
   return (
     <form className="form-grid" onSubmit={submit}>
-      <label>
-        Project
-        <select name="projectId" required defaultValue={item?.projectId ?? defaultProjectId ?? ""}>
-          <option value="" disabled>Select a project</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>{project.code ? `${project.code} · ` : ""}{project.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Title
-        <input name="title" required maxLength={200} defaultValue={item?.title ?? ""} />
-      </label>
-      <label>
-        Content key
-        <input name="contentKey" maxLength={32} defaultValue={item?.contentKey ?? ""} placeholder="H60-0042" autoCapitalize="characters" />
-      </label>
-      <label>
-        Topic
-        <input name="topic" maxLength={200} defaultValue={item?.topic ?? ""} />
-      </label>
-      <label>
-        Format
-        <select name="format" defaultValue={item?.format ?? "short_form"}>
-          <option value="short_form">Short form</option>
-          <option value="long_form">Long form</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
-      <label>
-        Production type
-        <select name="productionType" defaultValue={item?.productionType ?? "new"}>
-          <option value="new">New</option>
-          <option value="remaster">Remaster</option>
-          <option value="repurpose">Repurpose</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
-      <label>
-        Status
-        <select name="status" defaultValue={item?.status ?? "idea"}>
-          <option value="idea">Idea</option>
-          <option value="generating">Generating</option>
-          <option value="editing">Editing</option>
-          <option value="ready">Ready</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="published">Published</option>
-          <option value="archived">Archived</option>
-        </select>
-      </label>
-      <label>
-        Language
-        <input name="languageCode" required maxLength={12} defaultValue={item?.languageCode ?? "en"} />
-      </label>
-      <label>
-        Duration in seconds
-        <input name="durationSeconds" inputMode="numeric" min={0} max={86400} defaultValue={item?.durationSeconds ?? ""} />
-      </label>
-      <label>
-        Notes
-        <textarea name="notes" maxLength={8000} rows={4} defaultValue={item?.notes ?? ""} />
-      </label>
+      <ContentItemFields item={item} projects={projects} defaultProjectId={defaultProjectId} />
       <div className="form-actions">
-        <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : item ? "Save content" : "Create content item"}</button>
+        <button className="button" type="submit" disabled={busy}>{busy ? "Saving…" : item ? "Save content" : "Create content"}</button>
         {item && item.status !== "archived" ? (
           <button className="button secondary" type="button" disabled={busy} onClick={archive}>Archive content</button>
         ) : null}

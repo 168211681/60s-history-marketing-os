@@ -1,7 +1,7 @@
 export const projectStatuses = ["active", "archived"] as const;
 export const contentStatuses = ["idea", "generating", "editing", "ready", "scheduled", "published", "archived"] as const;
-export const contentFormats = ["short_form", "long_form", "other"] as const;
-export const productionTypes = ["new", "remaster", "repurpose", "other"] as const;
+export const contentFormats = ["unknown", "short_form", "long_form", "other"] as const;
+export const productionTypes = ["unknown", "new", "remaster", "repurpose", "other"] as const;
 
 export type ProjectStatus = (typeof projectStatuses)[number];
 export type ContentStatus = (typeof contentStatuses)[number];
@@ -30,7 +30,7 @@ export type ContentInput = {
 
 const codePattern = /^[A-Z0-9][A-Z0-9-]{0,15}$/;
 const keyPattern = /^[A-Z0-9][A-Z0-9-]{0,31}$/;
-const languagePattern = /^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/;
+const languagePattern = /^(?:und|[a-z]{2}(-[A-Za-z0-9]{2,8})?)$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function record(value: unknown) {
@@ -99,10 +99,10 @@ export function parseContentInput(value: unknown): ContentInput | null {
   const contentKey = optionalToken(body.contentKey, keyPattern);
   const title = text(body.title);
   const topic = text(body.topic);
-  const format = text(body.format || "short_form");
-  const productionType = text(body.productionType || "new");
+  const format = text(body.format || "unknown");
+  const productionType = text(body.productionType || "unknown");
   const status = text(body.status || "idea");
-  const languageCode = text(body.languageCode || "en").toLowerCase();
+  const languageCode = text(body.languageCode || "und").toLowerCase();
   const notes = text(body.notes);
   if (!isUuid(projectId) || contentKey === undefined) return null;
   if (title.length < 1 || title.length > 200 || topic.length > 200 || notes.length > 8000) return null;

@@ -1012,9 +1012,29 @@ footer {
     flex-direction: column;
   }
 }
-.form-grid {
+.advanced-fields {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.advanced-fields summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.advanced-fields .form-grid {
+  margin-top: 8px;
+}
+.import-panel {
   display: grid;
   gap: 12px;
+  min-width: 0;
+}
+.import-panel p,
+.import-panel dd,
+.import-panel a {
+  overflow-wrap: anywhere;
 }
 .form-grid textarea {
   min-height: 88px;
