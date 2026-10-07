@@ -12,11 +12,21 @@ import {
   maxAssetBytes,
   multipartPlan,
   partBytes,
+  resolveUploadPath,
   uploadAllowed,
   validMultipartParts,
 } from "../src/lib/clipforge/assets";
 import { commitUploadedAsset } from "../src/lib/clipforge/commit-asset";
 import { r2Configured, signPutObject, startMultipartUpload } from "../src/lib/clipforge/r2";
+import {
+  DirectUploadError,
+  partProgress,
+  sequentialSigner,
+  uploadMasterObject,
+  uploadRetryDelaysMs,
+  uploadThumbnailObject,
+  uploadWithRetry,
+} from "../src/lib/clipforge/upload-retry";
 import {
   applyPlatformPatch,
   distributionSummary,
@@ -66,6 +76,10 @@ test("storage paths stay inside the owner and content item", () => {
   assert.equal(parts?.[0]?.etag, `"${"a".repeat(32)}"`);
   assert.equal(validMultipartParts([{ partNumber: 2, etag: "a".repeat(32) }], 100), null);
   assert.equal(validMultipartParts([{ partNumber: 1, etag: "not-an-etag" }], 100), null);
+  const thumb = `${owner}/${item}/thumbnail/cover.jpg`;
+  assert.equal(resolveUploadPath(owner, item, "thumbnail", "cover.jpg", thumb), thumb);
+  assert.equal(resolveUploadPath(owner, item, "master_video", "clip.mp4", `${owner}/${item}/master_video/clip.mp4`), null);
+  assert.equal(resolveUploadPath(owner, item, "thumbnail", "cover.jpg", `${owner}/${item}/master_video/clip.mp4`), null);
 });
 
 test("platform copy rejects unsafe URLs and missing schedule times", () => {
@@ -135,6 +149,9 @@ test("the pending migration does not touch Supabase Storage", () => {
   assert.doesNotMatch(migration, /storage\.buckets/);
   assert.doesNotMatch(migration, /storage\.foldername/);
   assert.doesNotMatch(migration, /alter table storage/i);
+  assert.doesNotMatch(migration, /content_assets_update_own/);
+  assert.doesNotMatch(migration, /grant update \([^)]*\) on public\.content_assets to authenticated/);
+  assert.match(migration, /grant delete on public\.content_assets to authenticated/);
   assert.match(migration, /storage_provider text not null default 'r2'/);
   assert.match(migration, /check \(storage_bucket = 'clipforge-assets'\)/);
 });
@@ -153,37 +170,146 @@ test("browser code never receives R2 credentials", () => {
   assert.ok(clients.length > 0);
   for (const file of clients) {
     const source = readFileSync(file, "utf8");
-    assert.doesNotMatch(source, /R2_SECRET_ACCESS_KEY|R2_ACCESS_KEY_ID|R2_ACCOUNT_ID/);
+    assert.doesNotMatch(source, /R2_SECRET_ACCESS_KEY|R2_ACCESS_KEY_ID|R2_ACCOUNT_ID|NEXT_PUBLIC_R2/);
+    assert.doesNotMatch(source, /clipforge\/r2|lib\/clipforge\/r2/);
   }
   const manager = readFileSync("src/components/asset-manager.tsx", "utf8");
   assert.doesNotMatch(manager, /tus-js-client|getSession|supabase\.storage/);
   assert.match(manager, /assets\/upload\/part/);
+  assert.match(manager, /uploadMasterObject/);
+  assert.match(manager, /uploadThumbnailObject/);
   assert.match(manager, /type="file"/);
+  const r2 = readFileSync("src/lib/clipforge/r2.ts", "utf8");
+  assert.match(r2, /import ["']server-only["']/);
+  assert.doesNotMatch(readFileSync(".env.example", "utf8"), /NEXT_PUBLIC_R2/);
 });
 
-test("stored metadata is recorded only after the object size matches", async () => {
+test("stored metadata is recorded only after size and content type match", async () => {
   const removed: string[] = [];
+  const key = `${owner}/${item}/master_video/file.mp4`;
   const saved = await commitUploadedAsset({
-    async size() { return 12; },
-    async remove(key) { removed.push(key); return true; },
-  }, "owned/key", 12, async () => ({ id: "asset-1" }));
+    async inspect() { return { size: 12, contentType: "video/mp4" }; },
+    async remove(path) { removed.push(path); return true; },
+  }, key, 12, "video/mp4", async () => ({ id: "asset-1" }));
   assert.deepEqual(saved, { ok: true, id: "asset-1" });
+  let inserted = 0;
   const mismatch = await commitUploadedAsset({
-    async size() { return 11; },
-    async remove(key) { removed.push(key); return true; },
-  }, "owned/key", 12, async () => ({ id: "nope" }));
+    async inspect() { return { size: 11, contentType: "video/mp4" }; },
+    async remove(path) { removed.push(path); return true; },
+  }, key, 12, "video/mp4", async () => { inserted += 1; return { id: "nope" }; });
   assert.equal(mismatch.ok, false);
-  assert.deepEqual(removed, ["owned/key"]);
-  await assert.rejects(commitUploadedAsset({
-    async size() { return 12; },
-    async remove() { return true; },
-  }, "owned/key", 12, async () => { throw new Error("db"); }));
-  const orphan = await commitUploadedAsset({
-    async size() { return 12; },
+  if (!mismatch.ok) assert.match(mismatch.error, /size did not match/);
+  const typeMismatch = await commitUploadedAsset({
+    async inspect() { return { size: 12, contentType: "image/png" }; },
+    async remove(path) { removed.push(path); return true; },
+  }, key, 12, "video/mp4", async () => { inserted += 1; return { id: "nope" }; });
+  assert.equal(typeMismatch.ok, false);
+  if (!typeMismatch.ok) {
+    assert.equal(typeMismatch.status, 409);
+    assert.match(typeMismatch.error, /type did not match/);
+  }
+  assert.equal(inserted, 0);
+  assert.deepEqual(removed, [key, key]);
+  const orphanMismatch = await commitUploadedAsset({
+    async inspect() { return { size: 12, contentType: "text/plain" }; },
     async remove() { return false; },
-  }, "orphan-key", 12, async () => { throw new Error("db"); });
+  }, "orphan-type", 12, "image/jpeg", async () => ({ id: "x" }));
+  assert.equal(orphanMismatch.ok, false);
+  if (!orphanMismatch.ok) assert.match(orphanMismatch.error, /orphan-type/);
+  await assert.rejects(commitUploadedAsset({
+    async inspect() { return { size: 12, contentType: "video/mp4" }; },
+    async remove() { return true; },
+  }, key, 12, "video/mp4", async () => { throw new Error("db"); }));
+  const orphan = await commitUploadedAsset({
+    async inspect() { return { size: 12, contentType: "video/mp4" }; },
+    async remove() { return false; },
+  }, "orphan-key", 12, "video/mp4", async () => { throw new Error("db"); });
   assert.equal(orphan.ok, false);
   if (!orphan.ok) assert.match(orphan.error, /orphan-key/);
+});
+
+test("direct uploads retry one part or thumbnail without restarting finished work", async () => {
+  assert.deepEqual([...uploadRetryDelaysMs], [0, 1000, 3000, 5000, 10000]);
+  assert.equal(partProgress(8, 0, 16), 50);
+  const etag = `"${"a".repeat(32)}"`;
+  const once = await uploadWithRetry({
+    sign: async () => "https://example.test/part-1",
+    put: async (url) => {
+      assert.equal(url, "https://example.test/part-1");
+      return etag;
+    },
+  });
+  assert.equal(once, etag);
+
+  const signed: number[] = [];
+  const uploaded: number[] = [];
+  const slept: number[] = [];
+  let aborted = false;
+  const parts = await uploadMasterObject({
+    partCount: 2,
+    delays: [0, 1000, 3000],
+    sleep: async (ms) => { slept.push(ms); },
+    signPart: async (partNumber) => {
+      signed.push(partNumber);
+      return `https://example.test/${partNumber}/${signed.length}`;
+    },
+    putPart: async (url, partNumber) => {
+      uploaded.push(partNumber);
+      assert.match(url, new RegExp(`/${partNumber}/`));
+      if (partNumber === 2 && uploaded.filter((value) => value === 2).length === 1) {
+        throw new DirectUploadError("storage busy", 503);
+      }
+      return etag;
+    },
+    complete: async (done) => { assert.deepEqual(done.map((part) => part.partNumber), [1, 2]); },
+    abort: async () => { aborted = true; },
+  });
+  assert.equal(aborted, false);
+  assert.deepEqual(uploaded, [1, 2, 2]);
+  assert.deepEqual(signed, [1, 2, 2]);
+  assert.deepEqual(slept, [1000]);
+  assert.deepEqual(parts.map((part) => part.partNumber), [1, 2]);
+
+  const exhausted: number[] = [];
+  let abortCount = 0;
+  let completeCount = 0;
+  await assert.rejects(uploadMasterObject({
+    partCount: 2,
+    delays: [0, 1000],
+    sleep: async () => {},
+    signPart: async (partNumber) => `https://example.test/${partNumber}`,
+    putPart: async (_url, partNumber) => {
+      exhausted.push(partNumber);
+      if (partNumber === 2) throw new DirectUploadError("still down", 500);
+      return etag;
+    },
+    complete: async () => { completeCount += 1; },
+    abort: async () => { abortCount += 1; },
+  }));
+  assert.equal(abortCount, 1);
+  assert.equal(completeCount, 0);
+  assert.deepEqual(exhausted, [1, 2, 2]);
+
+  let forbiddenSigns = 0;
+  await assert.rejects(uploadWithRetry({
+    delays: uploadRetryDelaysMs,
+    sleep: async () => { throw new Error("validation failures are not retried"); },
+    sign: async () => { forbiddenSigns += 1; return "https://example.test/denied"; },
+    put: async () => { throw new DirectUploadError("forbidden", 403); },
+  }));
+  assert.equal(forbiddenSigns, 1);
+
+  const thumbUrls: string[] = [];
+  await uploadThumbnailObject({
+    delays: [0, 1000],
+    sleep: async (ms) => { assert.equal(ms, 1000); },
+    sign: sequentialSigner("https://example.test/thumb-initial", async () => "https://example.test/thumb-fresh"),
+    put: async (url) => {
+      thumbUrls.push(url);
+      if (thumbUrls.length === 1) throw new DirectUploadError("network", null);
+    },
+  });
+  assert.deepEqual(thumbUrls, ["https://example.test/thumb-initial", "https://example.test/thumb-fresh"]);
 });
 
 test("R2 signing does nothing unless server credentials and a scoped key exist", async () => {

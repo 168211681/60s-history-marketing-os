@@ -60,7 +60,8 @@ Phase 7 infrastructure and is not a ClipForge apply workflow.
 `public.platform_posts`, and a covering index on `content_items (project_id, owner_id)`.
 Master video and thumbnail bytes go to the private Cloudflare R2 bucket
 `clipforge-assets`, not Supabase Storage. Master upload is a direct multipart
-upload. Platform rows record copy and status only. This branch adds that one pending
+upload with bounded per-part retries. Asset metadata is immutable after insert.
+Platform rows record copy and status only. This branch adds that one pending
 migration and does not change the exact-equality gate. Do not open a pull request
 until the migration is reviewed and applied separately. Do not apply this file
 to Production.

@@ -29,7 +29,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
 | `public.projects` | ClipForge workspace name, optional code, description, and active/archived status. Owned directly by `owner_id`; not a YouTube channel | Read/create/edit/delete own projects |
 | `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
-| `public.content_assets` | Pointer to one private master video or thumbnail in Cloudflare R2 bucket `clipforge-assets`. Bytes are not in Postgres or Supabase Storage | Read/create/delete own pointers; cannot retarget owner, path, kind, provider, or bucket |
+| `public.content_assets` | Pointer to one private master video or thumbnail in Cloudflare R2 bucket `clipforge-assets`. Bytes are not in Postgres or Supabase Storage | Read/create/delete own pointers; cannot update filename, type, size, owner, path, kind, provider, bucket, or timestamps |
 | `public.platform_posts` | Manual YouTube, Facebook, TikTok, and Instagram copy and status | Read/create/edit/delete own rows; cannot retarget owner or platform |
 
 The ClipForge project and content tables are added by `supabase/migrations/20261006175601_clipforge_projects_and_content_items.sql`.

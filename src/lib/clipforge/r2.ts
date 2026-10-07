@@ -1,3 +1,4 @@
+import "server-only";
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -10,7 +11,7 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { assetBucket, type UploadPart } from "./assets";
+import { assetBucket, normalizeMimeType, type UploadPart } from "./assets";
 
 const accountPattern = /^[a-f0-9]{32}$/i;
 
@@ -59,12 +60,15 @@ function missingObject(error: unknown) {
   return name === "NotFound" || name === "NoSuchKey" || status === 404;
 }
 
-export async function headObjectSize(key: string): Promise<number | null | "error"> {
+export type StoredObjectInfo = { size: number; contentType: string };
+
+export async function headStoredObject(key: string): Promise<StoredObjectInfo | null | "error"> {
   const ctx = clientFor(key);
   if (!ctx) return "error";
   try {
     const head = await ctx.client.send(new HeadObjectCommand({ Bucket: ctx.bucket, Key: key }));
-    return typeof head.ContentLength === "number" ? head.ContentLength : "error";
+    if (typeof head.ContentLength !== "number") return "error";
+    return { size: head.ContentLength, contentType: normalizeMimeType(head.ContentType ?? "") };
   } catch (error) {
     return missingObject(error) ? null : "error";
   }

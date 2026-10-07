@@ -652,10 +652,16 @@ test("clipforge assets and platform posts stay private to the owning content ite
     "'r2'::text",
   );
   assert.equal(sql("select count(*) from pg_policies where schemaname='storage' and policyname like 'clipforge%'"), "0");
-  for (const column of ["owner_id", "content_item_id", "kind", "storage_provider", "storage_bucket", "storage_path", "created_at", "updated_at"]) {
-    assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','update')`), "f");
+  for (const column of ["owner_id", "content_item_id", "kind", "storage_provider", "storage_bucket", "storage_path", "original_filename", "mime_type", "size_bytes", "created_at", "updated_at"]) {
+    assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','update')`), "f", column);
   }
-  assert.equal(sql("select has_column_privilege('authenticated','public.content_assets','original_filename','update')"), "t");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','update')"), "f");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','select')"), "t");
+  assert.equal(sql("select has_table_privilege('authenticated','public.content_assets','delete')"), "t");
+  for (const column of ["content_item_id", "owner_id", "kind", "storage_provider", "storage_bucket", "storage_path", "original_filename", "mime_type", "size_bytes"]) {
+    assert.equal(sql(`select has_column_privilege('authenticated','public.content_assets','${column}','insert')`), "t", column);
+  }
+  assert.equal(sql("select count(*) from pg_policies where schemaname='public' and tablename='content_assets' and cmd='UPDATE'"), "0");
   for (const column of ["owner_id", "content_item_id", "platform", "created_at", "updated_at"]) {
     assert.equal(sql(`select has_column_privilege('authenticated','public.platform_posts','${column}','update')`), "f");
   }
@@ -688,7 +694,12 @@ test("clipforge assets and platform posts stay private to the owning content ite
   asRole("authenticated", userA, `update public.content_assets set storage_bucket='public' where content_item_id='${itemA}'`, "42501");
   asRole("authenticated", userA, `update public.content_assets set created_at=now() where content_item_id='${itemA}'`, "42501");
   asRole("authenticated", userA, `update public.content_assets set updated_at=now() where content_item_id='${itemA}'`, "42501");
-  assert.equal(asRole("authenticated", userA, `update public.content_assets set original_filename='renamed.mp4' where content_item_id='${itemA}' and kind='master_video' returning original_filename`), "renamed.mp4");
+  asRole("authenticated", userA, `update public.content_assets set original_filename='renamed.mp4' where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set mime_type='video/quicktime' where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  asRole("authenticated", userA, `update public.content_assets set size_bytes=2048 where content_item_id='${itemA}' and kind='master_video'`, "42501");
+  assert.equal(sql(`select original_filename from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "clip final.mp4");
+  assert.equal(sql(`select mime_type from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "video/mp4");
+  assert.equal(sql(`select size_bytes from public.content_assets where content_item_id='${itemA}' and kind='master_video'`), "1024");
   sql(`update public.content_assets set owner_id='${userB}' where content_item_id='${itemA}' and kind='master_video'`, "23514");
 
   for (const platform of ["youtube", "facebook", "tiktok", "instagram"]) {

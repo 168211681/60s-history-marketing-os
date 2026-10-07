@@ -92,6 +92,22 @@ export function isScopedAssetPath(path: string, ownerId: string, contentItemId: 
     && filePattern.test(filename);
 }
 
+export function normalizeMimeType(value: string) {
+  return value.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+export function resolveUploadPath(
+  ownerId: string,
+  contentItemId: string,
+  kind: AssetKind,
+  filename: string,
+  requestedPath: string,
+) {
+  if (!requestedPath) return buildAssetPath(ownerId, contentItemId, kind, filename);
+  if (kind !== "thumbnail" || !isScopedAssetPath(requestedPath, ownerId, contentItemId, "thumbnail")) return null;
+  return requestedPath;
+}
+
 export function buildAssetPath(ownerId: string, contentItemId: string, kind: AssetKind, filename: string, uniqueId = crypto.randomUUID()) {
   const owner = ownerId.toLowerCase();
   const content = contentItemId.toLowerCase();

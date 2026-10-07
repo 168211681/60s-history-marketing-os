@@ -4,7 +4,7 @@ import { isScopedAssetPath, uploadAllowed } from "@/lib/clipforge/assets";
 import { commitUploadedAsset } from "@/lib/clipforge/commit-asset";
 import { createAsset } from "@/lib/clipforge/data";
 import { clipforgeError } from "@/lib/clipforge/http";
-import { headObjectSize, removeStoredObject } from "@/lib/clipforge/r2";
+import { headStoredObject, removeStoredObject } from "@/lib/clipforge/r2";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,9 +30,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   try {
     const saved = await commitUploadedAsset(
-      { size: headObjectSize, remove: removeStoredObject },
+      { inspect: headStoredObject, remove: removeStoredObject },
       storagePath,
       sizeBytes,
+      mimeType,
       () => createAsset(access.ownerId, id, { kind, storagePath, originalFilename, mimeType, sizeBytes }),
     );
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });

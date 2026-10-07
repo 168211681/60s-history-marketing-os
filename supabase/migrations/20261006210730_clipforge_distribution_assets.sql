@@ -44,7 +44,7 @@ create table public.content_assets (
 );
 create index content_assets_owner_item_idx on public.content_assets (owner_id, content_item_id);
 comment on table public.content_assets is
-  'Private ClipForge file pointer. Bytes live in Cloudflare R2 bucket clipforge-assets, not in Postgres.';
+  'Private ClipForge file pointer. Bytes live in Cloudflare R2 bucket clipforge-assets, not in Postgres. Authenticated clients may insert and delete a pointer, not update it.';
 
 create table public.platform_posts (
   id uuid primary key default gen_random_uuid(),
@@ -100,7 +100,6 @@ end $$;
 grant insert (
   content_item_id, owner_id, kind, storage_provider, storage_bucket, storage_path, original_filename, mime_type, size_bytes
 ) on public.content_assets to authenticated;
-grant update (original_filename, mime_type, size_bytes) on public.content_assets to authenticated;
 grant delete on public.content_assets to authenticated;
 
 grant insert (content_item_id, owner_id, platform, status, title, caption, hashtags, scheduled_at, published_at, post_url, platform_post_id)
@@ -112,12 +111,6 @@ grant delete on public.platform_posts to authenticated;
 create policy content_assets_select_own on public.content_assets for select to authenticated
   using (owner_id = (select auth.uid()));
 create policy content_assets_insert_own on public.content_assets for insert to authenticated
-  with check (
-    owner_id = (select auth.uid())
-    and content_item_id in (select id from public.content_items where owner_id = (select auth.uid()))
-  );
-create policy content_assets_update_own on public.content_assets for update to authenticated
-  using (owner_id = (select auth.uid()))
   with check (
     owner_id = (select auth.uid())
     and content_item_id in (select id from public.content_items where owner_id = (select auth.uid()))

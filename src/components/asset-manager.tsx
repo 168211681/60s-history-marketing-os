@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { partBytes, type AssetKind } from "@/lib/clipforge/assets";
 import type { AssetRecord } from "@/lib/clipforge/data";
+import { DirectUploadError, partProgress, sequentialSigner, uploadMasterObject, uploadThumbnailObject } from "@/lib/clipforge/upload-retry";
 
 function declaredMime(file: File, kind: AssetKind) {
   if (file.type) return file.type;
@@ -22,7 +23,7 @@ function formatBytes(bytes: number) {
 }
 
 function putBytes(url: string, body: Blob, contentType: string | undefined, onProgress: (loaded: number) => void) {
-  return new Promise<string | null>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     if (contentType) xhr.setRequestHeader("Content-Type", contentType);
@@ -31,12 +32,16 @@ function putBytes(url: string, body: Blob, contentType: string | undefined, onPr
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(xhr.getResponseHeader("ETag"));
+        resolve(xhr.getResponseHeader("ETag") ?? "");
         return;
       }
-      reject(new Error(`Upload failed (${xhr.status}).`));
+      if (xhr.status === 0) {
+        reject(new DirectUploadError("The file could not reach private storage.", null));
+        return;
+      }
+      reject(new DirectUploadError(`Upload failed (${xhr.status}).`, xhr.status));
     };
-    xhr.onerror = () => reject(new Error("The file could not reach private storage."));
+    xhr.onerror = () => reject(new DirectUploadError("The file could not reach private storage.", null));
     xhr.send(body);
   });
 }
@@ -125,8 +130,25 @@ function AssetSlot({
 
   async function uploadThumbnail(selected: File, mimeType: string, plan: { path?: string; url?: string; contentType?: string }) {
     if (!plan.url || !plan.path) throw new Error("Upload could not start.");
-    await putBytes(plan.url, selected, plan.contentType || mimeType, (loaded) => {
-      setProgress(selected.size ? Math.round((loaded / selected.size) * 100) : 0);
+    const sign = sequentialSigner(plan.url, async () => {
+      const again = await fetch(`/api/content-items/${contentItemId}/assets/upload`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind, filename: selected.name, mimeType, sizeBytes: selected.size, storagePath: plan.path }),
+      });
+      const payload = await readJson(again);
+      if (!again.ok || typeof payload?.url !== "string") {
+        throw new DirectUploadError(payload?.error || "Upload could not continue.", again.status);
+      }
+      return payload.url;
+    });
+    await uploadThumbnailObject({
+      sign,
+      put: async (url) => {
+        await putBytes(url, selected, plan.contentType || mimeType, (loaded) => {
+          setProgress(partProgress(0, loaded, selected.size));
+        });
+      },
     });
     await saveMetadata(plan.path, selected, mimeType);
   }
@@ -134,51 +156,53 @@ function AssetSlot({
   async function uploadMultipart(selected: File, mimeType: string, plan: { path?: string; uploadId?: string; partSize?: number; partCount?: number }) {
     if (!plan.path || !plan.uploadId || !plan.partCount) throw new Error("Upload could not start.");
     const chunk = plan.partSize || partBytes;
-    const parts: { partNumber: number; etag: string }[] = [];
-    let completedUpload = false;
-    try {
-      for (let partNumber = 1; partNumber <= plan.partCount; partNumber += 1) {
-        const start = (partNumber - 1) * chunk;
-        const blob = selected.slice(start, Math.min(start + chunk, selected.size));
+    await uploadMasterObject({
+      partCount: plan.partCount,
+      signPart: async (partNumber) => {
         const signed = await fetch(`/api/content-items/${contentItemId}/assets/upload/part`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ storagePath: plan.path, uploadId: plan.uploadId, partNumber, sizeBytes: selected.size }),
         });
         const payload = await readJson(signed);
-        if (!signed.ok || !payload?.url) throw new Error(payload?.error || "Upload could not continue.");
-        const etag = await putBytes(payload.url, blob, undefined, (loaded) => {
-          const done = start + loaded;
-          setProgress(selected.size ? Math.min(100, Math.round((done / selected.size) * 100)) : 0);
+        if (!signed.ok || typeof payload?.url !== "string") {
+          throw new DirectUploadError(payload?.error || "Upload could not continue.", signed.status);
+        }
+        return payload.url;
+      },
+      putPart: async (url, partNumber) => {
+        const start = (partNumber - 1) * chunk;
+        const blob = selected.slice(start, Math.min(start + chunk, selected.size));
+        const etag = await putBytes(url, blob, undefined, (loaded) => {
+          setProgress(partProgress(start, loaded, selected.size));
         });
-        if (!etag) throw new Error("Private storage did not return a part id. The upload was stopped.");
-        parts.push({ partNumber, etag });
-      }
-      const completed = await fetch(`/api/content-items/${contentItemId}/assets/upload/complete`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          storagePath: plan.path,
-          uploadId: plan.uploadId,
-          parts,
-          mimeType,
-          sizeBytes: selected.size,
-        }),
-      });
-      const payload = await readJson(completed);
-      if (!completed.ok) throw new Error(payload?.error || "Private storage could not finish the upload.");
-      completedUpload = true;
-      await saveMetadata(plan.path, selected, mimeType);
-    } catch (error) {
-      if (!completedUpload) {
+        if (!etag) throw new DirectUploadError("Private storage did not return a part id. The upload was stopped.", null, false);
+        return etag;
+      },
+      complete: async (parts) => {
+        const completed = await fetch(`/api/content-items/${contentItemId}/assets/upload/complete`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            storagePath: plan.path,
+            uploadId: plan.uploadId,
+            parts,
+            mimeType,
+            sizeBytes: selected.size,
+          }),
+        });
+        const payload = await readJson(completed);
+        if (!completed.ok) throw new DirectUploadError(payload?.error || "Private storage could not finish the upload.", completed.status);
+      },
+      abort: async () => {
         await fetch(`/api/content-items/${contentItemId}/assets/upload/abort`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ storagePath: plan.path, uploadId: plan.uploadId }),
-        }).catch(() => null);
-      }
-      throw error;
-    }
+        }).catch(() => undefined);
+      },
+    });
+    await saveMetadata(plan.path, selected, mimeType);
   }
 
   async function saveMetadata(storagePath: string, selected: File, mimeType: string) {
