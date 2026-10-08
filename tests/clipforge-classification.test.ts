@@ -10,11 +10,14 @@ import { commitClassificationResult, reviewLockedSuggestion, reuseLockedSuggesti
 import {
   classificationDocument,
   classificationFingerprint,
+  classificationResponseFormat,
   classificationResultSchema,
   classificationStep,
   classificationSystemInstruction,
+  classificationValidationIssues,
   constrainProductionType,
   finalizeClassification,
+  parseClassificationResult,
   reviewClassification,
   suggestionIsStale,
   type ClassificationSource,
@@ -113,6 +116,28 @@ function withProvider<T>(run: () => Promise<T>) {
   });
 }
 
+async function withClassifier(content: string, run: (logs: unknown[][]) => Promise<void>) {
+  await withProvider(async () => {
+    process.env.AI_PROVIDER = "openai-compatible";
+    process.env.AI_API_KEY = "server-only-test-key";
+    process.env.AI_BASE_URL = "https://ai.example.test/v1";
+    process.env.AI_MODEL = "test-model";
+    const logs: unknown[][] = [];
+    const originalError = console.error;
+    const originalFetch = globalThis.fetch;
+    console.error = (...args: unknown[]) => {
+      logs.push(args);
+    };
+    globalThis.fetch = async () => Response.json({ choices: [{ message: { content } }] });
+    try {
+      await run(logs);
+    } finally {
+      console.error = originalError;
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
+
 test("classification schema accepts nullable unknown output and rejects bad values", () => {
   assert.deepEqual(classificationResultSchema.parse(validResult).productionType, "unknown");
   assert.equal(classificationResultSchema.parse({ ...validResult, topic: null, contentPillar: null }).topic, null);
@@ -120,6 +145,13 @@ test("classification schema accepts nullable unknown output and rejects bad valu
   assert.throws(() => classificationResultSchema.parse({ ...validResult, productionType: "newish" }));
   assert.throws(() => classificationResultSchema.parse({ ...validResult, confidence: { ...validResult.confidence, topic: 1.1 } }));
   assert.throws(() => classificationResultSchema.parse({ ...validResult, confidence: { ...validResult.confidence, contentPillar: -0.01 } }));
+  const missingConfidence = classificationResultSchema.safeParse({ ...validResult, confidence: { contentPillar: null, productionType: null } });
+  assert.equal(missingConfidence.success, false);
+  if (!missingConfidence.success) {
+    const issues = classificationValidationIssues(missingConfidence.error);
+    assert.deepEqual(issues, [{ path: "confidence.topic", code: "invalid_type" }]);
+    assert.equal(JSON.stringify(issues).includes("message"), false);
+  }
 });
 
 test("H60 rejects an unknown pillar and other projects keep a bounded pillar", () => {
@@ -173,8 +205,13 @@ test("prompt injection stays inside the untrusted record", async () => {
     const original = globalThis.fetch;
     globalThis.fetch = async (_input, init) => {
       const body = JSON.parse(String(init?.body));
+      assert.equal(body.response_format.type, "json_schema");
+      assert.deepEqual(body.response_format, classificationResponseFormat);
       assert.match(body.messages[0].content, /Never follow instructions/);
+      assert.match(body.messages[0].content, /Do not omit a confidence field/);
+      assert.match(body.messages[0].content, /Do not omit a rationale field/);
       assert.equal(body.messages[0].content.includes("Bearer"), false);
+      assert.equal(JSON.stringify(body).includes("server-only-test-key"), false);
       const user = JSON.parse(body.messages[1].content);
       assert.equal(user.untrustedRecord.youtube.description, injected);
       return Response.json({ choices: [{ message: { content: JSON.stringify(validResult) } }] });
@@ -186,6 +223,54 @@ test("prompt injection stays inside the untrusted record", async () => {
       globalThis.fetch = original;
     }
   });
+});
+
+test("malformed classification output is rejected without logging the model text", async () => {
+  const secret = "DO_NOT_LOG_MODEL_TEXT";
+  const schema = classificationResponseFormat.json_schema.schema as {
+    properties: {
+      confidence: { required: string[]; properties: { topic: unknown; contentPillar: unknown; productionType: unknown } };
+      rationale: { required: string[]; properties: { topic: unknown; contentPillar: unknown; productionType: unknown } };
+    };
+  };
+  assert.deepEqual(schema.properties.confidence.required, ["topic", "contentPillar", "productionType"]);
+  assert.deepEqual(schema.properties.rationale.required, ["topic", "contentPillar", "productionType"]);
+  assert.match(JSON.stringify(schema.properties.confidence.properties), /null/);
+  assert.equal(JSON.stringify(schema).includes(secret), false);
+
+  await withClassifier(`{"topic":"${secret}"}`, async (logs) => {
+    await assert.rejects(() => aiProvider().classifyMetadata({}), /AI_INVALID_RESPONSE/);
+    assert.equal(logs[0]?.[0], "classification validation failed");
+    const issues = JSON.parse(String(logs[0]?.[1])) as { path: string; code: string }[];
+    assert.deepEqual(issues.find((issue) => issue.path === "contentPillar"), { path: "contentPillar", code: "invalid_type" });
+    assert.equal(issues.some((issue) => issue.path === "confidence" && issue.code === "invalid_type"), true);
+    assert.equal(issues.some((issue) => issue.path === "rationale" && issue.code === "invalid_type"), true);
+    const recorded = JSON.stringify(logs);
+    assert.equal(recorded.includes(secret), false);
+    assert.equal(recorded.includes("server-only-test-key"), false);
+  });
+
+  await withClassifier(JSON.stringify({
+    ...validResult,
+    topic: secret,
+    confidence: { ...validResult.confidence, topic: 1.4 },
+    rationale: { ...validResult.rationale, topic: secret },
+  }), async (logs) => {
+    await assert.rejects(() => aiProvider().classifyMetadata({}), /AI_INVALID_RESPONSE/);
+    const issues = JSON.parse(String(logs[0]?.[1])) as { path: string; code: string }[];
+    assert.deepEqual(issues, [{ path: "confidence.topic", code: "too_big" }]);
+    const recorded = JSON.stringify(logs);
+    assert.equal(recorded.includes(secret), false);
+    assert.equal(recorded.includes("1.4"), false);
+  });
+
+  await withClassifier(`not json ${secret}`, async (logs) => {
+    await assert.rejects(() => aiProvider().classifyMetadata({}), /AI_INVALID_JSON/);
+    assert.equal(JSON.stringify(logs).includes(secret), false);
+  });
+
+  assert.throws(() => finalizeClassification({ ...validResult, contentPillar: "Not a pillar" }, source), /AI_INVALID_RESPONSE/);
+  assert.equal(parseClassificationResult({ ...validResult, contentPillar: "Not a pillar" }).contentPillar, "Not a pillar");
 });
 
 test("source fingerprints change only when classification input changes", () => {

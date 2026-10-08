@@ -17,8 +17,13 @@ AI_MODEL=your-model
 
 The key is never exposed through `NEXT_PUBLIC_*`. Responses are treated as
 untrusted text and must pass the bounded `zod` schemas before the application
-uses them. The adapter asks for separate observations, hypotheses, experiments,
-and script fields so causal claims and spoken copy are not silently mixed.
+uses them. Analysis and script drafts still ask for a JSON object. Metadata
+classification sends a strict JSON schema on the same chat-completions call,
+including nullable confidence fields and every rationale field. A response that
+fails that schema is `AI_INVALID_RESPONSE`. Validation logs record only Zod
+issue paths and codes, never the model text or the API key. The adapter asks
+for separate observations, hypotheses, experiments, and script fields so causal
+claims and spoken copy are not silently mixed.
 
 This is an adapter contract, not a claim that a provider account, quota, or
 billing plan is available. ChatGPT Plus does not supply an API key.

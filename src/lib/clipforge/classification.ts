@@ -19,28 +19,80 @@ export const classificationSystemInstruction = [
   "Do not classify format. Do not infer short form or long form from duration.",
   "Do not change language. Do not write captions or hashtags.",
   "For project code H60, contentPillar must be null or exactly one of the allowed pillars. Do not force a pillar.",
-  "Return JSON only with topic, contentPillar, productionType, confidence, and rationale.",
+  "Return one JSON object and nothing else.",
+  "Include every field: topic, contentPillar, productionType, confidence, and rationale.",
+  "topic is a string of at most 200 characters, or null.",
+  "contentPillar is a string of at most 80 characters, or null.",
+  "productionType is exactly one of unknown, new, remaster, repurpose, or other.",
+  "confidence is required. Its topic, contentPillar, and productionType fields are each a number from 0 to 1 inclusive, or null.",
+  "Use null for an unknown confidence. Do not omit a confidence field and do not invent a number.",
+  "rationale is required. Its topic, contentPillar, and productionType fields are each a string of at most 2000 characters.",
+  "Do not omit a rationale field.",
 ].join(" ");
 
-const confidenceSchema = z.number().finite().min(0).max(1).nullable();
+const confidenceSchema = z.number().finite().min(0).max(1).nullable().meta({
+  description: "Required probability from 0 to 1, or null when unknown. Do not omit this field.",
+});
+const rationaleSchema = z.string().max(2000).meta({
+  description: "Required evidence note of at most 2000 characters. Do not omit this field.",
+});
 
 export const classificationResultSchema = z.object({
-  topic: z.string().max(200).nullable(),
-  contentPillar: z.string().max(80).nullable(),
-  productionType: z.enum(productionTypes),
+  topic: z.string().max(200).nullable().meta({
+    description: "Suggested topic, or null. At most 200 characters.",
+  }),
+  contentPillar: z.string().max(80).nullable().meta({
+    description: "Suggested content pillar, or null. At most 80 characters.",
+  }),
+  productionType: z.enum(productionTypes).meta({
+    description: "Exactly one of unknown, new, remaster, repurpose, or other.",
+  }),
   confidence: z.object({
     topic: confidenceSchema,
     contentPillar: confidenceSchema,
     productionType: confidenceSchema,
+  }).meta({
+    description: "Required. topic, contentPillar, and productionType are each a number from 0 to 1 or null.",
   }),
   rationale: z.object({
-    topic: z.string().max(2000),
-    contentPillar: z.string().max(2000),
-    productionType: z.string().max(2000),
+    topic: rationaleSchema,
+    contentPillar: rationaleSchema,
+    productionType: rationaleSchema,
+  }).meta({
+    description: "Required. topic, contentPillar, and productionType are each a string.",
   }),
 });
 
 export type ClassificationResult = z.infer<typeof classificationResultSchema>;
+
+export const classificationResultJsonSchema = Object.fromEntries(
+  Object.entries(z.toJSONSchema(classificationResultSchema)).filter(([key]) => key !== "$schema"),
+);
+
+export const classificationResponseFormat = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "clipforge_metadata_classification",
+    strict: true,
+    schema: classificationResultJsonSchema,
+  },
+};
+
+export function classificationValidationIssues(error: z.ZodError) {
+  return error.issues.map((issue) => ({
+    path: issue.path.map((part) => String(part)).join("."),
+    code: issue.code,
+  }));
+}
+
+export function parseClassificationResult(value: unknown): ClassificationResult {
+  const parsed = classificationResultSchema.safeParse(value);
+  if (!parsed.success) {
+    console.error("classification validation failed", JSON.stringify(classificationValidationIssues(parsed.error)));
+    throw new Error("AI_INVALID_RESPONSE");
+  }
+  return parsed.data;
+}
 
 export type ClassificationYoutube = {
   youtubeVideoId: string;
@@ -96,7 +148,7 @@ export function constrainProductionType(suggested: ProductionType, source: Class
 }
 
 export function finalizeClassification(value: unknown, source: ClassificationSource): ClassificationResult {
-  const parsed = classificationResultSchema.parse(value);
+  const parsed = parseClassificationResult(value);
   const topic = blankToNull(parsed.topic);
   const pillar = blankToNull(parsed.contentPillar);
   if (source.projectCode === h60ProjectCode && pillar !== null && !isH60Pillar(pillar)) {

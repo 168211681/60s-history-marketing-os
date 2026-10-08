@@ -25,6 +25,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "AI_NOT_CONFIGURED") return NextResponse.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
+    if (message === "AI_INVALID_RESPONSE" || message === "AI_INVALID_JSON") {
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
     console.error("classification failed", error instanceof Error ? error.name : "unknown");
     return NextResponse.json({ error: "The classifier returned an unusable result." }, { status: 502 });
   }
