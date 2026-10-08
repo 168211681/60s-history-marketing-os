@@ -115,7 +115,7 @@ Verified on Staging:
 
 ## ClipForge Sprint 004.2 — metadata intelligence
 
-**Status: branch/local only. Not applied to Staging or Production. Do not claim hosted verification.**
+**Status: applied and verified on Staging. Not applied to Production. The canonical Production deployment is unchanged.**
 `20261008020000_clipforge_metadata_intelligence` adds `content_items.content_pillar`
 (text, at most 80 characters, default empty) and
 `public.content_classification_suggestions`. The classifier may suggest topic,
@@ -124,12 +124,29 @@ fields before canonical metadata changes. Generation, rejection, and an
 unconfigured provider do not invent or overwrite canonical fields. Format,
 language, captions, hashtags, YouTube source facts, R2, and publishing stay
 untouched. There is no batch classification. History in 60s (`H60`) pillars are
-an application rule, not a global database enum. Do not apply this migration
-without a separate explicit approval.
+an application rule, not a global database enum. Staging already has this
+migration. Do not reapply it there. Production still needs a separate explicit
+approval. Do not apply it to Production before that approval, and do not merge
+to `main` until it is applied and verified: merging deploys the app to
+Production automatically.
 
-The Production baseline this branch must not mutate is 43 content items, topic
-empty, format unknown, and production type unknown. Sprint 004.1 is already
-complete in Production. Sprint 004.2 is not applied there.
+The Production baseline remains Sprint 004.1 and must not be mutated: 43
+content items, topic empty, format unknown, and production type unknown.
+Sprint 004.2 is not applied there.
+
+Staging verification, deployment commit
+`af8edc5b57bb3304078b705224c55b23427ba6da`:
+
+- Forced RLS, owner SELECT-only access, server-side writes, constraints, and the ownership foreign key
+- Gemini 3.5 Flash-Lite classification succeeded with the strict JSON schema
+- Generate stored a valid pending suggestion
+- Accept updated only topic and content pillar
+- The accepted suggestion kept its source fingerprint and recorded the accepted fields
+- Reject left canonical metadata unchanged
+- A later Topic change made the suggestion stale and disabled Accept and Reject
+- A forced HTTP 409 against the hosted review endpoint was not performed; local regression tests cover that case
+- The smoke item topic was restored to `WWII Spitfire red gun-port patches`
+- Staging database: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending)
 
 ## Phase 0 — repository and security baseline
 

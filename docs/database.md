@@ -47,9 +47,11 @@ and verified on Staging and Production. Production's remote version is
 `20261007190850` `clipforge_youtube_source_metadata`. Do not normalize that
 version onto the repository filename, and do not reapply the file.
 `supabase/migrations/20261008020000_clipforge_metadata_intelligence.sql` is
-Sprint 004.2 and is branch/local only. It is not applied to Staging or
-Production. Do not apply it from this branch, and do not claim hosted
-verification for it.
+Sprint 004.2. It is applied and verified on Staging and is not applied to
+Production. Do not reapply it to Staging. Do not apply it to Production without
+a separate explicit approval. Staging has 44 content items and 3 classification
+suggestions (1 accepted, 1 rejected, 1 pending). Production remains Sprint 004.1
+with 43 content items.
 
 `private.password_setup_authorizations` is the original file
 `supabase/migrations/20260928140124_password_setup_authorizations.sql`.
@@ -70,9 +72,9 @@ Staging and Production. Production has 43 YouTube videos, 43 metadata synced,
 a successful v2 sync. Its remote version is `20261007190850`. Do not normalize
 that history. Do not reapply the repository file.
 Production migration history for Phase 6 and Phase 7 stays intentionally
-divergent and must not be normalized. Do not apply
-`20261008020000_clipforge_metadata_intelligence` to Staging or Production from
-this branch.
+divergent and must not be normalized. Do not reapply
+`20261008020000_clipforge_metadata_intelligence` to Staging. Do not apply it to
+Production from this document.
 
 Every table has `created_at`, primary/unique keys, FKs and forced RLS.
 `content_classification_suggestions` is the exception to `updated_at`: it records
@@ -162,8 +164,8 @@ the [database transition runbook](database-transition.md). Do not treat the olde
 Production-complete. `20261007200200_clipforge_youtube_source_metadata` is
 applied and verified on Staging and Production. Production's remote version is
 `20261007190850`. Do not normalize it or reapply the repository file.
-`20261008020000_clipforge_metadata_intelligence` is branch/local only and is
-not applied to Staging or Production.
+`20261008020000_clipforge_metadata_intelligence` is applied and verified on
+Staging and is not applied to Production. Do not reapply it to Staging.
 The ClipForge projects migration
 was applied separately to Staging after review. Production intentionally
 uses different historical versions for Phase 6 and Phase 7, and it does not

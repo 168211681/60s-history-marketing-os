@@ -35,8 +35,12 @@ Production: 43 YouTube videos, 43 metadata synced, 43 ClipForge content items,
 Production's remote migration version is `20261007190850`
 `clipforge_youtube_source_metadata`. The repository filename remains
 `20261007200200_clipforge_youtube_source_metadata.sql`. That version difference
-is intentional and must not be normalized. Sprint 004.2 is branch/local only
-and is not applied to Staging or Production. Production does not contain the
+is intentional and must not be normalized. Sprint 004.2 is applied and verified
+on Staging and is not applied to Production. Staging has 44 content items and
+3 classification suggestions (1 accepted, 1 rejected, 1 pending). The verified
+Staging deployment commit is `af8edc5b57bb3304078b705224c55b23427ba6da`.
+Production remains Sprint 004.1 with 43 content items, and its canonical
+deployment is unchanged. Production does not contain the
 password-setup migration and remains intentionally divergent.
 
 ## Evidence matrix

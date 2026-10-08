@@ -24,9 +24,21 @@ Production's remote migration version is `20261007190850`
 `clipforge_youtube_source_metadata`. The repository filename remains
 `20261007200200_clipforge_youtube_source_metadata.sql`. That version difference
 is intentional. Do not normalize migration history. Sprint 004.2
-(`20261008020000_clipforge_metadata_intelligence`) is branch/local only and is
-not applied to Staging or Production. The pull-request gate remains
-exact migration equality and does not push SQL.
+(`20261008020000_clipforge_metadata_intelligence`) is applied and verified on
+Staging and is not applied to Production. The verified Staging deployment
+commit is `af8edc5b57bb3304078b705224c55b23427ba6da`. Staging has 44 content
+items and 3 classification suggestions (1 accepted, 1 rejected, 1 pending).
+Forced RLS, owner SELECT-only access, server-side writes, constraints, and the
+ownership foreign key were verified. Gemini 3.5 Flash-Lite classification
+succeeded with the strict JSON schema: generate stored a pending suggestion,
+accept updated only topic and content pillar while preserving the source
+fingerprint and accepted fields, and reject left canonical metadata unchanged.
+A changed Topic made the suggestion stale and disabled Accept and Reject. A
+forced HTTP 409 against the hosted review endpoint was not performed; local
+regression tests cover that case. The smoke item topic was restored to
+`WWII Spitfire red gun-port patches`. Production remains Sprint 004.1 with 43
+content items, and its canonical deployment is unchanged. The pull-request gate
+remains exact migration equality against Staging and does not push SQL.
 `20261006175601_clipforge_projects_and_content_items` was applied separately to
 Staging after review. The pending-migration helper remains in the repository for
 a future reviewed difference and is not this pull-request gate. This avoids relying

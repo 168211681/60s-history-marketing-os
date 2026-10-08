@@ -41,3 +41,17 @@ When the adapter is configured, the signed-in owner can call:
 Both routes require the owner session and an exact `Origin` matching
 `APP_ORIGIN`. Script output is explicitly marked `ai_provider` and remains
 subject to human review before export to an external editing tool.
+
+## Staging classification check
+
+Sprint 004.2 classification was verified on Staging at deployment commit
+`af8edc5b57bb3304078b705224c55b23427ba6da`. The configured model was Gemini 3.5
+Flash-Lite through this OpenAI-compatible adapter, using the strict
+classification JSON schema. Generate stored a valid pending suggestion. Accept
+updated only topic and content pillar, preserved the suggestion's source
+fingerprint, and recorded the accepted fields. Reject left canonical metadata
+unchanged. After Topic changed, the panel treated the suggestion as stale and
+disabled Accept and Reject. A forced HTTP 409 against the hosted review
+endpoint was not performed; local regression tests cover that case. No API key,
+base URL, or model response text is recorded here. Production does not have
+this migration or this classification check.
