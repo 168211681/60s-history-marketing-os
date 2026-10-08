@@ -55,3 +55,13 @@ disabled Accept and Reject. A forced HTTP 409 against the hosted review
 endpoint was not performed; local regression tests cover that case. No API key,
 base URL, or model response text is recorded here. Production does not have
 this migration or this classification check.
+
+## Batch classification
+
+Sprint 004.3A is branch-local only and is not deployed to Staging or
+Production. An owner may preview at most five of their own content items and
+confirm a sequential run. Each new suggestion still uses
+`POST /api/content-items/[id]/classify`. The batch does not accept metadata,
+does not retry 429, 409, or 502 automatically, and does not show a currency
+cost. The cap is per run, not a daily quota. Gemini prompts and model settings
+are unchanged.

@@ -17,6 +17,9 @@ Sprint 004.2 adds reviewed AI suggestions for topic, content pillar, and
 production type. It is applied and verified on Staging and is not applied to
 Production. Staging has 44 content items and 3 suggestions (1 accepted, 1
 rejected, 1 pending). Production remains Sprint 004.1 with 43 content items.
+Sprint 004.3A adds an owner-only batch of at most five sequential
+classification requests per run. It is branch-local only: not deployed to
+Staging or Production, no bulk accept, and no new migration.
 Calendar and Archive remain labeled
 placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 

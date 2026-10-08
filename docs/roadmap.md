@@ -123,7 +123,7 @@ content pillar, and production type only. A person must accept the selected
 fields before canonical metadata changes. Generation, rejection, and an
 unconfigured provider do not invent or overwrite canonical fields. Format,
 language, captions, hashtags, YouTube source facts, R2, and publishing stay
-untouched. There is no batch classification. History in 60s (`H60`) pillars are
+untouched. Sprint 004.2 does not add batch classification. History in 60s (`H60`) pillars are
 an application rule, not a global database enum. Staging already has this
 migration. Do not reapply it there. Production still needs a separate explicit
 approval. Do not apply it to Production before that approval, and do not merge
@@ -147,6 +147,21 @@ Staging verification, deployment commit
 - A forced HTTP 409 against the hosted review endpoint was not performed; local regression tests cover that case
 - The smoke item topic was restored to `WWII Spitfire red gun-port patches`
 - Staging database: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending)
+
+## ClipForge Sprint 004.3A — safe batch classification
+
+**Status: branch/local only. Not deployed. Not applied on Staging or Production.**
+
+The library can preview up to five owned content items and then classify them
+one at a time through the existing `POST /api/content-items/[id]/classify`
+route. Items that already have a current suggestion are skipped. Stale items
+stay on their own clip for a separate decision. There is no bulk accept, no
+background worker, and no daily quota. Five items is a per-run limit. No price
+is shown because token usage and provider rates are not measured. Closing the
+page stops unstarted requests; suggestions already stored remain. Preview again
+to continue without creating a duplicate. No migration is added. Do not run
+this batch against Production. Do not merge or deploy until the branch has
+been reviewed. Staging deploy waits for that review.
 
 ## Phase 0 — repository and security baseline
 

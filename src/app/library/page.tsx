@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EmptyState, PageHeading, Panel } from "@/components/ui";
 import { ContentItemForm } from "@/components/content-item-form";
+import { LibraryBatch } from "@/components/batch-classification";
 import { currentOwner } from "@/lib/auth/server";
 import { listContentItems, listProjects } from "@/lib/clipforge/data";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
@@ -65,35 +66,32 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
           <button className="button" type="submit">Apply</button>
         </form>
       </Panel>
-      <Panel title={items.length ? "Content items" : "No matching content"} description={query || projectId || status ? "Change the filter if this is narrower than you expected." : "Saved items appear here."}>
-        {items.length ? (
-          <ul className="content-cards">
-            {items.map((item) => (
-              <li key={item.id}>
-                <div>
-                  <p className="eyebrow">{item.contentKey ?? "No key"}</p>
-                  <h3><Link href={`/library/${item.id}`}>{item.title}</Link></h3>
-                  <p className="muted">{item.projectCode ? `${item.projectCode} · ` : ""}{item.projectName}</p>
-                  <p className="content-meta">
-                    <span className="badge neutral">{clipforgeLabel(item.format)}</span>
-                    <span className="badge neutral">{clipforgeLabel(item.productionType)}</span>
-                    <span className="badge neutral">{clipforgeLabel(item.status)}</span>
-                    <span className="badge neutral">{item.distributionComplete}/4 complete</span>
-                    <span className="badge neutral">{item.hasMasterVideo ? "Master video" : "No master video"}</span>
-                    <span className="badge neutral">{item.hasThumbnail ? "Thumbnail" : "No thumbnail"}</span>
-                    <span className="muted">Updated {clipforgeTime(item.updatedAt)} UTC</span>
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
+      {items.length ? (
+        <LibraryBatch
+          key={[query, projectId ?? "", status ?? ""].join("|")}
+          items={items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            projectCode: item.projectCode,
+            projectName: item.projectName,
+            contentKey: item.contentKey,
+            formatLabel: clipforgeLabel(item.format),
+            productionTypeLabel: clipforgeLabel(item.productionType),
+            statusLabel: clipforgeLabel(item.status),
+            distributionComplete: item.distributionComplete,
+            hasMasterVideo: item.hasMasterVideo,
+            hasThumbnail: item.hasThumbnail,
+            updatedLabel: clipforgeTime(item.updatedAt),
+          }))}
+        />
+      ) : (
+        <Panel title="No matching content" description={query || projectId || status ? "Change the filter if this is narrower than you expected." : "Saved items appear here."}>
           <EmptyState title="No content items yet">
             <p>{projects.length ? "Create one below. Nothing is invented for you." : "Create a project before adding content."}</p>
             {projects.length ? null : <Link className="text-link" href="/projects">Open projects →</Link>}
           </EmptyState>
-        )}
-      </Panel>
+        </Panel>
+      )}
       {projects.length ? (
         <Panel title="Create content" description="Title and project are enough. Four empty platform rows are created with the item. Nothing is published.">
           <ContentItemForm projects={projects} defaultProjectId={projectId} />

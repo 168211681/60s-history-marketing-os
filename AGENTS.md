@@ -62,7 +62,11 @@ items and 3 classification suggestions (1 accepted, 1 rejected, 1 pending).
 The verified Staging deployment commit is
 `af8edc5b57bb3304078b705224c55b23427ba6da`. Production remains Sprint 004.1
 with 43 content items, and its canonical deployment is unchanged. Do not apply
-004.2 to Production from this branch. The pull-request gate remains
+004.2 to Production from this branch. Sprint 004.3A batch classification is
+branch-local only. It reuses the single-item classify route, caps a run at
+five items, and does not write canonical metadata or add a migration. Do not
+deploy it to Staging or Production until it has been reviewed. Do not run it
+against Production. The pull-request gate remains
 exact equality against Staging. Do not reapply earlier ClipForge migrations.
 Production does not contain the password-setup migration and must not be
 normalized to add it.

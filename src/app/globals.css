@@ -1115,6 +1115,52 @@ footer {
 .content-cards a {
   color: inherit;
 }
+.batch-classification,
+.batch-card,
+.batch-list {
+  min-width: 0;
+}
+.batch-classification {
+  display: grid;
+  gap: 12px;
+}
+.batch-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.batch-select input {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.batch-card {
+  flex: 1;
+}
+.batch-card h3,
+.batch-list a,
+.batch-list p,
+.batch-classification p {
+  overflow-wrap: anywhere;
+}
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.batch-list li {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
 .content-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1145,6 +1191,9 @@ footer {
   }
   .form-actions .button {
     flex: 1 1 140px;
+  }
+  .batch-actions .button {
+    flex: 1 1 100%;
   }
 }
 .platform-grid {
