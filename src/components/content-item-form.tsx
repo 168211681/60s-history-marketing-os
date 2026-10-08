@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ContentRecord, ProjectRecord } from "@/lib/clipforge/data";
+import { h60Pillars, h60ProjectCode, isH60Pillar } from "@/lib/clipforge/pillars";
 
 export function ContentItemFields({
   item,
@@ -13,11 +14,17 @@ export function ContentItemFields({
   projects: readonly Pick<ProjectRecord, "id" | "name" | "code">[];
   defaultProjectId?: string;
 }) {
+  const initialProject = item?.projectId ?? defaultProjectId ?? "";
+  const [projectId, setProjectId] = useState(initialProject);
+  const projectCode = projects.find((project) => project.id === projectId)?.code ?? null;
+  const historyProject = projectCode === h60ProjectCode;
+  const pillarOnThisProject = item && item.projectId === projectId ? item.contentPillar : "";
+  const historyPillar = isH60Pillar(pillarOnThisProject) ? pillarOnThisProject : "";
   return (
     <>
       <label>
         Project
-        <select name="projectId" required defaultValue={item?.projectId ?? defaultProjectId ?? ""}>
+        <select name="projectId" required value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <option value="" disabled>Select a project</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>{project.code ? `${project.code} · ` : ""}{project.name}</option>
@@ -31,6 +38,17 @@ export function ContentItemFields({
       <label>
         Topic
         <input name="topic" maxLength={200} defaultValue={item?.topic ?? ""} placeholder="Optional" />
+      </label>
+      <label>
+        Content pillar
+        {historyProject ? (
+          <select key={`pillar-${projectId}`} name="contentPillar" defaultValue={historyPillar}>
+            <option value="">None</option>
+            {h60Pillars.map((pillar) => <option key={pillar} value={pillar}>{pillar}</option>)}
+          </select>
+        ) : (
+          <input key={`pillar-${projectId}`} name="contentPillar" maxLength={80} defaultValue={pillarOnThisProject} placeholder="Optional" />
+        )}
       </label>
       <label>
         Format
@@ -125,6 +143,7 @@ export function ContentItemForm({
       contentKey: form.get("contentKey"),
       title: form.get("title"),
       topic: form.get("topic"),
+      contentPillar: form.get("contentPillar"),
       format: form.get("format"),
       productionType: form.get("productionType"),
       status: form.get("status"),

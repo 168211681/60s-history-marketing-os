@@ -29,6 +29,9 @@ test("OpenAI-compatible adapter validates structured analysis output", async () 
   globalThis.fetch = async (input, init) => {
     assert.equal(String(input), "https://ai.example.test/v1/chat/completions");
     assert.equal((init?.headers as Record<string, string>).authorization, "Bearer server-only-test-key");
+    const body = JSON.parse(String(init?.body));
+    assert.deepEqual(body.response_format, { type: "json_object" });
+    assert.equal(JSON.stringify(body).includes("server-only-test-key"), false);
     return Response.json({ choices: [{ message: { content: JSON.stringify({ observations: ["Observed"], hypotheses: ["Hypothesis"], experiments: ["Experiment"] }) } }] });
   };
   try {

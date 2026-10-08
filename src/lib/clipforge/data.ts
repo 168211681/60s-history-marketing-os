@@ -1,6 +1,8 @@
 import type { PoolClient } from "pg";
 import { database, transaction } from "@/lib/database";
 import { assetBucket, storageProvider, type AssetKind } from "./assets";
+import { assertContentPillar } from "./classification-store";
+import { effectiveContentPillar } from "./pillars";
 import {
   applyPlatformPatch,
   platforms,
@@ -30,6 +32,7 @@ export type ContentRecord = {
   contentKey: string | null;
   title: string;
   topic: string;
+  contentPillar: string;
   format: ContentInput["format"];
   productionType: ContentInput["productionType"];
   status: ContentStatus;
@@ -61,6 +64,7 @@ type ContentRow = {
   content_key: string | null;
   title: string;
   topic: string;
+  content_pillar: string;
   format: ContentRecord["format"];
   production_type: ContentRecord["productionType"];
   status: ContentStatus;
@@ -97,6 +101,7 @@ function content(row: ContentRow): ContentRecord {
     contentKey: row.content_key,
     title: row.title,
     topic: row.topic,
+    contentPillar: row.content_pillar,
     format: row.format,
     productionType: row.production_type,
     status: row.status,
@@ -113,7 +118,7 @@ function content(row: ContentRow): ContentRecord {
 
 const contentSelect = `
   select i.id, i.project_id, p.name as project_name, p.code as project_code,
-         i.content_key, i.title, i.topic, i.format, i.production_type, i.status,
+         i.content_key, i.title, i.topic, i.content_pillar, i.format, i.production_type, i.status,
          i.language_code, i.duration_seconds, i.notes, i.created_at, i.updated_at,
          exists (
            select 1 from public.content_assets a
@@ -274,15 +279,16 @@ async function ownedProject(client: PoolClient, ownerId: string, projectId: stri
 export async function createContentItem(ownerId: string, input: ContentInput) {
   return transaction(async (client) => {
     if (!(await ownedProject(client, ownerId, input.projectId))) return null;
+    await assertContentPillar(client, ownerId, input.projectId, input.contentPillar);
     const inserted = await client.query<{ id: string }>(
       `insert into public.content_items (
-         project_id, owner_id, content_key, title, topic, format, production_type,
+         project_id, owner_id, content_key, title, topic, content_pillar, format, production_type,
          status, language_code, duration_seconds, notes
        )
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        returning id`,
       [
-        input.projectId, ownerId, input.contentKey, input.title, input.topic, input.format,
+        input.projectId, ownerId, input.contentKey, input.title, input.topic, input.contentPillar, input.format,
         input.productionType, input.status, input.languageCode, input.durationSeconds, input.notes,
       ],
     );
@@ -296,6 +302,20 @@ export async function createContentItem(ownerId: string, input: ContentInput) {
 export async function updateContentItem(ownerId: string, id: string, input: Partial<ContentInput>) {
   return transaction(async (client) => {
     if (input.projectId && !(await ownedProject(client, ownerId, input.projectId))) return null;
+    if (input.projectId !== undefined || input.contentPillar !== undefined) {
+      const current = await client.query<{ project_id: string; content_pillar: string }>(
+        "select project_id, content_pillar from public.content_items where id = $1 and owner_id = $2",
+        [id, ownerId],
+      );
+      const row = current.rows[0];
+      if (!row) return null;
+      await assertContentPillar(
+        client,
+        ownerId,
+        input.projectId ?? row.project_id,
+        effectiveContentPillar(row.content_pillar, input.contentPillar),
+      );
+    }
     const values: unknown[] = [];
     const sets: string[] = [];
     for (const [column, value] of [
@@ -303,6 +323,7 @@ export async function updateContentItem(ownerId: string, id: string, input: Part
       ["content_key", input.contentKey],
       ["title", input.title],
       ["topic", input.topic],
+      ["content_pillar", input.contentPillar],
       ["format", input.format],
       ["production_type", input.productionType],
       ["status", input.status],

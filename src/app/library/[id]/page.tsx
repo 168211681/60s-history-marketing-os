@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AssetManager } from "@/components/asset-manager";
 import { ContentItemForm } from "@/components/content-item-form";
+import { MetadataSuggestionPanel } from "@/components/metadata-suggestion";
 import { PlatformMatrix } from "@/components/platform-matrix";
 import { PageHeading, Panel } from "@/components/ui";
 import { YoutubeSourceMetadataView } from "@/components/youtube-source";
+import { aiProvider } from "@/lib/ai/provider";
 import { currentOwner } from "@/lib/auth/server";
+import { getMetadataSuggestion } from "@/lib/clipforge/classification-store";
 import { getContentItem, getYoutubeSource, listAssets, listPlatformPosts, listProjects } from "@/lib/clipforge/data";
 import { distributionSummary } from "@/lib/clipforge/distribution";
 import { clipforgeLabel, clipforgeTime } from "@/lib/clipforge/labels";
@@ -29,13 +32,15 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   let assets;
   let posts;
   let source;
+  let suggestion;
   try {
-    [item, projects, assets, posts, source] = await Promise.all([
+    [item, projects, assets, posts, source, suggestion] = await Promise.all([
       getContentItem(owner.id, id),
       listProjects(owner.id),
       listAssets(owner.id, id),
       listPlatformPosts(owner.id, id),
       getYoutubeSource(owner.id, id),
+      getMetadataSuggestion(owner.id, id),
     ]);
   } catch {
     return <Panel title="Content unavailable"><p role="alert">We could not load this content item. <Link href="/library">Back to library</Link>.</p></Panel>;
@@ -57,6 +62,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
           <div><dt>Content key</dt><dd>{item.contentKey ?? "None"}</dd></div>
           <div><dt>Project</dt><dd><Link href={`/projects/${item.projectId}`}>{item.projectName}</Link></dd></div>
           <div><dt>Topic</dt><dd>{item.topic || "None"}</dd></div>
+          <div><dt>Content pillar</dt><dd>{item.contentPillar || "None"}</dd></div>
           <div><dt>Format</dt><dd>{clipforgeLabel(item.format)}</dd></div>
           <div><dt>Production type</dt><dd>{clipforgeLabel(item.productionType)}</dd></div>
           <div><dt>Status</dt><dd>{clipforgeLabel(item.status)}</dd></div>
@@ -68,6 +74,9 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
       </Panel>
       <Panel title="YouTube source metadata" description="Stored YouTube facts only. Nothing here is editable, and nothing here classifies format or production type.">
         <YoutubeSourceMetadataView source={source ?? null} />
+      </Panel>
+      <Panel title="AI metadata suggestion" description="A suggestion stays separate from saved metadata until you accept selected fields.">
+        <MetadataSuggestionPanel contentItemId={item.id} providerConfigured={aiProvider().configured} suggestion={suggestion} />
       </Panel>
       <Panel title="Edit metadata">
         <ContentItemForm key={item.updatedAt} item={item} projects={projects} />

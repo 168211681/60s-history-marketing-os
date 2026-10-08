@@ -16,9 +16,18 @@ the evidence record rather than treating old pre-apply checklists as pending wor
   `20261006175601_clipforge_projects_and_content_items`. Do not treat the older
   18-migration snapshot as today's hosted inventory. Sprint 004 is
   Production-complete.
-  `20261007200200_clipforge_youtube_source_metadata` is applied and verified on
-  Staging. Production does not have this migration. Do not apply it to
-  Production from this runbook.
+  Sprint 004.1 is applied and verified on Staging and on Production. Production
+  has 43 YouTube videos, 43 rows with metadata synced, 43 ClipForge content items,
+  172 platform posts, duplicate external IDs = 0, and a successful v2 sync.
+  Production's remote migration version is `20261007190850`
+  `clipforge_youtube_source_metadata`. The repository filename remains
+  `20261007200200_clipforge_youtube_source_metadata.sql`. That difference is
+  intentional. Do not normalize it or reapply the file. Sprint 004.2
+  (`20261008020000_clipforge_metadata_intelligence`) is applied and verified on
+  Staging and is not applied to Production. Staging has 44 content items and 3
+  classification suggestions (1 accepted, 1 rejected, 1 pending). Production
+  remains Sprint 004.1 with 43 content items. Do not reapply 004.2 to Staging
+  and do not apply it to Production from this runbook.
 - Production records Phase 7 as
   `20260924151134_research_fact_checking`. The local source remains
   `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
@@ -143,8 +152,11 @@ Staging later received `20260928140124_password_setup_authorizations` and, after
 a separate reviewed apply, `20261006175601_clipforge_projects_and_content_items`.
 Do not treat the older 18-migration snapshot as today's hosted inventory.
 Sprint 004 is Production-complete.
-`20261007200200_clipforge_youtube_source_metadata` is applied and verified on
-Staging. Production does not have this migration. Do not rerun this generic procedure against the current hosted project.
+Sprint 004.1 is applied and verified on Staging and on Production. Production's
+remote version is `20261007190850` `clipforge_youtube_source_metadata`; the
+repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`.
+That difference is intentional. Do not normalize it. Sprint 004.2 is applied
+and verified on Staging and is not applied to Production. Do not rerun this generic procedure against the current hosted project.
 Use the read-only validation workflow for current Staging checks.
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
@@ -243,8 +255,13 @@ count and not a pending allowance. Do not treat the older 18-migration snapshot
 as today's hosted inventory. Sprint 004 is Production-complete: one Production
 ClipForge project, 41 stored YouTube videos imported, 41 content items, 164
 platform posts, re-import idempotency verified, and duplicate external YouTube
-IDs = 0. `20261007200200_clipforge_youtube_source_metadata` is applied and
-verified on Staging. Production does not have this migration. The ClipForge projects migration
+IDs = 0. Sprint 004.1 is applied and verified on Staging and on Production:
+43 YouTube videos, 43 metadata synced, 43 ClipForge content items, 172 platform
+posts, duplicate external IDs = 0, and a successful v2 sync. Production's remote
+migration version is `20261007190850` `clipforge_youtube_source_metadata`. The
+repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`.
+That version difference is intentional and must not be normalized. Sprint 004.2
+is applied and verified on Staging and is not applied to Production. The ClipForge projects migration
 was applied separately to Staging after review. The pending-migration helper
 remains for a future reviewed difference; the pull-request workflow uses exact
 equality and does not apply SQL. A mismatch blocks validation.

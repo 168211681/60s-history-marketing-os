@@ -18,7 +18,7 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | --- | --- | --- |
 | `public.users` | Minimal identity referencing `auth.users`; no duplicated email/profile data | Read own row |
 | `public.channels` | Verified channel identity and `owner_id` | Read owned channels |
-| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from Sprint 004.1, applied and verified on Staging, and are not an R2 asset. Production does not have this migration | Read owned channel videos |
+| `public.videos` | Video identity, title, topic, duration, channel FK, and YouTube source facts (description, HTTPS thumbnail URL, exact tags within YouTube's 500-character list budget, category id, languages, privacy, `metadata_synced_at`). Source columns come from Sprint 004.1, applied and verified on Staging and Production. Production's remote version is `20261007190850`; the repository file remains `20261007200200_clipforge_youtube_source_metadata.sql`. They are not an R2 asset | Read owned channel videos |
 | `public.video_metrics` | Daily metrics keyed by `(video_id, metric_date)` | Read owned channel metrics |
 | `public.channel_metrics` | Daily metrics keyed by `(channel_id, metric_date)` | Read owned channel metrics |
 | `private.analytics_sync_jobs` | Manual reporting-window status, attempts and sanitized error code; unique `(channel_id, idempotency_key)` | No access |
@@ -28,7 +28,8 @@ values outside JavaScript's safe numeric range instead of silently losing precis
 | `public.marketing_insights` | Observation/comparison/hypothesis/experiment with explicit provenance and evidence | Read owned channel insights |
 | `public.content_ideas` | Title, angle and draft/shortlisted/archived status | Read/create/edit/delete own ideas |
 | `public.projects` | ClipForge workspace name, optional code, description, and active/archived status. Owned directly by `owner_id`; not a YouTube channel | Read/create/edit/delete own projects |
-| `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)` | Read/create/edit/delete own items; cannot retarget `owner_id` |
+| `public.content_items` | ClipForge content metadata owned through `projects` via `(project_id, owner_id)`. Includes owner-controlled `content_pillar` (empty until a person sets it; at most 80 characters; not a global pillar enum) | Read/create/edit/delete own items; cannot retarget `owner_id` |
+| `public.content_classification_suggestions` | One AI suggestion for topic, content pillar, and production type. Not a source fact. No `updated_at`; review time is `reviewed_at` | Read own rows only. No authenticated insert, update, or delete |
 | `public.content_assets` | Pointer to one private master video or thumbnail in Cloudflare R2 bucket `clipforge-assets`. Bytes are not in Postgres or Supabase Storage | Read/create/delete own pointers; cannot update filename, type, size, owner, path, kind, provider, bucket, or timestamps |
 | `public.platform_posts` | Manual YouTube, Facebook, TikTok, and Instagram copy and status | Read/create/edit/delete own rows; cannot retarget owner or platform |
 
@@ -40,11 +41,17 @@ File bytes stay in the private Cloudflare R2 bucket `clipforge-assets`.
 That file is on `main` and is used by the Production Sprint 004 import. Do not reapply it.
 `supabase/migrations/20261007143000_clipforge_legacy_youtube_import.sql` is the
 Production-complete Sprint 004 import. Do not rewrite it.
-`supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` is
-applied and verified on Staging. It stores YouTube source facts on
-`public.videos` and does not change R2. Production does not have this migration.
-Production migration history remains intentionally divergent. Do not apply it
-to Production without separate explicit approval.
+`supabase/migrations/20261007200200_clipforge_youtube_source_metadata.sql` stores
+YouTube source facts on `public.videos` and does not change R2. It is applied
+and verified on Staging and Production. Production's remote version is
+`20261007190850` `clipforge_youtube_source_metadata`. Do not normalize that
+version onto the repository filename, and do not reapply the file.
+`supabase/migrations/20261008020000_clipforge_metadata_intelligence.sql` is
+Sprint 004.2. It is applied and verified on Staging and is not applied to
+Production. Do not reapply it to Staging. Do not apply it to Production without
+a separate explicit approval. Staging has 44 content items and 3 classification
+suggestions (1 accepted, 1 rejected, 1 pending). Production remains Sprint 004.1
+with 43 content items.
 
 `private.password_setup_authorizations` is the original file
 `supabase/migrations/20260928140124_password_setup_authorizations.sql`.
@@ -60,13 +67,20 @@ Sprint 004 is Production-complete: one ClipForge project, 41 stored YouTube
 videos imported, 41 content items, 164 platform posts, re-import idempotency
 verified, and duplicate external YouTube IDs = 0.
 `20261007200200_clipforge_youtube_source_metadata` is applied and verified on
-Staging. Production does not have this migration. Production migration history
-stays intentionally divergent and must not be normalized. Do not apply it to
-Production without separate explicit approval.
+Staging and Production. Production has 43 YouTube videos, 43 metadata synced,
+43 ClipForge content items, 172 platform posts, duplicate external IDs = 0, and
+a successful v2 sync. Its remote version is `20261007190850`. Do not normalize
+that history. Do not reapply the repository file.
+Production migration history for Phase 6 and Phase 7 stays intentionally
+divergent and must not be normalized. Do not reapply
+`20261008020000_clipforge_metadata_intelligence` to Staging. Do not apply it to
+Production from this document.
 
-Every table has `created_at`, `updated_at`, primary/unique keys, FKs and forced RLS.
-`updated_at` is maintained by a security-invoker trigger in `private`; no
-security-definer function or public RPC is added. Column grants prevent clients
+Every table has `created_at`, primary/unique keys, FKs and forced RLS.
+`content_classification_suggestions` is the exception to `updated_at`: it records
+`created_at` and a nullable `reviewed_at` because a suggestion is not edited in
+place. `updated_at` elsewhere is maintained by a security-invoker trigger in
+`private`; no security-definer function or public RPC is added. Column grants prevent clients
 from changing idea IDs, channel IDs or timestamps. Every update policy has both
 `USING` and `WITH CHECK`.
 
@@ -148,7 +162,10 @@ current cloud state. Current migration identities and verification are recorded 
 the [database transition runbook](database-transition.md). Do not treat the older
 18-migration snapshot as today's hosted inventory. Sprint 004 is
 Production-complete. `20261007200200_clipforge_youtube_source_metadata` is
-applied and verified on Staging. Production does not have this migration.
+applied and verified on Staging and Production. Production's remote version is
+`20261007190850`. Do not normalize it or reapply the repository file.
+`20261008020000_clipforge_metadata_intelligence` is applied and verified on
+Staging and is not applied to Production. Do not reapply it to Staging.
 The ClipForge projects migration
 was applied separately to Staging after review. Production intentionally
 uses different historical versions for Phase 6 and Phase 7, and it does not

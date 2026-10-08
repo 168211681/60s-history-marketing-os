@@ -76,15 +76,14 @@ unknown until a later editorial sprint. Do not rewrite
 
 ## ClipForge Sprint 004.1 — YouTube source metadata
 
-**Status: applied and verified on Staging. Production not applied.**
+**Status: applied and verified on Staging and Production. Do not reapply it.**
 `20261007200200_clipforge_youtube_source_metadata` stores YouTube source facts
 on `public.videos`: description, one HTTPS thumbnail URL, exact tags bounded by
 YouTube's 500-character list budget, category id,
 default language, default audio language, privacy status, and
 `metadata_synced_at`. It does not classify topic, format, or production type,
-and it does not create an R2 asset. Do not apply it to Production without a
-separate explicit approval. Production migration history stays intentionally
-divergent. The pull-request gate remains exact migration equality.
+and it does not create an R2 asset. This branch does not modify that file.
+The pull-request gate remains exact migration equality.
 
 Verified on Staging:
 
@@ -109,7 +108,45 @@ Verified on Staging:
 - Format and production type remain unknown
 - Captions and hashtags remain untouched
 - No recent Staging runtime errors
-- Production remains untouched
+- Production remote version `20261007190850` `clipforge_youtube_source_metadata`
+- Repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`
+- That version difference is intentional. Do not normalize migration history
+- Production: 43 YouTube videos, 43 metadata synced, 43 content items, 172 platform posts, duplicate external IDs = 0, v2 sync succeeded
+
+## ClipForge Sprint 004.2 — metadata intelligence
+
+**Status: applied and verified on Staging. Not applied to Production. The canonical Production deployment is unchanged.**
+`20261008020000_clipforge_metadata_intelligence` adds `content_items.content_pillar`
+(text, at most 80 characters, default empty) and
+`public.content_classification_suggestions`. The classifier may suggest topic,
+content pillar, and production type only. A person must accept the selected
+fields before canonical metadata changes. Generation, rejection, and an
+unconfigured provider do not invent or overwrite canonical fields. Format,
+language, captions, hashtags, YouTube source facts, R2, and publishing stay
+untouched. There is no batch classification. History in 60s (`H60`) pillars are
+an application rule, not a global database enum. Staging already has this
+migration. Do not reapply it there. Production still needs a separate explicit
+approval. Do not apply it to Production before that approval, and do not merge
+to `main` until it is applied and verified: merging deploys the app to
+Production automatically.
+
+The Production baseline remains Sprint 004.1 and must not be mutated: 43
+content items, topic empty, format unknown, and production type unknown.
+Sprint 004.2 is not applied there.
+
+Staging verification, deployment commit
+`af8edc5b57bb3304078b705224c55b23427ba6da`:
+
+- Forced RLS, owner SELECT-only access, server-side writes, constraints, and the ownership foreign key
+- Gemini 3.5 Flash-Lite classification succeeded with the strict JSON schema
+- Generate stored a valid pending suggestion
+- Accept updated only topic and content pillar
+- The accepted suggestion kept its source fingerprint and recorded the accepted fields
+- Reject left canonical metadata unchanged
+- A later Topic change made the suggestion stale and disabled Accept and Reject
+- A forced HTTP 409 against the hosted review endpoint was not performed; local regression tests cover that case
+- The smoke item topic was restored to `WWII Spitfire red gun-port patches`
+- Staging database: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending)
 
 ## Phase 0 — repository and security baseline
 

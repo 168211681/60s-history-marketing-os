@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { ContentInputError } from "./model";
 
 export function clipforgeError(error: unknown) {
+  if (error instanceof ContentInputError) return NextResponse.json({ error: error.message }, { status: 400 });
   const record = typeof error === "object" && error ? error as { code?: string; table?: string } : {};
   const code = record.code ? String(record.code) : "";
   const table = record.table ? String(record.table) : "";

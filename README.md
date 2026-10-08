@@ -9,7 +9,15 @@ Sprint 001 changed the application shell. Sprint 002 adds owner-scoped projects
 and content items. Sprint 003 adds private Cloudflare R2 assets and a manual
 distribution queue. Sprint 004 imported the Production YouTube library into
 ClipForge. Sprint 004.1 stores YouTube source metadata and is applied and
-verified on Staging. Production does not have this migration. Calendar and Archive remain labeled
+verified on Staging and Production. Production's remote version is
+`20261007190850`; the repository file remains
+`20261007200200_clipforge_youtube_source_metadata.sql`. Production has 43
+YouTube videos, 43 metadata synced, 43 content items, and 172 platform posts.
+Sprint 004.2 adds reviewed AI suggestions for topic, content pillar, and
+production type. It is applied and verified on Staging and is not applied to
+Production. Staging has 44 content items and 3 suggestions (1 accepted, 1
+rejected, 1 pending). Production remains Sprint 004.1 with 43 content items.
+Calendar and Archive remain labeled
 placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 
 Internal video rendering, provider inference, artifact storage, production workers,
