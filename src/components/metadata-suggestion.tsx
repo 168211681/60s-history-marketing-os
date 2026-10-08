@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SuggestionRecord } from "@/lib/clipforge/classification-store";
 
 type SuggestionView = SuggestionRecord;
@@ -21,6 +21,40 @@ export function suggestionPanelState(input: {
   if (input.status === "superseded") return "Superseded";
   if (input.stale) return "Stale";
   return "Pending review";
+}
+
+export function displayedSuggestionState(input: {
+  server: { status: SuggestionRecord["status"]; stale: boolean } | null;
+  confirmed: { status: SuggestionRecord["status"]; stale: boolean } | null;
+  generating: boolean;
+  unavailable: boolean;
+}) {
+  const suggestion = input.confirmed ?? input.server;
+  return suggestionPanelState({
+    hasSuggestion: Boolean(suggestion),
+    unavailable: input.unavailable,
+    generating: input.generating,
+    status: suggestion?.status ?? null,
+    stale: Boolean(suggestion?.stale),
+  });
+}
+
+function isSuggestionView(value: unknown): value is SuggestionView {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<SuggestionView>;
+  const productionType = record.suggestedProductionType;
+  return typeof record.id === "string"
+    && (record.status === "pending" || record.status === "accepted" || record.status === "rejected" || record.status === "superseded")
+    && typeof record.stale === "boolean"
+    && (record.suggestedTopic === null || typeof record.suggestedTopic === "string")
+    && (record.suggestedContentPillar === null || typeof record.suggestedContentPillar === "string")
+    && (productionType === "unknown" || productionType === "new" || productionType === "remaster" || productionType === "repurpose" || productionType === "other")
+    && (record.topicConfidence === null || typeof record.topicConfidence === "number")
+    && (record.pillarConfidence === null || typeof record.pillarConfidence === "number")
+    && (record.productionTypeConfidence === null || typeof record.productionTypeConfidence === "number")
+    && typeof record.topicRationale === "string"
+    && typeof record.pillarRationale === "string"
+    && typeof record.productionTypeRationale === "string";
 }
 
 export function canRegenerateSuggestion(input: {
@@ -83,84 +117,110 @@ export function MetadataSuggestionPanel({
   suggestion: SuggestionView | null;
 }) {
   const router = useRouter();
+  const inflight = useRef(false);
+  const serverSuggestion = useRef(suggestion);
   const [busy, setBusy] = useState<"generate" | "review" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(!providerConfigured);
   const [selected, setSelected] = useState<string[]>([]);
-  const stale = Boolean(suggestion?.stale);
-  const pending = suggestion?.status === "pending" && !stale;
+  const [confirmed, setConfirmed] = useState<SuggestionView | null>(null);
+  const displayed = confirmed ?? suggestion;
+  const stale = Boolean(displayed?.stale);
+  const pending = displayed?.status === "pending" && !stale;
   const canGenerate = canRegenerateSuggestion({
-    hasSuggestion: Boolean(suggestion),
-    status: suggestion?.status ?? null,
+    hasSuggestion: Boolean(displayed),
+    status: displayed?.status ?? null,
     stale,
   });
-  const state = suggestionPanelState({
-    hasSuggestion: Boolean(suggestion),
-    unavailable,
+  const state = displayedSuggestionState({
+    server: suggestion ? { status: suggestion.status, stale: suggestion.stale } : null,
+    confirmed: confirmed ? { status: confirmed.status, stale: confirmed.stale } : null,
     generating: busy === "generate",
-    status: suggestion?.status ?? null,
-    stale,
+    unavailable,
   });
+
+  useEffect(() => {
+    if (serverSuggestion.current === suggestion) return;
+    serverSuggestion.current = suggestion;
+    setConfirmed(null);
+  }, [suggestion]);
 
   function toggle(name: string, checked: boolean) {
     setSelected((current) => checked ? [...current, name] : current.filter((field) => field !== name));
   }
 
   async function generate() {
+    if (inflight.current) return;
+    inflight.current = true;
     setBusy("generate");
     setMessage(null);
-    const response = await fetch(`/api/content-items/${contentItemId}/classify`, { method: "POST" });
-    const payload = await response.json().catch(() => null);
-    setBusy(null);
-    if (payload?.error === "AI_NOT_CONFIGURED") {
-      setUnavailable(true);
-      setMessage("The AI provider is not configured. No suggestion was stored.");
-      return;
+    try {
+      const response = await fetch(`/api/content-items/${contentItemId}/classify`, { method: "POST" });
+      const payload = await response.json().catch(() => null) as { error?: string; suggestion?: unknown } | null;
+      if (payload?.error === "AI_NOT_CONFIGURED") {
+        setUnavailable(true);
+        setMessage("The AI provider is not configured. No suggestion was stored.");
+        return;
+      }
+      if (payload?.error === "CLASSIFICATION_INPUT_CHANGED") {
+        setMessage("Source metadata changed while classification was running. Generate again.");
+        return;
+      }
+      if (!response.ok || !isSuggestionView(payload?.suggestion)) {
+        setMessage(payload?.error || "Could not generate a suggestion.");
+        return;
+      }
+      setConfirmed(payload.suggestion);
+      setSelected([]);
+      router.refresh();
+    } catch {
+      setMessage("Could not generate a suggestion.");
+    } finally {
+      inflight.current = false;
+      setBusy(null);
     }
-    if (payload?.error === "CLASSIFICATION_INPUT_CHANGED") {
-      setMessage("Source metadata changed while classification was running. Generate again.");
-      return;
-    }
-    if (!response.ok) {
-      setMessage(payload?.error || "Could not generate a suggestion.");
-      return;
-    }
-    setSelected([]);
-    router.refresh();
   }
 
   async function review(action: "accept" | "reject") {
-    if (!suggestion) return;
+    if (!displayed || inflight.current) return;
+    inflight.current = true;
     setBusy("review");
     setMessage(null);
-    const response = await fetch(`/api/content-items/${contentItemId}/classification/${suggestion.id}/review`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action, fields: action === "accept" ? selected : [] }),
-    });
-    const payload = await response.json().catch(() => null);
-    setBusy(null);
-    if (!response.ok) {
-      setMessage(payload?.error || "Could not review the suggestion.");
-      return;
+    try {
+      const response = await fetch(`/api/content-items/${contentItemId}/classification/${displayed.id}/review`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, fields: action === "accept" ? selected : [] }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string; suggestion?: unknown } | null;
+      if (!response.ok || !isSuggestionView(payload?.suggestion)) {
+        setMessage(payload?.error || "Could not review the suggestion.");
+        return;
+      }
+      setConfirmed(payload.suggestion);
+      setSelected([]);
+      router.refresh();
+    } catch {
+      setMessage("Could not review the suggestion.");
+    } finally {
+      inflight.current = false;
+      setBusy(null);
     }
-    setSelected([]);
-    router.refresh();
   }
 
   return (
     <div className="suggestion-panel">
       <p className="badge neutral">AI suggestion · not a source fact</p>
       <p>{state}</p>
-      {unavailable && !suggestion ? <p>No classifier is configured, so nothing was invented.</p> : null}
-      {suggestion && (suggestion.status === "accepted" || suggestion.status === "rejected") && stale ? (
+      {unavailable && !displayed ? <p>No classifier is configured, so nothing was invented.</p> : null}
+      {displayed && (displayed.status === "accepted" || displayed.status === "rejected") && stale ? (
         <p className="muted">Current metadata has changed since this decision. The suggestion stays {state.toLowerCase()}.</p>
       ) : null}
-      {suggestion ? (
+      {displayed ? (
         <>
-          <Field name="topic" label="Topic" value={suggestion.suggestedTopic} confidence={suggestion.topicConfidence} rationale={suggestion.topicRationale} disabled={!pending} checked={selected.includes("topic")} onChange={toggle} />
-          <Field name="content_pillar" label="Content pillar" value={suggestion.suggestedContentPillar} confidence={suggestion.pillarConfidence} rationale={suggestion.pillarRationale} disabled={!pending} checked={selected.includes("content_pillar")} onChange={toggle} />
-          <Field name="production_type" label="Production type" value={suggestion.suggestedProductionType} confidence={suggestion.productionTypeConfidence} rationale={suggestion.productionTypeRationale} disabled={!pending} checked={selected.includes("production_type")} onChange={toggle} />
+          <Field name="topic" label="Topic" value={displayed.suggestedTopic} confidence={displayed.topicConfidence} rationale={displayed.topicRationale} disabled={!pending} checked={selected.includes("topic")} onChange={toggle} />
+          <Field name="content_pillar" label="Content pillar" value={displayed.suggestedContentPillar} confidence={displayed.pillarConfidence} rationale={displayed.pillarRationale} disabled={!pending} checked={selected.includes("content_pillar")} onChange={toggle} />
+          <Field name="production_type" label="Production type" value={displayed.suggestedProductionType} confidence={displayed.productionTypeConfidence} rationale={displayed.productionTypeRationale} disabled={!pending} checked={selected.includes("production_type")} onChange={toggle} />
         </>
       ) : null}
       <div className="form-actions">

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { PoolClient } from "pg";
-import { canRegenerateSuggestion, suggestionPanelState } from "../src/components/metadata-suggestion";
+import { canRegenerateSuggestion, displayedSuggestionState, suggestionPanelState } from "../src/components/metadata-suggestion";
 import { aiProvider } from "../src/lib/ai/provider";
 import { classificationLockStatements } from "../src/lib/clipforge/classification-locks.mjs";
 import { commitClassificationResult, reviewLockedSuggestion, reuseLockedSuggestion } from "../src/lib/clipforge/classification-store";
@@ -504,6 +504,36 @@ test("accepted and rejected suggestions keep their decision when later input cha
   assert.match(reviewFunction, /set status = 'accepted'/);
   assert.match(reviewFunction, /transaction\(\(client\) => reviewLockedSuggestion/);
   assert.ok(reviewFunction.indexOf("lockClassificationContext") < reviewFunction.indexOf("for update"));
+});
+
+test("a successful generation does not flash Not generated before refresh", () => {
+  const pending = { status: "pending" as const, stale: false };
+  assert.equal(displayedSuggestionState({ server: null, confirmed: null, generating: true, unavailable: false }), "Generating");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: pending, generating: false, unavailable: false }), "Pending review");
+  assert.notEqual(displayedSuggestionState({ server: null, confirmed: pending, generating: false, unavailable: false }), "Not generated");
+  assert.equal(displayedSuggestionState({ server: pending, confirmed: null, generating: false, unavailable: false }), "Pending review");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: null, generating: false, unavailable: false }), "Not generated");
+  assert.equal(displayedSuggestionState({ server: { status: "accepted", stale: true }, confirmed: null, generating: false, unavailable: false }), "Accepted");
+  assert.equal(displayedSuggestionState({ server: { status: "rejected", stale: false }, confirmed: null, generating: false, unavailable: false }), "Rejected");
+  assert.equal(displayedSuggestionState({ server: { status: "pending", stale: true }, confirmed: null, generating: false, unavailable: false }), "Stale");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: { status: "accepted", stale: false }, generating: false, unavailable: false }), "Accepted");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: { status: "rejected", stale: true }, generating: false, unavailable: false }), "Rejected");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: { status: "pending", stale: true }, generating: false, unavailable: false }), "Stale");
+  assert.equal(displayedSuggestionState({ server: null, confirmed: pending, generating: true, unavailable: false }), "Generating");
+  const panel = readFileSync("src/components/metadata-suggestion.tsx", "utf8");
+  const generate = panel.slice(panel.indexOf("async function generate"), panel.indexOf("async function review"));
+  assert.ok(generate.indexOf("setConfirmed") < generate.indexOf("router.refresh()"));
+  assert.equal(generate.split("setBusy(null)").length, 2);
+  assert.ok(generate.indexOf("finally") < generate.indexOf("setBusy(null)"));
+  assert.ok(generate.indexOf("setConfirmed") < generate.indexOf("setBusy(null)"));
+  assert.match(generate, /if \(inflight\.current\) return/);
+  assert.ok(generate.indexOf("AI_NOT_CONFIGURED") < generate.indexOf("setConfirmed"));
+  assert.ok(generate.indexOf("CLASSIFICATION_INPUT_CHANGED") < generate.indexOf("setConfirmed"));
+  const reviewStart = panel.indexOf("async function review");
+  const review = panel.slice(reviewStart, panel.indexOf("return (", reviewStart));
+  assert.ok(review.indexOf("setConfirmed") < review.indexOf("router.refresh()"));
+  assert.equal(review.split("setBusy(null)").length, 2);
+  assert.ok(review.indexOf("finally") < review.indexOf("setBusy(null)"));
 });
 
 test("a stale pending suggestion cannot be accepted after the locked reload", async () => {
