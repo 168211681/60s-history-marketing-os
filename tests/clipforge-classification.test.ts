@@ -5,7 +5,8 @@ import test from "node:test";
 import type { PoolClient } from "pg";
 import { canRegenerateSuggestion, suggestionPanelState } from "../src/components/metadata-suggestion";
 import { aiProvider } from "../src/lib/ai/provider";
-import { commitClassificationResult } from "../src/lib/clipforge/classification-store";
+import { classificationLockStatements } from "../src/lib/clipforge/classification-locks.mjs";
+import { commitClassificationResult, reviewLockedSuggestion, reuseLockedSuggestion } from "../src/lib/clipforge/classification-store";
 import {
   classificationDocument,
   classificationFingerprint,
@@ -45,6 +46,52 @@ const validResult = {
   confidence: { topic: 0.8, contentPillar: 0.7, productionType: null },
   rationale: { topic: "The description is about a wall.", contentPillar: "The problem is structural.", productionType: "The source does not say how it was produced." },
 };
+
+function suggestionRow(status: "pending" | "accepted" | "rejected" | "superseded", fingerprint: string) {
+  return {
+    id: "c2000000-0000-4000-8000-0000000000e9",
+    content_item_id: "b2000000-0000-4000-8000-0000000000e1",
+    suggested_topic: "Siege engineering",
+    suggested_content_pillar: "Hidden Engineering",
+    suggested_production_type: "unknown" as const,
+    topic_confidence: "0.8",
+    pillar_confidence: "0.7",
+    production_type_confidence: null,
+    topic_rationale: "The description is about a wall.",
+    pillar_rationale: "The problem is structural.",
+    production_type_rationale: "The source does not say how it was produced.",
+    provider: "openai-compatible",
+    model: "test-model",
+    prompt_version: "clipforge-metadata-v1",
+    source_fingerprint: fingerprint,
+    source_metadata_synced_at: null,
+    status,
+    accepted_fields: status === "accepted" ? ["topic"] : [],
+    created_at: "2026-10-08T00:00:00.000Z",
+    reviewed_at: status === "pending" || status === "superseded" ? null : "2026-10-08T01:00:00.000Z",
+  };
+}
+
+function contextRow(value: ClassificationSource) {
+  const youtube = value.youtube;
+  if (!youtube) throw new Error("fixture");
+  return {
+    title: value.title,
+    topic: value.topic,
+    production_type: value.productionType,
+    project_code: value.projectCode,
+    content_pillar: "",
+    youtube_video_id: youtube.youtubeVideoId,
+    source_title: youtube.title,
+    description: youtube.description,
+    tags: youtube.tags,
+    category_id: youtube.categoryId,
+    default_language: youtube.defaultLanguage,
+    default_audio_language: youtube.defaultAudioLanguage,
+    privacy_status: youtube.privacyStatus,
+    metadata_synced_at: youtube.metadataSyncedAt,
+  };
+}
 
 function withProvider<T>(run: () => Promise<T>) {
   const previous = {
@@ -206,11 +253,13 @@ test("a classification from source A is not stored under source B", async () => 
   const fingerprintB = classificationFingerprint(sourceB);
   assert.notEqual(fingerprintA, fingerprintB);
   const parsed = finalizeClassification(validResult, source);
-  const writes: string[] = [];
+  const queries: string[] = [];
+  let reloadAt = -1;
   const client = {
     query: async (sql: string) => {
-      writes.push(sql);
-      throw new Error("classification write attempted");
+      queries.push(sql);
+      if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+      throw new Error(`classification write attempted: ${sql}`);
     },
   } as unknown as PoolClient;
   const result = await commitClassificationResult(client, {
@@ -220,11 +269,126 @@ test("a classification from source A is not stored under source B", async () => 
     parsed,
     providerName: "openai-compatible",
     model: "test-model",
-    reload: async () => ({ source: sourceB, fingerprint: fingerprintB }),
+    reload: async () => {
+      reloadAt = queries.length;
+      return { source: sourceB, fingerprint: fingerprintB };
+    },
   });
   assert.equal(result.kind, "input_changed");
-  assert.equal(writes.length, 0);
   assert.equal("suggestion" in result, false);
+  assert.deepEqual(queries, [...classificationLockStatements]);
+  assert.equal(reloadAt, classificationLockStatements.length);
+  assert.equal(queries.some((sql) => /insert into|set status = 'superseded'|set status = 'pending'/.test(sql)), false);
+});
+
+test("a matching classification is inserted only after the input locks", async () => {
+  const fingerprint = classificationFingerprint(source);
+  const queries: string[] = [];
+  let reloadAt = -1;
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+      if (sql === "savepoint classification_insert" || sql === "release savepoint classification_insert") return { rows: [] };
+      if (sql.includes("set status = 'superseded'")) return { rowCount: 0, rows: [] };
+      if (sql.includes("insert into public.content_classification_suggestions")) return { rowCount: 1, rows: [suggestionRow("pending", fingerprint)] };
+      if (sql.includes("content_classification_suggestions")) return { rows: [] };
+      throw new Error(sql);
+    },
+  } as unknown as PoolClient;
+  const result = await commitClassificationResult(client, {
+    ownerId: "11000000-0000-4000-8000-0000000000e1",
+    contentItemId: "b2000000-0000-4000-8000-0000000000e1",
+    inputFingerprint: fingerprint,
+    parsed: finalizeClassification(validResult, source),
+    providerName: "openai-compatible",
+    model: "test-model",
+    reload: async () => {
+      reloadAt = queries.length;
+      return { source, fingerprint };
+    },
+  });
+  assert.equal(result.kind, "suggestion");
+  assert.equal(reloadAt, classificationLockStatements.length);
+  const insertAt = queries.findIndex((sql) => sql.includes("insert into public.content_classification_suggestions"));
+  assert.ok(insertAt > classificationLockStatements.length);
+  assert.deepEqual(queries.slice(0, classificationLockStatements.length), [...classificationLockStatements]);
+});
+
+test("a missing content item stops before later classification locks", async () => {
+  const queries: string[] = [];
+  let reloaded = false;
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      return { rowCount: 0, rows: [] };
+    },
+  } as unknown as PoolClient;
+  const result = await commitClassificationResult(client, {
+    ownerId: "11000000-0000-4000-8000-0000000000e1",
+    contentItemId: "b2000000-0000-4000-8000-0000000000e1",
+    inputFingerprint: classificationFingerprint(source),
+    parsed: finalizeClassification(validResult, source),
+    providerName: "openai-compatible",
+    model: "test-model",
+    reload: async () => {
+      reloaded = true;
+      return { source, fingerprint: classificationFingerprint(source) };
+    },
+  });
+  assert.equal(result.kind, "missing");
+  assert.equal(reloaded, false);
+  assert.deepEqual(queries, [classificationLockStatements[0]]);
+});
+
+test("reuse does not reopen a superseded suggestion after the locked fingerprint changes", async () => {
+  const youtube = source.youtube;
+  if (!youtube) throw new Error("fixture");
+  const sourceB: ClassificationSource = { ...source, youtube: { ...youtube, description: "Changed after the first lookup." } };
+  const queries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+      throw new Error(`reuse write attempted: ${sql}`);
+    },
+  } as unknown as PoolClient;
+  const result = await reuseLockedSuggestion(client, {
+    ownerId: "11000000-0000-4000-8000-0000000000e1",
+    contentItemId: "b2000000-0000-4000-8000-0000000000e1",
+    inputFingerprint: classificationFingerprint(source),
+    reload: async () => ({ source: sourceB, fingerprint: classificationFingerprint(sourceB) }),
+  });
+  assert.equal(result.kind, "input_changed");
+  assert.deepEqual(queries, [...classificationLockStatements]);
+});
+
+test("reuse reopens a superseded suggestion only when the locked fingerprint still matches", async () => {
+  const fingerprint = classificationFingerprint(source);
+  const queries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+      if (sql.includes("set status = 'pending'")) return { rowCount: 1, rows: [] };
+      if (sql.includes("content_classification_suggestions")) {
+        const reopened = queries.some((query) => query.includes("set status = 'pending'"));
+        return { rowCount: 1, rows: [suggestionRow(reopened ? "pending" : "superseded", fingerprint)] };
+      }
+      throw new Error(sql);
+    },
+  } as unknown as PoolClient;
+  const result = await reuseLockedSuggestion(client, {
+    ownerId: "11000000-0000-4000-8000-0000000000e1",
+    contentItemId: "b2000000-0000-4000-8000-0000000000e1",
+    inputFingerprint: fingerprint,
+    reload: async () => ({ source, fingerprint }),
+  });
+  assert.equal(result.kind, "suggestion");
+  if (result.kind === "suggestion") assert.equal(result.suggestion.status, "pending");
+  const reopenAt = queries.findIndex((sql) => sql.includes("set status = 'pending'"));
+  assert.equal(reopenAt, classificationLockStatements.length + 1);
+  assert.deepEqual(queries.slice(0, classificationLockStatements.length), [...classificationLockStatements]);
 });
 
 test("accepted and rejected suggestions keep their decision when later input changes", () => {
@@ -250,9 +414,60 @@ test("accepted and rejected suggestions keep their decision when later input cha
     suggestedProductionType: "unknown",
   }).ok, false);
   const review = readFileSync("src/lib/clipforge/classification-store.ts", "utf8");
-  const reviewFunction = review.slice(review.indexOf("export async function reviewContentSuggestion"));
+  const reviewFunction = review.slice(review.indexOf("export async function reviewLockedSuggestion"), review.indexOf("export async function assertContentPillar"));
   assert.doesNotMatch(reviewFunction, /source_fingerprint\s*=/);
   assert.match(reviewFunction, /set status = 'accepted'/);
+  assert.match(reviewFunction, /transaction\(\(client\) => reviewLockedSuggestion/);
+  assert.ok(reviewFunction.indexOf("lockClassificationContext") < reviewFunction.indexOf("for update"));
+});
+
+test("a stale pending suggestion cannot be accepted after the locked reload", async () => {
+  const youtube = source.youtube;
+  if (!youtube) throw new Error("fixture");
+  const sourceB: ClassificationSource = { ...source, youtube: { ...youtube, description: "Changed before review committed." } };
+  const queries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+      if (sql.includes("for update")) return { rowCount: 1, rows: [suggestionRow("pending", classificationFingerprint(source))] };
+      if (sql.includes("select i.title")) return { rowCount: 1, rows: [contextRow(sourceB)] };
+      throw new Error(`review write attempted: ${sql}`);
+    },
+  } as unknown as PoolClient;
+  const result = await reviewLockedSuggestion(client, "11000000-0000-4000-8000-0000000000e1", "b2000000-0000-4000-8000-0000000000e1", "c2000000-0000-4000-8000-0000000000e9", "accept", ["topic"]);
+  assert.equal(result.kind, "invalid");
+  if (result.kind === "invalid") {
+    assert.equal(result.status, 409);
+    assert.match(result.error, /stale/);
+  }
+  assert.deepEqual(queries.slice(0, classificationLockStatements.length), [...classificationLockStatements]);
+  assert.equal(queries[classificationLockStatements.length]?.includes("for update"), true);
+  assert.equal(queries[classificationLockStatements.length + 1]?.includes("select i.title"), true);
+  assert.equal(queries.some((sql) => sql.includes("update public")), false);
+});
+
+test("accepted and rejected reviews still do not rewrite the stored decision", async () => {
+  const fingerprint = classificationFingerprint(source);
+  for (const status of ["accepted", "rejected"] as const) {
+    const queries: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        queries.push(sql);
+        if (classificationLockStatements.includes(sql)) return { rowCount: 1, rows: [{ id: "locked" }] };
+        if (sql.includes("for update")) return { rowCount: 1, rows: [suggestionRow(status, fingerprint)] };
+        if (sql.includes("select i.title")) return { rowCount: 1, rows: [contextRow({ ...source, topic: "Siege engineering" })] };
+        throw new Error(`review write attempted: ${sql}`);
+      },
+    } as unknown as PoolClient;
+    const result = await reviewLockedSuggestion(client, "11000000-0000-4000-8000-0000000000e1", "b2000000-0000-4000-8000-0000000000e1", "c2000000-0000-4000-8000-0000000000e9", "accept", ["topic"]);
+    assert.equal(result.kind, "invalid");
+    if (result.kind === "invalid") {
+      assert.equal(result.status, 409);
+      assert.match(result.error, /no longer pending/);
+    }
+    assert.equal(queries.some((sql) => sql.includes("update public") || /source_fingerprint\s*=/.test(sql)), false);
+  }
 });
 
 test("moving a non-H60 pillar onto H60 is rejected unless the pillar is cleared", () => {

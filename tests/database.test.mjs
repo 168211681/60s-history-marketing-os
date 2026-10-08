@@ -1,6 +1,10 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { classificationLockStatements, classificationLocksSql } from "../src/lib/clipforge/classification-locks.mjs";
+
+const { Client } = createRequire(import.meta.url)("pg");
 import {
   chmodSync,
   mkdtempSync,
@@ -1237,3 +1241,120 @@ test("classification suggestions stay owner-readable and change canonical metada
   assert.equal(sql(`select status || '|' || accepted_fields::text from public.content_classification_suggestions where id='${suggestion}'`), "accepted|{topic}");
   assert.equal(sql(`select format || '|' || production_type from public.content_items where id='${item}'`), "unknown|unknown");
 });
+
+test("classification locks hold source rows until review commits", async () => {
+  const owner = "11000000-0000-4000-8000-0000000000e3";
+  const project = "a2000000-0000-4000-8000-0000000000e3";
+  const item = "b2000000-0000-4000-8000-0000000000e3";
+  const channel = "21000000-0000-4000-8000-0000000000e3";
+  const video = "31000000-0000-4000-8000-0000000000e3";
+  const post = "d2000000-0000-4000-8000-0000000000e3";
+  const suggestion = "c2000000-0000-4000-8000-0000000000e3";
+  const fingerprint = "c".repeat(64);
+  sql(`insert into auth.users (id) values ('${owner}')`);
+  sql(`insert into public.users (id) values ('${owner}')`);
+  sql(`insert into public.projects (id, owner_id, name, code) values ('${project}','${owner}','Lock project','H60')`);
+  sql(`insert into public.content_items (id, project_id, owner_id, title, topic, format, production_type, language_code) values ('${item}','${project}','${owner}','Locked siege','','unknown','unknown','und')`);
+  sql(`insert into public.channels (id, owner_id, youtube_channel_id, title) values ('${channel}','${owner}','lock-channel-e3','Lock channel')`);
+  sql(`insert into public.videos (id, channel_id, youtube_video_id, title, description) values ('${video}','${channel}','lockvid00e3','Locked siege','original source')`);
+  sql(`insert into public.platform_posts (id, content_item_id, owner_id, platform, platform_post_id) values ('${post}','${item}','${owner}','youtube','lockvid00e3')`);
+  sql(`insert into public.content_classification_suggestions (id, content_item_id, owner_id, suggested_topic, suggested_content_pillar, suggested_production_type, provider, model, prompt_version, source_fingerprint) values ('${suggestion}','${item}','${owner}','Siege engineering','Hidden Engineering','unknown','openai-compatible','test-model','clipforge-metadata-v1','${fingerprint}')`);
+
+  const holder = new Client({ host: pgEnv.PGHOST, port: Number(pgEnv.PGPORT), user: pgEnv.PGUSER, database: pgEnv.PGDATABASE });
+  const rival = new Client({ host: pgEnv.PGHOST, port: Number(pgEnv.PGPORT), user: pgEnv.PGUSER, database: pgEnv.PGDATABASE });
+  await holder.connect();
+  await rival.connect();
+  try {
+    await holder.query("begin");
+    for (const statement of classificationLockStatements) {
+      const locked = await holder.query(statement, [owner, item]);
+      assert.equal(locked.rowCount, 1, statement);
+    }
+    const modes = await holder.query(
+      `select c.relname
+         from pg_locks l
+         join pg_class c on c.oid = l.relation
+         join pg_namespace n on n.oid = c.relnamespace
+        where l.pid = pg_backend_pid()
+          and l.granted
+          and l.locktype = 'relation'
+          and l.mode = 'RowShareLock'
+          and n.nspname = 'public'
+          and c.relkind = 'r'`,
+    );
+    const shareLocked = new Set(modes.rows.map((row) => row.relname));
+    for (const table of ["content_items", "projects", "platform_posts", "channels", "videos"]) {
+      assert.equal(shareLocked.has(table), true, table);
+    }
+    const blocked = async (statement, params) => {
+      await rival.query("begin");
+      await rival.query("set local lock_timeout = '300ms'");
+      try {
+        await assert.rejects(rival.query(statement, params), (error) => error.code === "55P03");
+      } finally {
+        await rival.query("rollback");
+      }
+    };
+    const shared = async (statement, params) => {
+      await rival.query("begin");
+      await rival.query("set local lock_timeout = '300ms'");
+      try {
+        const result = await rival.query(statement, params);
+        assert.equal(result.rowCount, 1);
+      } finally {
+        await rival.query("rollback");
+      }
+    };
+    await blocked("select 1 from public.content_items where id = $1 for key share", [item]);
+    await shared("select 1 from public.projects where id = $1 for share", [project]);
+    await blocked("update public.projects set description = 'locked' where id = $1", [project]);
+    await shared("select 1 from public.platform_posts where id = $1 for share", [post]);
+    await blocked("update public.platform_posts set title = 'locked' where id = $1", [post]);
+    await shared("select 1 from public.channels where id = $1 for share", [channel]);
+    await blocked("select 1 from public.channels where id = $1 for update", [channel]);
+    await shared("select 1 from public.videos where id = $1 for share", [video]);
+    await blocked("update public.videos set description = 'changed under lock' where id = $1", [video]);
+    assert.equal(sql(`select description from public.videos where id='${video}'`), "original source");
+    await holder.query("rollback");
+  } finally {
+    await holder.end();
+    await rival.end();
+  }
+
+  assert.equal(sql(`update public.videos set description = 'after release' where id = '${video}' returning description`), "after release");
+  await rivalReleased(channel);
+
+  const locks = classificationLocksSql(owner, item);
+  sql(`begin;
+    ${locks}
+    update public.content_items set topic = 'Siege engineering' where id = '${item}' and owner_id = '${owner}';
+    update public.content_classification_suggestions
+       set status = 'accepted', accepted_fields = array['topic'], reviewed_at = now()
+     where id = '${suggestion}';
+    select 1/0;`, "22012");
+  assert.equal(sql(`select topic from public.content_items where id='${item}'`), "");
+  assert.equal(sql(`select status from public.content_classification_suggestions where id='${suggestion}'`), "pending");
+  assert.equal(sql(`select source_fingerprint from public.content_classification_suggestions where id='${suggestion}'`), fingerprint);
+
+  sql(`begin;
+    ${locks}
+    update public.content_items set topic = 'Siege engineering' where id = '${item}' and owner_id = '${owner}';
+    update public.content_classification_suggestions
+       set status = 'accepted', accepted_fields = array['topic'], reviewed_at = now()
+     where id = '${suggestion}';
+    commit;`);
+  assert.equal(sql(`select topic || '|' || format || '|' || production_type from public.content_items where id='${item}'`), "Siege engineering|unknown|unknown");
+  assert.equal(sql(`select status || '|' || accepted_fields::text || '|' || source_fingerprint from public.content_classification_suggestions where id='${suggestion}'`), `accepted|{topic}|${fingerprint}`);
+});
+
+async function rivalReleased(channel) {
+  const client = new Client({ host: pgEnv.PGHOST, port: Number(pgEnv.PGPORT), user: pgEnv.PGUSER, database: pgEnv.PGDATABASE });
+  await client.connect();
+  try {
+    await client.query("begin");
+    await client.query("select 1 from public.channels where id = $1 for update", [channel]);
+    await client.query("rollback");
+  } finally {
+    await client.end();
+  }
+}
