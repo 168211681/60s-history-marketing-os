@@ -66,7 +66,7 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
   }, []);
 
   function toggle(id: string) {
-    if (busy) return;
+    if (inflight.current) return;
     const next = toggleBatchSelection(selected, id);
     setSelected(next.selected);
     setRejectedSelection(next.rejected);
@@ -75,11 +75,11 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
     setMessage(null);
   }
 
-  async function previewBatch() {
-    if (!claimBatchRun(inflight)) return;
+  async function loadPreview() {
     setBusy("preview");
+    setPreview(null);
     setMessage(null);
-    setResults(null);
+    const refreshNote = "Click Preview batch to refresh before generating.";
     try {
       const response = await fetch("/api/content-items/classification-batch/preview", {
         method: "POST",
@@ -87,21 +87,33 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
         body: JSON.stringify({ ids: selected }),
       });
       const payload = await response.json().catch(() => null) as { error?: string } | BatchPreview | null;
-      if (!mounted.current) return;
+      if (!mounted.current || stopped.current) return;
       if (!response.ok || !isBatchPreview(payload)) {
         setPreview(null);
-        setMessage(payload && "error" in payload && payload.error ? payload.error : "Could not preview that batch.");
+        const error = payload && "error" in payload && payload.error ? payload.error : "Could not preview that batch.";
+        setMessage(`${error} ${refreshNote}`);
         return;
       }
       const allowed = new Set(selected);
       if (payload.items.some((item) => !allowed.has(item.id))) {
         setPreview(null);
-        setMessage("Could not preview that batch.");
+        setMessage(`Could not preview that batch. ${refreshNote}`);
         return;
       }
       setPreview(payload);
     } catch {
-      if (mounted.current) setMessage("Could not preview that batch.");
+      if (mounted.current && !stopped.current) {
+        setPreview(null);
+        setMessage(`Could not preview that batch. ${refreshNote}`);
+      }
+    }
+  }
+
+  async function previewBatch() {
+    if (!claimBatchRun(inflight)) return;
+    stopped.current = false;
+    try {
+      await loadPreview();
     } finally {
       releaseBatchRun(inflight);
       if (mounted.current) setBusy(null);
@@ -116,8 +128,12 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
       return;
     }
     stopped.current = false;
+    // A run consumes its preview. Keep the gate claimed through the read-only
+    // refresh so repeated clicks cannot reuse the old generation queue.
+    setPreview(null);
     setBusy("run");
     setMessage(null);
+    setResults(null);
     setCompleted(0);
     setTotal(queue.length);
     try {
@@ -138,6 +154,7 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
         },
       });
       if (mounted.current) setResults(runResults);
+      if (mounted.current && !stopped.current) await loadPreview();
     } catch {
       if (mounted.current) setMessage("Could not generate suggestions.");
     } finally {
@@ -168,9 +185,9 @@ export function LibraryBatch({ items }: { items: LibraryBatchItem[] }) {
           {preview ? (
             <>
               <p>
-                About {runnable.length} new classification {runnable.length === 1 ? "request" : "requests"}.
-                No price is shown because token usage and provider rates are not measured.
-                {skippedCount} skipped. {separateCount} need a separate decision.
+                About {runnable.length} new classification {runnable.length === 1 ? "request" : "requests"}.{" "}
+                No price is shown because token usage and provider rates are not measured.{" "}
+                {skippedCount} skipped. {separateCount} {separateCount === 1 ? "needs" : "need"} a separate decision.
               </p>
               <ul className="batch-list">
                 {preview.items.map((item) => (
