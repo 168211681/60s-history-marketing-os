@@ -74,6 +74,8 @@ test("projects and library stay private without an owner session", async ({ page
     await expect(page.getByText(/Sign in as the channel owner/)).toBeVisible();
     await expect(page.getByRole("button", { name: /Create/ })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "History in 60s" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Preview batch" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Confirm and generate" })).toHaveCount(0);
     await expect(page.locator('nav [aria-current="page"]')).toHaveAttribute("href", route);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -90,6 +92,47 @@ test("projects and library stay private without an owner session", async ({ page
   await expect(page.getByRole("button", { name: /Import \d+ videos/ })).toHaveCount(0);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
+});
+test("batch classification stays private and its controls fit an iPhone-sized viewport", async ({ page, request }) => {
+  const response = await page.goto("/library");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Preview batch" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Confirm and generate" })).toHaveCount(0);
+  const denied = await request.post("/api/content-items/classification-batch/preview", {
+    data: { ids: ["00000000-0000-4000-8000-000000000001"] },
+  });
+  expect([401, 403]).toContain(denied.status());
+  await page.locator("#main").evaluate((main) => {
+    const section = document.createElement("section");
+    section.className = "panel batch-classification";
+    section.innerHTML = `
+      <h2>Batch classification</h2>
+      <p>Select up to 5 content items per run. This is not a daily quota.</p>
+      <ul class="content-cards">
+        <li>
+          <label class="batch-select"><input type="checkbox" aria-label="Select Example clip for batch classification" /><span>Select</span></label>
+          <div class="batch-card">
+            <h3><a href="/library/00000000-0000-4000-8000-000000000001">Example clip with a long title that should wrap instead of widening the page on a phone</a></h3>
+            <p class="muted">H60 · History in 60s</p>
+          </div>
+        </li>
+      </ul>
+      <div class="form-actions batch-actions">
+        <button class="button" type="button">Preview batch</button>
+        <button class="button" type="button">Confirm and generate</button>
+      </div>
+      <ol class="batch-list">
+        <li><a href="/library/00000000-0000-4000-8000-000000000001">Example clip with a long title that should wrap instead of widening the page on a phone</a><p>Success</p><p class="muted">Suggestion stored. Review it on the clip.</p></li>
+      </ol>
+    `;
+    main.append(section);
+  });
+  const box = await page.locator(".batch-select").boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);
 });
 test("research workspace stays private without an owner session", async ({ page, request }) => {

@@ -14,13 +14,34 @@ verified on Staging and Production. Production's remote version is
 `20261007200200_clipforge_youtube_source_metadata.sql`. Production has 43
 YouTube videos, 43 metadata synced, 43 content items, and 172 platform posts.
 Sprint 004.2 adds reviewed AI suggestions for topic, content pillar, and
-production type. It is applied and verified on Staging and is not applied to
-Production. Staging has 44 content items and 3 suggestions (1 accepted, 1
-rejected, 1 pending). Production remains Sprint 004.1 with 43 content items.
+production type and is applied in both environments. Production records
+`20261008063522_clipforge_metadata_intelligence`; the repository file remains
+`20261008020000_clipforge_metadata_intelligence.sql`. Both this divergence and
+the Sprint 004.1 version difference are intentional; do not normalize or
+reapply migrations.
+
+The 2026-10-08 read-only verification recorded:
+
+| Environment | Content items | Videos | Platform posts | AI suggestions |
+| --- | ---: | ---: | ---: | ---: |
+| Production | 43 | 43 | 172 | 1 |
+| Staging | 44 | 43 | 176 | 10 |
+
+Forced RLS is enabled on `public.content_items` and
+`public.content_classification_suggestions` in both environments.
+
+Sprint 004.3A adds an owner-only batch of at most five sequential classification
+requests per run, with human review and no new migration. Staging owner
+acceptance on the Antikythera clip verified 1 new request, Confirm and generate,
+Success, and automatic preview refresh to 0 new / 1 skipped. The pending
+review suggestion persisted; canonical topic and pillar stayed unchanged.
+PR #39's Production rollout follows a squash merge after latest-head GitHub CI,
+both Vercel checks, and clean mergeability pass. Production inference smoke
+checks have not been performed for this release.
 Calendar and Archive remain labeled
 placeholders. Nothing is posted to YouTube, Facebook, TikTok, or Instagram.
 
-Internal video rendering, provider inference, artifact storage, production workers,
+Internal video rendering, its provider inference, artifact storage, production workers,
 YouTube upload, and public publishing remain retired. Historical production rows
 and audit events stay read-only.
 

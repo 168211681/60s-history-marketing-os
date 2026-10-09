@@ -56,13 +56,25 @@ Production's remote migration version is `20261007190850`
 `clipforge_youtube_source_metadata`. The repository filename remains
 `20261007200200_clipforge_youtube_source_metadata.sql`. That version difference
 is intentional. Do not normalize migration history and do not reapply the file.
-Sprint 004.2 (`20261008020000_clipforge_metadata_intelligence`) is applied and
-verified on Staging and is not applied to Production. Staging has 44 content
-items and 3 classification suggestions (1 accepted, 1 rejected, 1 pending).
-The verified Staging deployment commit is
-`af8edc5b57bb3304078b705224c55b23427ba6da`. Production remains Sprint 004.1
-with 43 content items, and its canonical deployment is unchanged. Do not apply
-004.2 to Production from this branch. The pull-request gate remains
-exact equality against Staging. Do not reapply earlier ClipForge migrations.
+Sprint 004.2 metadata intelligence is applied in both environments. The
+2026-10-08 read-only verification recorded Production migration
+`20261008063522_clipforge_metadata_intelligence`; the repository filename
+remains `20261008020000_clipforge_metadata_intelligence.sql`. Preserve this
+intentional remote/local version divergence. Do not rename or reapply it.
+Production has 43 content items, 43 videos, 172 platform posts, and 1 AI
+suggestion. Staging has 44 content items, 43 videos, 176 platform posts, and
+10 suggestions. Forced RLS is enabled on `public.content_items` and
+`public.content_classification_suggestions` in both environments.
+
+Sprint 004.3A batch classification has Staging owner acceptance. On the
+Antikythera clip, preview showed 1 new request; Confirm and generate returned
+Success; automatic preview refresh showed 0 new and 1 skipped. The pending
+review suggestion persisted, and canonical topic and pillar stayed unchanged.
+The batch reuses the single-item classify route, caps a run at five items,
+requires human review, and adds no migration. PR #39's release requires
+passing latest-head GitHub CI, both Vercel checks, and clean mergeability before
+a squash merge to `main`. Production inference is not a release smoke test.
+The pull-request migration gate remains exact equality against Staging.
+Do not reapply earlier ClipForge migrations.
 Production does not contain the password-setup migration and must not be
 normalized to add it.

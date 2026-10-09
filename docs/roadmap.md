@@ -115,7 +115,7 @@ Verified on Staging:
 
 ## ClipForge Sprint 004.2 — metadata intelligence
 
-**Status: applied and verified on Staging. Not applied to Production. The canonical Production deployment is unchanged.**
+**Status: applied in Staging and Production; current database state verified read-only on 2026-10-08. Do not reapply.**
 `20261008020000_clipforge_metadata_intelligence` adds `content_items.content_pillar`
 (text, at most 80 characters, default empty) and
 `public.content_classification_suggestions`. The classifier may suggest topic,
@@ -123,18 +123,25 @@ content pillar, and production type only. A person must accept the selected
 fields before canonical metadata changes. Generation, rejection, and an
 unconfigured provider do not invent or overwrite canonical fields. Format,
 language, captions, hashtags, YouTube source facts, R2, and publishing stay
-untouched. There is no batch classification. History in 60s (`H60`) pillars are
-an application rule, not a global database enum. Staging already has this
-migration. Do not reapply it there. Production still needs a separate explicit
-approval. Do not apply it to Production before that approval, and do not merge
-to `main` until it is applied and verified: merging deploys the app to
-Production automatically.
+untouched. Sprint 004.2 does not add batch classification. History in 60s (`H60`) pillars are
+an application rule, not a global database enum. Production records remote
+version `20261008063522_clipforge_metadata_intelligence`; the repository source
+remains `20261008020000_clipforge_metadata_intelligence.sql`. This difference,
+the Sprint 004.1 version difference, and the earlier Phase 6/7 divergence are
+intentional. Do not normalize migration history or reapply these migrations.
 
-The Production baseline remains Sprint 004.1 and must not be mutated: 43
-content items, topic empty, format unknown, and production type unknown.
-Sprint 004.2 is not applied there.
+Current read-only verification:
 
-Staging verification, deployment commit
+| Environment | Content items | Videos | Platform posts | AI suggestions |
+| --- | ---: | ---: | ---: | ---: |
+| Production | 43 | 43 | 172 | 1 |
+| Staging | 44 | 43 | 176 | 10 |
+
+Forced RLS is enabled on `public.content_items` and
+`public.content_classification_suggestions` in both environments. This release
+does not change schema or Production data.
+
+Initial Staging verification, deployment commit
 `af8edc5b57bb3304078b705224c55b23427ba6da`:
 
 - Forced RLS, owner SELECT-only access, server-side writes, constraints, and the ownership foreign key
@@ -146,7 +153,38 @@ Staging verification, deployment commit
 - A later Topic change made the suggestion stale and disabled Accept and Reject
 - A forced HTTP 409 against the hosted review endpoint was not performed; local regression tests cover that case
 - The smoke item topic was restored to `WWII Spitfire red gun-port patches`
-- Staging database: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending)
+- At that initial verification: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending); the current snapshot above supersedes those totals
+
+## ClipForge Sprint 004.3A — safe batch classification
+
+**Status: Staging owner acceptance complete. Production rollout follows the gated squash merge of PR #39. No new migration.**
+
+The library can preview up to five owned content items and then classify them
+one at a time through the existing `POST /api/content-items/[id]/classify`
+route. Items that already have a current suggestion are skipped. Stale items
+stay on their own clip for a separate decision. There is no bulk accept, no
+background worker, and no daily quota. Five items is a per-run limit. No price
+is shown because token usage and provider rates are not measured. Closing the
+page stops unstarted requests; suggestions already stored remain. Starting a
+run invalidates its actionable preview. Completion automatically fetches a
+read-only preview, preserving individual Success/Failed results while updating
+counts and statuses. Refresh failure clears the preview and requires a manual
+refresh before another confirmed run. Nothing is automatically retried.
+
+Staging owner acceptance on the Antikythera clip:
+
+- Batch preview showed 1 new request.
+- Confirm and generate returned Success.
+- Automatic preview refresh showed 0 new requests and 1 skipped.
+- The pending review suggestion persisted.
+- Canonical topic and content pillar stayed unchanged.
+
+No migration is added. The release requires passing latest-head GitHub CI,
+both Vercel checks, and clean PR mergeability before squash-merging PR #39 to
+`main`. The merge triggers the existing Production deployment flow; its
+deployment state must then be verified. Production inference smoke checks
+remain unperformed, and this release does not change provider settings or
+publishing flows.
 
 ## Phase 0 — repository and security baseline
 

@@ -53,5 +53,46 @@ fingerprint, and recorded the accepted fields. Reject left canonical metadata
 unchanged. After Topic changed, the panel treated the suggestion as stale and
 disabled Accept and Reject. A forced HTTP 409 against the hosted review
 endpoint was not performed; local regression tests cover that case. No API key,
-base URL, or model response text is recorded here. Production does not have
-this migration or this classification check.
+base URL, or model response text is recorded here. These are the initial
+Staging classification checks, not a Production smoke-test record.
+
+## Current verified database state
+
+The 2026-10-08 read-only verification recorded metadata intelligence applied
+in both environments. Production records migration
+`20261008063522_clipforge_metadata_intelligence`; the repository source remains
+`20261008020000_clipforge_metadata_intelligence.sql`. This version divergence
+is intentional. Do not rename, normalize, or reapply the migration.
+Production has 43 content items, 43 videos, 172 platform posts, and 1 AI
+suggestion. Staging has 44 content items, 43 videos, 176 platform posts, and
+10 suggestions. Forced RLS is enabled on `public.content_items` and
+`public.content_classification_suggestions` in both environments. This release
+does not change schema, provider settings, or Production data.
+
+## Batch classification
+
+Sprint 004.3A has Staging owner acceptance. An owner may preview at most five
+of their own content items and confirm a sequential run. Each new suggestion still uses
+`POST /api/content-items/[id]/classify`. The batch does not accept metadata,
+does not retry 429, 409, or 502 automatically, and does not show a currency
+cost. The cap is per run, not a daily quota. Gemini prompts and model settings
+are unchanged. Generation invalidates the old actionable preview immediately.
+After the run, a read-only preview refresh updates counts and statuses while
+preserving individual Success/Failed results. Repeated clicks cannot start
+duplicate classification requests. A failed refresh clears the preview and
+requires a manual Preview batch before another confirmed run. Pagehide and
+unmount stop unstarted requests and prevent late refreshes from restoring
+an actionable preview.
+
+Staging owner acceptance on the Antikythera clip verified:
+
+- Batch preview showed 1 new request.
+- Confirm and generate returned Success.
+- Automatic preview refresh showed 0 new requests and 1 skipped.
+- The suggestion persisted as pending review.
+- Canonical topic and content pillar stayed unchanged.
+
+No migration was added. Release through PR #39 requires passing latest-head
+GitHub CI, both Vercel checks, and clean mergeability before a squash merge.
+Production inference has not been run as a smoke test for this release;
+generating suggestions never automatically accepts or rejects them.

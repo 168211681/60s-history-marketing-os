@@ -17,6 +17,7 @@ import {
 import { ContentInputError, type ProductionType } from "./model";
 import { pillarAllowed } from "./pillars";
 import { classificationLockStatements } from "./classification-locks.mjs";
+import { assembleBatchPreview, parseBatchIds, type BatchFoundItem } from "./batch-classification";
 
 export type SuggestionRecord = {
   id: string;
@@ -200,20 +201,24 @@ async function reopenSuperseded(client: PoolClient, ownerId: string, contentItem
   return (await findByFingerprint(client, ownerId, contentItemId, fingerprint)) ?? row;
 }
 
+async function suggestionForContext(client: PoolClient, ownerId: string, contentItemId: string, fingerprint: string) {
+  const matched = await findByFingerprint(client, ownerId, contentItemId, fingerprint);
+  if (matched) return suggestion(matched, fingerprint);
+  const latest = await client.query<SuggestionRow>(
+    `${suggestionSelect}
+      where owner_id = $1 and content_item_id = $2 and status <> 'superseded'
+      order by created_at desc
+      limit 1`,
+    [ownerId, contentItemId],
+  );
+  return latest.rows[0] ? suggestion(latest.rows[0], fingerprint) : null;
+}
+
 export async function getMetadataSuggestion(ownerId: string, contentItemId: string) {
   return transaction(async (client) => {
     const context = await loadContext(client, ownerId, contentItemId);
     if (!context) return null;
-    const matched = await findByFingerprint(client, ownerId, contentItemId, context.fingerprint);
-    if (matched) return suggestion(matched, context.fingerprint);
-    const latest = await client.query<SuggestionRow>(
-      `${suggestionSelect}
-        where owner_id = $1 and content_item_id = $2 and status <> 'superseded'
-        order by created_at desc
-        limit 1`,
-      [ownerId, contentItemId],
-    );
-    return latest.rows[0] ? suggestion(latest.rows[0], context.fingerprint) : null;
+    return suggestionForContext(client, ownerId, contentItemId, context.fingerprint);
   });
 }
 
@@ -370,6 +375,42 @@ export async function classifyContentItem(ownerId: string, contentItemId: string
       return current ? { source: current.source, fingerprint: current.fingerprint } : null;
     },
   }));
+}
+
+export async function previewBatchClassification(ownerId: string, ids: unknown) {
+  const normalized = parseBatchIds(Array.isArray(ids) ? { ids } : ids);
+  if (!normalized.ok) return { kind: "invalid" as const, error: normalized.error };
+  const found = new Map<string, BatchFoundItem>();
+  for (const id of normalized.ids) {
+    const loaded = await transaction(async (client) => {
+      const identity = await client.query<{ id: string; title: string; project_id: string; project_name: string }>(
+        `select i.id, i.title, i.project_id, p.name as project_name
+           from public.content_items i
+           join public.projects p on p.id = i.project_id and p.owner_id = i.owner_id
+          where i.owner_id = $1 and i.id = $2`,
+        [ownerId, id],
+      );
+      const row = identity.rows[0];
+      if (!row) return null;
+      const context = await loadContext(client, ownerId, id);
+      if (!context) return null;
+      const current = await suggestionForContext(client, ownerId, id, context.fingerprint);
+      return { row, current };
+    });
+    if (!loaded) return { kind: "missing" as const };
+    found.set(id, {
+      id: loaded.row.id,
+      title: loaded.row.title,
+      projectId: loaded.row.project_id,
+      projectName: loaded.row.project_name,
+      hasSuggestion: Boolean(loaded.current),
+      status: loaded.current?.status ?? null,
+      stale: Boolean(loaded.current?.stale),
+    });
+  }
+  const assembled = assembleBatchPreview(normalized.ids, found);
+  if (!assembled.ok) return assembled.status === 404 ? { kind: "missing" as const } : { kind: "invalid" as const, error: assembled.error };
+  return { kind: "preview" as const, preview: assembled.preview };
 }
 
 export async function reviewLockedSuggestion(client: PoolClient, ownerId: string, contentItemId: string, suggestionId: string, action: "accept" | "reject", fields: readonly string[]) {
