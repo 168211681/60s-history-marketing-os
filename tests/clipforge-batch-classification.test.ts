@@ -177,7 +177,10 @@ test("batch classification does not write canonical metadata or add a bulk accep
   ];
   for (const file of files) {
     const source = readFileSync(file, "utf8");
-    assert.doesNotMatch(source, /reviewContentSuggestion|\/review|update public\.content_items|Accept selected|USD|\$\d/);
+    // The Library may link to the read-only /review queue; batch code still
+    // must never call an individual review action or expose bulk acceptance.
+    assert.doesNotMatch(source, /reviewContentSuggestion|\/api\/content-items\/[^\s]+\/review|update public\.content_items|Accept selected|USD|\$\d/);
+    if (file !== "src/app/library/page.tsx") assert.doesNotMatch(source, /\/review/);
   }
   const panel = readFileSync("src/components/batch-classification.tsx", "utf8");
   assert.match(panel, /pagehide/);

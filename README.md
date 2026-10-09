@@ -73,6 +73,7 @@ The optional database and browser checks are `npm run test:db` and `npm run test
 | `/` | Channel overview, metrics, recent videos and trend |
 | `/projects` | Owner projects. Create, edit, archive, and open a project |
 | `/library` | Owner content items, private files, and manual platform copy |
+| `/review` | Read-only owner metadata suggestions, state totals, search, project filters, and paginated clip links |
 | `/videos` | Video search and performance exploration |
 | `/distribution` | Manual cross-post queue. Does not publish |
 | `/calendar` | Placeholder. No schedule |

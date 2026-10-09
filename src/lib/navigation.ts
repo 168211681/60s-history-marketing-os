@@ -16,6 +16,7 @@ export const primaryNavigation: readonly NavLink[] = [
 ];
 
 export const workspaceNavigation: readonly NavLink[] = [
+  { href: "/review", label: "Metadata review", symbol: "✓" },
   { href: "/videos", label: "Videos", symbol: "▷" },
   { href: "/insights", label: "Insights", symbol: "✧" },
   { href: "/scripts", label: "Scripts", symbol: "✎" },

@@ -155,6 +155,20 @@ Initial Staging verification, deployment commit
 - The smoke item topic was restored to `WWII Spitfire red gun-port patches`
 - At that initial verification: 44 content items and 3 suggestions (1 accepted, 1 rejected, 1 pending); the current snapshot above supersedes those totals
 
+## ClipForge Sprint 004.4A — metadata review queue
+
+Implemented on `feat/clipforge-review-queue-0044a`; awaiting hosted owner acceptance.
+`/review` provides mobile cards, title search, project and review-state filters,
+exact owner-scoped totals, and 20-item pages with links to individual reviews.
+It preserves reviewed status for stale accepted/rejected suggestions and labels
+superseded history explicitly. It shares fingerprint/state logic with the
+existing classification flow. Reads are bounded, owner-scoped, and enforced by
+a read-only transaction; no new inference or review mutations are introduced.
+No migration, Production deployment, or change to the intentional migration
+version divergence is required. See `docs/ai.md` for query bounds and large-library
+tradeoffs. Staging should verify owner-session navigation, representative states,
+and iPhone Safari before release.
+
 ## ClipForge Sprint 004.3A — safe batch classification
 
 **Status: Staging owner acceptance complete. Production rollout follows the gated squash merge of PR #39. No new migration.**
