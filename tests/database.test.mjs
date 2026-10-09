@@ -1360,9 +1360,8 @@ async function rivalReleased(channel) {
 }
 
 test("review queue reads an owner snapshot with bounded pagination, current suggestions, and no writes", async () => {
-  const { tsImport } = await import("tsx/esm/api");
-  const { readReviewQueue } = await tsImport("../src/lib/clipforge/review-queue-read.ts", import.meta.url);
-  const { classificationFingerprint } = await tsImport("../src/lib/clipforge/classification.ts", import.meta.url);
+  const { readReviewQueue } = await import("../src/lib/clipforge/review-queue-read.ts");
+  const { classificationFingerprint } = await import("../src/lib/clipforge/classification.ts");
   const { currentSuggestionsSql, reviewContextsSql } = await import("../src/lib/clipforge/classification-read-sql.mjs");
   const id = (n) => `00440000-0000-4000-8000-${String(n).padStart(12, "0")}`;
   const owner = id(900), other = id(901), project = id(800), emptyProject = id(801), foreignProject = id(802);
