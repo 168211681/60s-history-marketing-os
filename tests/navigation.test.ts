@@ -10,6 +10,7 @@ test("ClipForge navigation keeps the new sections and the working routes", () =>
   assert.deepEqual(
     workspaceNavigation.map((link) => [link.label, link.href]),
     [
+      ["Metadata review", "/review"],
       ["Videos", "/videos"],
       ["Insights", "/insights"],
       ["Scripts", "/scripts"],

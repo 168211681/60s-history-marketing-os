@@ -69,6 +69,32 @@ suggestion. Staging has 44 content items, 43 videos, 176 platform posts, and
 `public.content_classification_suggestions` in both environments. This release
 does not change schema, provider settings, or Production data.
 
+## Metadata review queue
+
+Sprint 004.4A adds `/review`, an owner-only, read-only metadata review queue.
+It shows one selected suggestion per clip, with topic, pillar, production type,
+confidence, and concise rationale. Missing confidence remains unavailable.
+Title and project filters scope the state totals; state filters select the cards.
+Accept, Reject, and Regenerate remain on the individual clip page.
+
+The queue shares the clip review's source mapping, classification fingerprint,
+and current-suggestion selection: exact fingerprint and prompt first, otherwise
+the latest non-superseded record. Equal timestamps use the suggestion UUID as a
+deterministic tie-break. Exact-matching superseded records are explicitly labeled
+historical, never pending. Accepted and rejected records retain their decisions
+when their source changes, with a separate source-changed notice.
+
+The reader uses an owner-scoped, read-only repeatable-read transaction. It reads
+100 source records at a time using a timestamp/UUID cursor and fetches selected
+suggestions in one set query per batch; it retains only the requested 20 cards.
+It never loads full suggestion histories or issues per-clip database requests.
+Exact stale totals require scanning the filtered library with the existing Node
+fingerprint function. Each query has a five-second timeout and the scan checks
+a fifteen-second deadline between batches; failures show no partial totals.
+Very large libraries may require a later performance design. No migration,
+inference, provider configuration, canonical metadata, or publishing change is
+part of this sprint. Hosted owner acceptance remains a separate gate.
+
 ## Batch classification
 
 Sprint 004.3A has Staging owner acceptance. An owner may preview at most five

@@ -1358,3 +1358,100 @@ async function rivalReleased(channel) {
     await client.end();
   }
 }
+
+test("review queue reads an owner snapshot with bounded pagination, current suggestions, and no writes", async () => {
+  const { readReviewQueue } = await import("../src/lib/clipforge/review-queue-read.ts");
+  const { classificationFingerprint } = await import("../src/lib/clipforge/classification.ts");
+  const { currentSuggestionsSql, reviewContextsSql } = await import("../src/lib/clipforge/classification-read-sql.mjs");
+  const id = (n) => `00440000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const owner = id(900), other = id(901), project = id(800), emptyProject = id(801), foreignProject = id(802);
+  const client = new Client({ host: root, port: 5432, user: "postgres", database: "postgres" });
+  await client.connect();
+  const filters = { state: "all", project: "", q: "", page: 1 };
+  const title = (n) => n === 9 ? "Literal 50%_clip" : n === 10 ? "Literal 50ABclip" : `Review clip ${n}`;
+  const fingerprint = (n) => classificationFingerprint({ title: title(n), topic: "", productionType: "unknown", projectCode: "H60", youtube: null });
+  const add = async (n, suggestionId, status, hash, topic, prompt = "clipforge-metadata-v1", created = "2026-10-09T01:00:00Z") => {
+    await client.query(`insert into public.content_classification_suggestions
+      (id, content_item_id, owner_id, suggested_topic, suggested_production_type, topic_confidence,
+       provider, model, prompt_version, source_fingerprint, status, created_at)
+      values ($1,$2,$3,$4,'unknown',null,'test','test',$5,$6,$7,$8)`,
+    [id(suggestionId), id(n), n === 106 ? other : owner, topic, prompt, hash, status, created]);
+  };
+  const run = async (input = filters, requestOwner = owner, role = "service_role", sessionOwner = owner) => {
+    await client.query("begin");
+    try {
+      assert.ok(["service_role", "authenticated", "anon"].includes(role));
+      await client.query(`set local role ${role}`);
+      await client.query(`set local request.jwt.claim.sub = '${sessionOwner}'`);
+      const result = await readReviewQueue(client, requestOwner, input);
+      assert.equal((await client.query("show transaction_read_only")).rows[0].transaction_read_only, "on");
+      assert.equal((await client.query("show transaction_isolation")).rows[0].transaction_isolation, "repeatable read");
+      return result;
+    } finally { await client.query("rollback"); }
+  };
+  try {
+    await client.query("insert into auth.users(id) values($1),($2)", [owner, other]);
+    await client.query("insert into public.users(id) values($1),($2)", [owner, other]);
+    await client.query("insert into public.projects(id,owner_id,name,code) values($1,$2,'Queue test','H60'),($3,$2,'Empty project','EMPTY'),($4,$5,'FOREIGN SECRET PROJECT','H60')", [project,owner,emptyProject,foreignProject,other]);
+    for (let n = 1; n <= 106; n++) {
+      await client.query(`insert into public.content_items(id,project_id,owner_id,title,created_at)
+        values($1,$2,$3,$4,'2026-10-09 00:00:00.123456+00')`, [id(n), n === 106 ? foreignProject : project, n === 106 ? other : owner, title(n)]);
+    }
+    await add(1, 2001, "pending", fingerprint(1), "Exact match wins");
+    await add(1, 3001, "pending", "b".repeat(64), "Newer but mismatched", undefined, "2026-10-09T02:00:00Z");
+    await add(2, 2002, "pending", "b".repeat(64), "Stale pending");
+    await add(3, 2003, "accepted", "b".repeat(64), "Reviewed accepted");
+    await add(4, 2004, "rejected", "b".repeat(64), "Reviewed rejected");
+    await add(5, 2005, "superseded", fingerprint(5), "Historical exact match");
+    await add(5, 3005, "pending", "b".repeat(64), "Different context", undefined, "2026-10-09T02:00:00Z");
+    await add(6, 2006, "superseded", "b".repeat(64), "Only historical, not current");
+    await add(7, 2007, "pending", "b".repeat(64), "Tie loses");
+    await add(7, 3007, "rejected", "c".repeat(64), "Tie wins by UUID");
+    await add(8, 2008, "accepted", fingerprint(8), "Old prompt", "old-prompt");
+    await add(8, 3008, "pending", "b".repeat(64), "Latest current prompt", undefined, "2026-10-09T02:00:00Z");
+    await add(106, 2106, "pending", fingerprint(106), "FOREIGN SECRET SUGGESTION");
+    const before = await client.query("select (select jsonb_agg(i order by id) from public.content_items i where owner_id=$1) as items, (select jsonb_agg(s order by id) from public.content_classification_suggestions s where owner_id=$1) as suggestions", [owner]);
+    const first = await run();
+    assert.deepEqual(first.totals, { all: 105, pending: 1, stale: 2, accepted: 1, rejected: 2, not_generated: 98, superseded: 1 });
+    assert.equal(first.pageCount, 6);
+    assert.equal(first.items.length, 20);
+    assert.equal(first.items[0].id, id(105));
+    assert.equal(first.projects.length, 2);
+    assert.equal(JSON.stringify(first).includes("FOREIGN SECRET"), false);
+    const allIds = [];
+    for (let page = 1; page <= 6; page++) {
+      const result = await run({ ...filters, page });
+      allIds.push(...result.items.map((item) => item.id));
+    }
+    assert.deepEqual(allIds, Array.from({length:105}, (_,i) => id(105 - i)));
+    assert.equal(new Set(allIds).size, 105);
+    assert.deepEqual((await run({ ...filters, page: 6 })).items.map((item) => item.id), [5,4,3,2,1].map(id));
+    const fresh = await run({ ...filters, state: "pending" });
+    assert.equal(fresh.items[0].suggestion.suggestedTopic, "Exact match wins");
+    assert.equal(fresh.items[0].suggestion.topicConfidence, null);
+    assert.equal((await run({ ...filters, state: "accepted" })).items[0].suggestion.stale, true);
+    assert.deepEqual((await run({ ...filters, state: "rejected" })).items.map((item) => item.id), [id(7), id(4)]);
+    assert.equal((await run({ ...filters, state: "superseded" })).items[0].suggestion.status, "superseded");
+    assert.equal((await run({ ...filters, q: "Literal 50%_" })).items[0].id, id(9));
+    assert.equal((await run({ ...filters, q: "Literal 50%_" })).totals.all, 1);
+    for (const input of [{ ...filters, project: emptyProject }, { ...filters, project: foreignProject }, { ...filters, q: "' OR true --" }]) {
+      assert.equal((await run(input)).totals.all, 0);
+    }
+    assert.equal((await run({ ...filters, page: 99 })).items.length, 0);
+    // RLS and explicit ownership predicates are both tested, including a forged
+    // owner argument under an authenticated session and a privileged reader.
+    assert.deepEqual((await run(filters, owner, "authenticated")).totals, first.totals);
+    assert.equal((await run(filters, other, "authenticated", owner)).totals.all, 0);
+    assert.equal((await run(filters, other, "authenticated", owner)).projects.length, 0);
+    await assert.rejects(run(filters, owner, "anon"), (error) => error.code === "42501");
+    await client.query("begin read only");
+    await client.query("set local role service_role");
+    const cross = await client.query(currentSuggestionsSql, [owner, [id(106)], [fingerprint(106)], "clipforge-metadata-v1"]);
+    assert.equal(cross.rows.length, 0);
+    assert.equal((await client.query(reviewContextsSql, [owner, foreignProject, "", null, null])).rows.length, 0);
+    await assert.rejects(client.query("update public.content_items set topic='forbidden' where id=$1", [id(1)]), (error) => error.code === "25006");
+    await client.query("rollback");
+    const after = await client.query("select (select jsonb_agg(i order by id) from public.content_items i where owner_id=$1) as items, (select jsonb_agg(s order by id) from public.content_classification_suggestions s where owner_id=$1) as suggestions", [owner]);
+    assert.deepEqual(after.rows, before.rows);
+  } finally { await client.end(); }
+});

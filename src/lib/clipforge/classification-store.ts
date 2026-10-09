@@ -1,4 +1,7 @@
 import type { PoolClient } from "pg";
+import { classificationContextSelect, currentSuggestionsSql } from "./classification-read-sql.mjs";
+import { sourceFromRow, suggestion, type ContextRow, type SuggestionRow } from "./classification-read";
+export type { SuggestionRecord } from "./classification-read";
 import { aiProvider } from "@/lib/ai/provider";
 import { transaction } from "@/lib/database";
 import {
@@ -9,79 +12,13 @@ import {
   finalizeClassification,
   reviewClassification,
   suggestionIsStale,
-  type ClassificationField,
   type ClassificationResult,
   type ClassificationSource,
-  type ClassificationYoutube,
 } from "./classification";
-import { ContentInputError, type ProductionType } from "./model";
+import { ContentInputError } from "./model";
 import { pillarAllowed } from "./pillars";
 import { classificationLockStatements } from "./classification-locks.mjs";
 import { assembleBatchPreview, parseBatchIds, type BatchFoundItem } from "./batch-classification";
-
-export type SuggestionRecord = {
-  id: string;
-  contentItemId: string;
-  suggestedTopic: string | null;
-  suggestedContentPillar: string | null;
-  suggestedProductionType: ProductionType;
-  topicConfidence: number | null;
-  pillarConfidence: number | null;
-  productionTypeConfidence: number | null;
-  topicRationale: string;
-  pillarRationale: string;
-  productionTypeRationale: string;
-  provider: string;
-  model: string;
-  promptVersion: string;
-  sourceFingerprint: string;
-  sourceMetadataSyncedAt: string | null;
-  status: "pending" | "accepted" | "rejected" | "superseded";
-  acceptedFields: ClassificationField[];
-  createdAt: string;
-  reviewedAt: string | null;
-  stale: boolean;
-};
-
-type SuggestionRow = {
-  id: string;
-  content_item_id: string;
-  suggested_topic: string | null;
-  suggested_content_pillar: string | null;
-  suggested_production_type: ProductionType;
-  topic_confidence: string | null;
-  pillar_confidence: string | null;
-  production_type_confidence: string | null;
-  topic_rationale: string;
-  pillar_rationale: string;
-  production_type_rationale: string;
-  provider: string;
-  model: string;
-  prompt_version: string;
-  source_fingerprint: string;
-  source_metadata_synced_at: Date | string | null;
-  status: SuggestionRecord["status"];
-  accepted_fields: string[] | null;
-  created_at: Date | string;
-  reviewed_at: Date | string | null;
-};
-
-type ContextRow = {
-  title: string;
-  topic: string;
-  production_type: ProductionType;
-  project_code: string | null;
-  content_pillar: string;
-  youtube_video_id: string | null;
-  source_title: string | null;
-  description: string | null;
-  tags: string[] | null;
-  category_id: string | null;
-  default_language: string | null;
-  default_audio_language: string | null;
-  privacy_status: string | null;
-  metadata_synced_at: Date | string | null;
-};
 
 const suggestionSelect = `
   select id, content_item_id, suggested_topic, suggested_content_pillar, suggested_production_type,
@@ -90,86 +27,9 @@ const suggestionSelect = `
          source_fingerprint, source_metadata_synced_at, status, accepted_fields, created_at, reviewed_at
     from public.content_classification_suggestions`;
 
-function iso(value: Date | string) {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function numberOrNull(value: string | null) {
-  if (value === null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function suggestion(row: SuggestionRow, currentFingerprint: string): SuggestionRecord {
-  return {
-    id: row.id,
-    contentItemId: row.content_item_id,
-    suggestedTopic: row.suggested_topic,
-    suggestedContentPillar: row.suggested_content_pillar,
-    suggestedProductionType: row.suggested_production_type,
-    topicConfidence: numberOrNull(row.topic_confidence),
-    pillarConfidence: numberOrNull(row.pillar_confidence),
-    productionTypeConfidence: numberOrNull(row.production_type_confidence),
-    topicRationale: row.topic_rationale,
-    pillarRationale: row.pillar_rationale,
-    productionTypeRationale: row.production_type_rationale,
-    provider: row.provider,
-    model: row.model,
-    promptVersion: row.prompt_version,
-    sourceFingerprint: row.source_fingerprint,
-    sourceMetadataSyncedAt: row.source_metadata_synced_at ? iso(row.source_metadata_synced_at) : null,
-    status: row.status,
-    acceptedFields: (row.accepted_fields ?? []).filter((field): field is ClassificationField =>
-      field === "topic" || field === "content_pillar" || field === "production_type"),
-    createdAt: iso(row.created_at),
-    reviewedAt: row.reviewed_at ? iso(row.reviewed_at) : null,
-    stale: suggestionIsStale(row.source_fingerprint, currentFingerprint),
-  };
-}
-
-function sourceFromRow(row: ContextRow): ClassificationSource {
-  const youtube: ClassificationYoutube | null = row.youtube_video_id
-    ? {
-        youtubeVideoId: row.youtube_video_id,
-        title: row.source_title ?? "",
-        description: row.description ?? "",
-        tags: Array.isArray(row.tags) ? row.tags : [],
-        categoryId: row.category_id,
-        defaultLanguage: row.default_language,
-        defaultAudioLanguage: row.default_audio_language,
-        privacyStatus: row.privacy_status,
-        metadataSyncedAt: row.metadata_synced_at ? iso(row.metadata_synced_at) : null,
-      }
-    : null;
-  return {
-    title: row.title,
-    topic: row.topic,
-    productionType: row.production_type,
-    projectCode: row.project_code,
-    youtube,
-  };
-}
-
 async function loadContext(client: PoolClient, ownerId: string, contentItemId: string) {
   const result = await client.query<ContextRow>(
-    `select i.title, i.topic, i.production_type, i.content_pillar, p.code as project_code,
-            v.youtube_video_id, v.title as source_title, v.description, v.tags, v.category_id,
-            v.default_language, v.default_audio_language, v.privacy_status, v.metadata_synced_at
-       from public.content_items i
-       join public.projects p on p.id = i.project_id and p.owner_id = i.owner_id
-       left join lateral (
-         select v.youtube_video_id, v.title, v.description, v.tags, v.category_id,
-                v.default_language, v.default_audio_language, v.privacy_status, v.metadata_synced_at
-           from public.platform_posts pp
-           join public.videos v on v.youtube_video_id = pp.platform_post_id
-           join public.channels c on c.id = v.channel_id and c.owner_id = pp.owner_id
-          where pp.owner_id = i.owner_id
-            and pp.content_item_id = i.id
-            and pp.platform = 'youtube'
-            and pp.platform_post_id is not null
-          order by v.published_at nulls last, c.id
-          limit 1
-       ) v on true
+    `${classificationContextSelect}
       where i.owner_id = $1 and i.id = $2`,
     [ownerId, contentItemId],
   );
@@ -202,16 +62,10 @@ async function reopenSuperseded(client: PoolClient, ownerId: string, contentItem
 }
 
 async function suggestionForContext(client: PoolClient, ownerId: string, contentItemId: string, fingerprint: string) {
-  const matched = await findByFingerprint(client, ownerId, contentItemId, fingerprint);
-  if (matched) return suggestion(matched, fingerprint);
-  const latest = await client.query<SuggestionRow>(
-    `${suggestionSelect}
-      where owner_id = $1 and content_item_id = $2 and status <> 'superseded'
-      order by created_at desc
-      limit 1`,
-    [ownerId, contentItemId],
-  );
-  return latest.rows[0] ? suggestion(latest.rows[0], fingerprint) : null;
+  const result = await client.query<SuggestionRow>(currentSuggestionsSql, [
+    ownerId, [contentItemId], [fingerprint], classificationPromptVersion,
+  ]);
+  return result.rows[0] ? suggestion(result.rows[0], fingerprint) : null;
 }
 
 export async function getMetadataSuggestion(ownerId: string, contentItemId: string) {

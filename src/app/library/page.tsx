@@ -45,7 +45,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   }
   return (
     <>
-      <PageHeading eyebrow="CLIPFORGE" title="Library" description="Search content, file status, and how many platforms are already published or skipped." />
+      <PageHeading eyebrow="CLIPFORGE" title="Library" description="Search content, file status, and how many platforms are already published or skipped." action={<Link className="text-link" href="/review">Metadata review queue →</Link>} />
       <Panel title="Filter" description="Filters apply to your records only.">
         <form className="filters" method="get">
           <label className="search-label">Search title, topic, or key
