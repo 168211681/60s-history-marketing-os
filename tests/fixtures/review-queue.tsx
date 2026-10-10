@@ -10,6 +10,8 @@ declare global {
 
 // Mounted only in an intercepted browser test document, never in the app.
 const { filters, data, mode } = window.reviewFixture;
-createRoot(document.getElementById("root")!).render(
+const root = createRoot(document.getElementById("root")!);
+window.addEventListener("test:unmount", () => root.unmount());
+root.render(
   mode === "loading" ? <ReviewQueueLoading /> : mode ? <ReviewQueueUnavailable invalid={mode === "invalid"} /> : <ReviewQueue filters={filters} data={data} />,
 );

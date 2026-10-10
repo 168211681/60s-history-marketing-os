@@ -60,7 +60,8 @@ test("owner queue cards show every state, reviewed staleness, null confidence, a
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
-  await expect(page.getByRole("button", { name: /Accept|Reject|Regenerate|Generate/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Preview accept" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Regenerate|Generate/ })).toHaveCount(0);
   expect(await page.content()).not.toContain("PRIVATE_PROVIDER");
   expect(requests).toEqual([]);
   expect(errors).toEqual([]);
