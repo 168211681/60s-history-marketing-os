@@ -66,6 +66,8 @@ insert into auth.users values(1);
 class BackupRestoreTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if os.geteuid() == 0:
+            raise RuntimeError("Synthetic PostgreSQL fixtures must run as an unprivileged user")
         cls.root = Path(tempfile.mkdtemp(prefix="clipforge-backup-test-"))
         cls.root.chmod(0o700)
         cls.env = {k: v for k, v in os.environ.items() if not k.startswith("PG") and
@@ -77,6 +79,8 @@ class BackupRestoreTests(unittest.TestCase):
             cls.command("initdb", "-D", str(cls.root / "data"), "--username=postgres", "--auth-local=trust", "--auth-host=reject", "--no-locale", "--encoding=UTF8")
             cls.command("pg_ctl", "-D", str(cls.root / "data"), "-l", str(cls.root / "postgres.log"), "-o", f"-F -k {cls.root} -h '' -p 5432", "-w", "start")
             cls.server_started = True
+            if cls.sql("show listen_addresses") != "":
+                raise AssertionError("Synthetic PostgreSQL must have no TCP listener")
             cls.sql("create role fixture_reader nologin nobypassrls")
         except Exception:
             cls.tearDownClass()
@@ -399,6 +403,72 @@ os.execv({str(self.bin / name)!r}, [{name!r}] + sys.argv[1:])
         self.assertTrue(all(c["pg"]["PGHOST"] == str(self.root) for c in calls))
         self.assertTrue(all(c["pg"]["PGPORT"] == "5432" for c in calls))
 
+    def test_23_scram_passfile_success_and_wrong_password_refusal(self):
+        # Generated exclusively for this private local cluster, never a hosted
+        # credential. Exercise real password authentication, not trust-only auth.
+        self.password = secrets.token_hex(32)
+        correct = "*:*:*:postgres:" + self.password + "\n"
+        self.passfile.write_text(correct)
+        self.sql("alter role postgres password '" + self.password + "'")
+        hba = self.root / "data" / "pg_hba.conf"
+        original_hba = hba.read_text()
+        original_admin_env = dict(type(self).env)
+        try:
+            hba.write_text("local all all scram-sha-256\nhost all all 0.0.0.0/0 reject\nhost all all ::0/0 reject\n")
+            self.command("pg_ctl", "-D", str(self.root / "data"), "reload")
+            type(self).env["PGPASSFILE"] = str(self.passfile)
+            self.assertEqual(self.sql("select auth_method from pg_hba_file_rules where type='local'"), "scram-sha-256")
+            before = self.sql("select jsonb_agg(to_jsonb(c) order by id) from public.content_items c", self.source)
+            self.passfile.write_text("*:*:*:postgres:intentionally-wrong-synthetic-password\n")
+            failed = self.deny("backup")
+            self.assertNotIn("intentionally-wrong-synthetic-password", failed.stdout + failed.stderr)
+            self.assertEqual(list(self.store.iterdir()), [])
+            self.passfile.write_text(correct)
+            self.backup()
+            restored = self.invoke("restore")
+            self.assertEqual(restored.returncode, 0, restored.stderr)
+            self.assertEqual(self.sql("select jsonb_agg(to_jsonb(c) order by id) from public.content_items c", self.target), before)
+            self.assertEqual(self.sql("select jsonb_agg(to_jsonb(c) order by id) from public.content_items c", self.source), before)
+            self.assertNotIn(self.password, self.calls.read_text())
+        finally:
+            hba.write_text(original_hba)
+            self.command("pg_ctl", "-D", str(self.root / "data"), "reload")
+            type(self).env = original_admin_env
+
+    def test_24_storage_flags_are_attestations_not_encryption_detection(self):
+        # Passing this test demonstrates the operator contract, NOT encryption.
+        with patch.dict(os.environ, self.settings, clear=True):
+            self.assertEqual(tooling.storage(), self.store)
+        for flag in ("TRUSTED_BACKUP_HOST", "BACKUP_STORAGE_VERIFIED_ENCRYPTED", "BACKUP_SCOPE_APPROVED"):
+            with patch.dict(os.environ, self.settings | {flag: "NO"}, clear=True):
+                with self.assertRaises(tooling.Refused):
+                    tooling.storage()
+
+
+class SafetyCIResult(unittest.TextTestResult):
+    """Fail closed on incomplete runs; never print potentially sensitive errors."""
+
+    def printErrors(self):
+        # Test names/statuses and aggregate counts remain visible. An assertion
+        # failure can otherwise echo a passfile or deliberately hostile stderr.
+        if self.errors or self.failures:
+            self.stream.writeln("Failure diagnostics suppressed; reproduce with synthetic fixtures locally.")
+
+    def wasSuccessful(self):
+        return super().wasSuccessful() and self.testsRun >= 24 and not self.skipped
+
+
+class SafetyCIRunner(unittest.TextTestRunner):
+    resultclass = SafetyCIResult
+
+    def run(self, test):
+        result = super().run(test)
+        self.stream.writeln(f"Supplemental backup safety: {result.testsRun} executed, "
+                            f"{len(result.failures)} failures, {len(result.errors)} errors, {len(result.skipped)} skipped; "
+                            f"{'PASS' if result.wasSuccessful() else 'FAIL (24+ required, no skips)'}. "
+                            "Not a replacement for staging equality or proof of real recovery.")
+        return result
+
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2, testRunner=SafetyCIRunner if os.environ.get("BACKUP_SAFETY_CI") == "1" else None)

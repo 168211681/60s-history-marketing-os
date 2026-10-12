@@ -1,0 +1,114 @@
+name: Backup/restore synthetic safety (supplemental)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# Supplemental only. Never replaces the unchanged staging migration equality gate.
+permissions:
+  contents: read
+
+jobs:
+  synthetic-safety:
+    name: Supplemental backup safety — no hosted database
+    if: >-
+      github.repository == '168211681/60s-history-marketing-os' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the exact trusted source without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install PostgreSQL 17 from the authenticated official APT repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(dpkg --print-architecture)" = amd64
+          test "$(lsb_release --codename --short)" = noble
+          # GitHub's Ubuntu 24.04 image supplies Python, Node/npm and ShellCheck.
+          # No npm install, remote setup scripts, or third-party binaries.
+          python3 -c 'import sys; assert sys.version_info >= (3, 11)'
+          node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'
+          command -v npm
+          command -v shellcheck
+          printf 'Runner image: %s / %s\n' "${ImageOS:?Missing runner image identity}" "${ImageVersion:?Missing runner image version}"
+          git rev-parse HEAD
+          umask 077
+          key_dir="$(mktemp -d "$RUNNER_TEMP/clipforge-pgdg.XXXXXX")"
+          trap 'rm -rf "$key_dir"' EXIT
+          mkdir -m 700 "$key_dir/gnupg"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            --output "$key_dir/pgdg.asc"
+          # Pin the official PGDG primary signing-key fingerprint, independently
+          # of HTTPS. Key rotation fails closed for review; never trust-key bypass.
+          fingerprint="$(gpg --batch --no-options --homedir "$key_dir/gnupg" \
+            --show-keys --with-colons "$key_dir/pgdg.asc" \
+            | awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }')"
+          test "$fingerprint" = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          sudo install -m 0644 "$key_dir/pgdg.asc" /usr/share/keyrings/clipforge-pgdg.asc
+          printf '%s\n' \
+            'deb [arch=amd64 signed-by=/usr/share/keyrings/clipforge-pgdg.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' \
+            | sudo tee /etc/apt/sources.list.d/clipforge-pgdg.list >/dev/null
+          # Do not create or start a package-managed TCP cluster. The tests own
+          # their unprivileged, disposable Unix-socket cluster exclusively.
+          printf 'create_main_cluster = false\nstart_conf = manual\n' \
+            | sudo tee /etc/postgresql-common/createcluster.conf >/dev/null
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            -o Dpkg::Options::=--force-confold \
+            postgresql-17 postgresql-client-17 postgresql-server-dev-17
+          sudo systemctl stop postgresql
+          pg_bin=/usr/lib/postgresql/17/bin
+          for pg_tool in pg_config postgres initdb pg_ctl psql pg_dump pg_restore; do
+            test -x "$pg_bin/$pg_tool"
+            version="$("$pg_bin/$pg_tool" --version)"
+            printf '%s: %s\n' "$pg_tool" "$version"
+            [[ "$version" =~ (^|[[:space:]])17\. ]]
+          done
+          test "$("$pg_bin/pg_config" --bindir)" = "$pg_bin"
+
+      - name: Syntax and ShellCheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/db/backup-production.sh scripts/db/restore-verify.sh
+          shellcheck scripts/db/backup-production.sh scripts/db/restore-verify.sh
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for name in ('scripts/db/backup_restore.py', 'tests/backup-restore.test.py'):
+              ast.parse(Path(name).read_text())
+          PY
+          git diff --check
+
+      - name: Run genuine PostgreSQL fixtures without network or inherited credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(id -u)" -ne 0
+          fixture_dir="$(mktemp -d "$RUNNER_TEMP/clipforge-safety.XXXXXX")"
+          trap 'rm -rf "$fixture_dir"' EXIT
+          runner_user="$(id -un)"
+          node_bin="$(dirname "$(command -v node)")"
+          # Root is used ONLY to create the network namespace and drop to the
+          # runner UID. No test or initdb executes as root. No egress fallback.
+          # No secrets, service/passfiles or ambient cloud/PG settings are passed.
+          sudo unshare --net -- runuser -u "$runner_user" -- \
+            env -i HOME="$fixture_dir" TMPDIR="$fixture_dir" \
+            PATH="/usr/lib/postgresql/17/bin:$node_bin:/usr/local/bin:/usr/bin:/bin" \
+            BACKUP_SAFETY_CI=1 \
+            npm run test:backup-restore
+          test -z "$(find "$fixture_dir" -maxdepth 1 -type d -name 'clipforge-backup-test-*' -print -quit)"
+          printf '%s\n' \
+            'Supplemental synthetic safety passed. This does not satisfy staging equality or prove real recovery.' \
+            >> "$GITHUB_STEP_SUMMARY"
+          # No artifact upload: never retain database files, credentials or dumps.
