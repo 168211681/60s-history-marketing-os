@@ -22,12 +22,11 @@ the evidence record rather than treating old pre-apply checklists as pending wor
   Production's remote migration version is `20261007190850`
   `clipforge_youtube_source_metadata`. The repository filename remains
   `20261007200200_clipforge_youtube_source_metadata.sql`. That difference is
-  intentional. Do not normalize it or reapply the file. Sprint 004.2
-  (`20261008020000_clipforge_metadata_intelligence`) is applied and verified on
-  Staging and is not applied to Production. Staging has 44 content items and 3
-  classification suggestions (1 accepted, 1 rejected, 1 pending). Production
-  remains Sprint 004.1 with 43 content items. Do not reapply 004.2 to Staging
-  and do not apply it to Production from this runbook.
+  intentional. Do not normalize it or reapply the file. Sprint 004.2 was
+  subsequently verified in both environments (2026-10-08 evidence in AGENTS.md).
+  Production records `20261008063522_clipforge_metadata_intelligence`, while
+  source remains `20261008020000_clipforge_metadata_intelligence.sql`. These
+  versions intentionally differ. Do not reapply either historical migration.
 - Production records Phase 7 as
   `20260924151134_research_fact_checking`. The local source remains
   `supabase/migrations/20260924041349_research_fact_checking.sql`. This history
@@ -76,75 +75,45 @@ record. It does not require the Production timestamp to equal the local source
 timestamp. Any future Production migration remains an explicit human-approved
 operation.
 
-## Required access and credentials
+## Current backup/restore preparation (PR #41)
 
-The operator needs a Supabase project owner/database connection with permission
-to create a backup and inspect grants. Use a trusted terminal and environment
-variables only. Never put a URL, password, service-role key, or token in this
-repository, shell history, logs, or chat.
+The previous URL-based backup/restore commands are superseded by
+[`backup-restore-operator.md`](backup-restore-operator.md). They exposed database
+passwords in process arguments and did not enforce a local-only restore target.
+Use only the hardened service/passfile workflow after separate owner approval.
+Phase A is preparation with synthetic local data only; no real Production backup,
+restore, migration, encrypted off-host copy, or recoverability is claimed.
 
-Required values are supplied only at execution time:
+The scripts now require private service/passfiles outside the checkout, explicit
+storage/identity approval gates, a scoped read-only snapshot, and a fresh local
+restore target. Restore must complete without errors and match recorded counts,
+columns, constraints, indexes, triggers and RLS definitions. Never treat dump
+creation or manifest parsing alone as restore success.
 
-- `DATABASE_URL`: production connection used only by `backup-production.sh`.
-- `EXPECTED_PRODUCTION_DATABASE_NAME` and `EXPECTED_PRODUCTION_SERVER_ADDRESS`:
-  values independently verified in the Supabase dashboard/DB session.
-- `STAGING_DATABASE_URL`: disposable/staging connection used only by
-  `apply-staging-migration.sh`.
-- `EXPECTED_STAGING_DATABASE_NAME` and `EXPECTED_STAGING_SERVER_ADDRESS`:
-  independently verified staging identity values.
-- `RESTORE_TARGET_DATABASE_URL`: local disposable restore target.
-- `EXPECTED_RESTORE_DATABASE_NAME` and `EXPECTED_RESTORE_SERVER_ADDRESS`:
-  identity values for that disposable target; `RESTORE_TARGET_LABEL` must be
-  exactly `disposable`.
+`current_database()` and `inet_server_addr()` are extra mismatch checks, not
+project authentication: hosted projects often share the name `postgres` and a
+pooler address. Independently verify the Production project reference and direct
+connection details from the official Supabase Connect screen, and verify TLS.
+Friendly project names and copied query output are insufficient. The new backup
+path deliberately supports only the verified direct endpoint, not shared poolers.
 
-## Backup and restore rehearsal
+Supported scope is `public`, `private`, and verbatim `supabase_migrations` schema
+history. This is a **partial application-scope artifact**, not a complete Supabase
+backup. Auth/Storage/Vault data, role passwords and grants, provider settings,
+large objects, and external files are outside this scope. The old claim that
+placeholder roles established hosted compatibility was incorrect. The restore
+script creates no placeholder hosted roles, functions, users, or extensions.
+Missing required dependencies fail the rehearsal, including `auth.users` foreign
+keys and `auth.uid()`/role dependencies. See the operator guide for the separate
+compatibility/credential/storage gates that remain blocked.
 
-1. Confirm the project and branch in the Supabase dashboard.
-2. Confirm no production worker is enabled and record the current deployment
-   identifier.
-3. In a trusted terminal, run:
+The 2026-10-11 handoff reports 43 Production content items, 172 platform posts,
+one AI suggestion and 19 recorded Production migrations; Staging has 23 recorded
+versions. These are prior observations, not counts verified by Phase A. Preserve
+all intentional remote/local version differences; no history repair/reset/replay
+or automatic Production operation is authorized here.
 
-   ```sh
-   ALLOW_PRODUCTION_BACKUP=YES \
-     EXPECTED_PRODUCTION_DATABASE_NAME='(verified name)' \
-     EXPECTED_PRODUCTION_SERVER_ADDRESS='(verified address)' \
-     BACKUP_DIR=/secure/path \
-     DATABASE_URL='(provided out of band)' scripts/db/backup-production.sh
-   ```
-
-4. Verify the dump manifest exists, has mode `600`, and copy it to encrypted,
-   access-controlled storage. Record its checksum with `sha256sum`.
-5. Restore the dump into a disposable local PostgreSQL database only:
-
-   ```sh
-   ALLOW_DISPOSABLE_RESTORE=YES \
-     RESTORE_TARGET_LABEL=disposable \
-     EXPECTED_RESTORE_DATABASE_NAME='(local database name)' \
-     EXPECTED_RESTORE_SERVER_ADDRESS=local \
-     BACKUP_FILE=/secure/path/60s-history-production-<stamp>.dump \
-     RESTORE_TARGET_DATABASE_URL='postgresql://...local...' \
-     scripts/db/restore-verify.sh
-   ```
-
-6. Run `scripts/db/pending-production-jobs.sql` and
-   `scripts/db/verify-retirement.sql` against the restored copy. Confirm row
-   counts and representative owner data match the pre-backup inventory.
-
-The restore rehearsal is evidence that the backup is usable. It is not a
-production restore and must not target a Supabase or Vercel hostname.
-
-### Local restore limitations
-
-The local PostgreSQL rehearsal cannot provide Supabase-managed components. The
-rehearsal therefore excludes the `vault` schema, the `supabase_vault`
-extension, its `vault.secrets` data, and the `pg_stat_statements` extension.
-It creates disposable placeholders for hosted roles such as `anon`,
-`authenticated`, and `service_role`. This verifies application tables and
-historical rows, but it does not verify Vault contents, hosted extension
-behavior, Supabase-managed roles, or JWT/Data API behavior. A genuinely
-isolated Supabase staging project is required for those checks.
-
-## Staging migration procedure for a new disposable project
+## Historical Staging migration procedure
 
 This retained operator procedure is for a newly provisioned, isolated
 disposable project. Phase 7 historically left hosted Staging at 16 migrations.
@@ -155,23 +124,18 @@ Sprint 004 is Production-complete.
 Sprint 004.1 is applied and verified on Staging and on Production. Production's
 remote version is `20261007190850` `clipforge_youtube_source_metadata`; the
 repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`.
-That difference is intentional. Do not normalize it. Sprint 004.2 is applied
-and verified on Staging and is not applied to Production. Do not rerun this generic procedure against the current hosted project.
+That difference is intentional. Do not normalize it. The later Sprint 004.2
+verification supersedes this section's historical pre-release state. Do not
+rerun this generic procedure against either current hosted project.
 Use the read-only validation workflow for current Staging checks.
 
 1. Use a disposable Supabase staging project or local PostgreSQL clone, never
    the production URL.
-2. Apply the complete migration history, then run:
-
-   ```sh
-   ALLOW_STAGING_MIGRATION=YES \
-     EXPECTED_STAGING_DATABASE_NAME='(verified staging name)' \
-     EXPECTED_STAGING_SERVER_ADDRESS='(verified address)' \
-     STAGING_DATABASE_URL='(staging only)' \
-     scripts/db/apply-staging-migration.sh
-   psql "$STAGING_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-     -f scripts/db/verify-retirement.sql
-   ```
+2. The historical procedure applied migrations and verified retirement SQL.
+   Its executable examples have been removed: the legacy
+   `apply-staging-migration.sh` helper still uses a URL in argv and requires a
+   separate audit before reuse. It is outside Phase A's backup/restore scope.
+   No migration application is authorized by this runbook update.
 
 3. Verify owner and foreign-owner reads with real Supabase Auth sessions. The
    local database test proves SQL/RLS semantics but cannot prove hosted JWT or
@@ -261,7 +225,8 @@ posts, duplicate external IDs = 0, and a successful v2 sync. Production's remote
 migration version is `20261007190850` `clipforge_youtube_source_metadata`. The
 repository filename remains `20261007200200_clipforge_youtube_source_metadata.sql`.
 That version difference is intentional and must not be normalized. Sprint 004.2
-is applied and verified on Staging and is not applied to Production. The ClipForge projects migration
+was later verified in both environments under the intentionally different
+versions documented above. The ClipForge projects migration
 was applied separately to Staging after review. The pending-migration helper
 remains for a future reviewed difference; the pull-request workflow uses exact
 equality and does not apply SQL. A mismatch blocks validation.
