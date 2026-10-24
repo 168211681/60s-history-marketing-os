@@ -107,6 +107,21 @@ export function applyPlatformPatch(current: PlatformPostInput, patch: PlatformPo
   return next;
 }
 
+/** Keep timestamps consistent with the manual workflow's current status. */
+export function platformSaveTimes(
+  status: PlatformStatus,
+  scheduledLocal: string,
+  publishedLocal: string,
+  now: Date = new Date(),
+) {
+  return {
+    scheduledAt: status === "scheduled" && scheduledLocal ? new Date(scheduledLocal).toISOString() : null,
+    publishedAt: status === "published"
+      ? publishedLocal ? new Date(publishedLocal).toISOString() : now.toISOString()
+      : null,
+  };
+}
+
 export function distributionSummary(statuses: readonly PlatformStatus[]) {
   const complete = statuses.filter((status) => status === "published" || status === "skipped").length;
   const remaining = statuses.filter((status) => status === "not_started" || status === "ready").length;
