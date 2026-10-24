@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/local-time";
 import type { PlatformPostRecord } from "@/lib/clipforge/data";
-import { platformCopyAll, platformStatuses, type PlatformStatus } from "@/lib/clipforge/distribution";
+import { platformCopyAll, platformSaveTimes, platformStatuses, type PlatformStatus } from "@/lib/clipforge/distribution";
 import { clipforgeLabel } from "@/lib/clipforge/labels";
 
 export function PlatformCopyButtons({
@@ -87,8 +87,8 @@ function PlatformCard({ contentItemId, post }: { contentItemId: string; post: Pl
   const [title, setTitle] = useState(post.title);
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState(post.hashtags);
-  const [scheduledAt, setScheduledAt] = useState(localInput(post.scheduledAt));
-  const [publishedAt, setPublishedAt] = useState(localInput(post.publishedAt));
+  const [scheduledAt, setScheduledAt] = useState(post.status === "scheduled" ? localInput(post.scheduledAt) : "");
+  const [publishedAt, setPublishedAt] = useState(post.status === "published" ? localInput(post.publishedAt) : "");
   const [postUrl, setPostUrl] = useState(post.postUrl ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -109,6 +109,7 @@ function PlatformCard({ contentItemId, post }: { contentItemId: string; post: Pl
       setMessage("A scheduled post needs a scheduled time.");
       return;
     }
+    const times = platformSaveTimes(statusToSave, scheduledAt, publishedAt);
     setBusy(true);
     setMessage(null);
     const response = await fetch(`/api/content-items/${contentItemId}/platform-posts/${post.platform}`, {
@@ -119,8 +120,7 @@ function PlatformCard({ contentItemId, post }: { contentItemId: string; post: Pl
         title,
         caption,
         hashtags,
-        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        publishedAt: publishedAt ? new Date(publishedAt).toISOString() : null,
+        ...times,
         postUrl: postUrl.trim() ? postUrl.trim() : null,
       }),
     });
@@ -131,6 +131,8 @@ function PlatformCard({ contentItemId, post }: { contentItemId: string; post: Pl
       return;
     }
     setStatus(statusToSave);
+    setScheduledAt(localInput(times.scheduledAt));
+    setPublishedAt(localInput(times.publishedAt));
     setMessage(`${clipforgeLabel(post.platform)} saved. Nothing was published to the platform.`);
     router.refresh();
   }
