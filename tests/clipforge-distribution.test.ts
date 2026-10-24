@@ -32,6 +32,7 @@ import {
   distributionSummary,
   isHttpsUrl,
   parsePlatformPostPatch,
+  platformSaveTimes,
   platformCopyAll,
   queueMembership,
 } from "../src/lib/clipforge/distribution";
@@ -97,6 +98,26 @@ test("platform copy rejects unsafe URLs and missing schedule times", () => {
   const ready = applyPlatformPatch(blank, { status: "ready", postUrl: "https://example.com/post" });
   assert.equal(ready?.status, "ready");
   assert.equal(ready?.postUrl, "https://example.com/post");
+});
+
+test("manual published actions timestamp now and reversing status clears stale times", () => {
+  const now = new Date("2026-10-24T14:30:00.000Z");
+  assert.deepEqual(platformSaveTimes("ready", "2026-10-26T07:30", "2026-10-24T21:00", now), {
+    scheduledAt: null,
+    publishedAt: null,
+  });
+  assert.deepEqual(platformSaveTimes("scheduled", "2026-10-26T07:30", "", now), {
+    scheduledAt: new Date("2026-10-26T07:30").toISOString(),
+    publishedAt: null,
+  });
+  assert.deepEqual(platformSaveTimes("published", "2026-10-26T07:30", "", now), {
+    scheduledAt: null,
+    publishedAt: "2026-10-24T14:30:00.000Z",
+  });
+  assert.deepEqual(platformSaveTimes("published", "", "2026-10-24T21:00", now), {
+    scheduledAt: null,
+    publishedAt: new Date("2026-10-24T21:00").toISOString(),
+  });
 });
 
 test("distribution progress counts published and skipped as complete", () => {
