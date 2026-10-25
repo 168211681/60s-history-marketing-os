@@ -3,10 +3,12 @@ version: 2.1
 # Alternative to GitHub Actions billing-locked CI.
 # This workflow tests only repository code and disposable local resources.
 # It must NEVER receive Staging/Production environment credentials.
+# Run repository scripts as pwuser with an explicit environment allowlist.
+# Cloud trust/OIDC and checkout credential exposure require separate review.
 jobs:
   verify-isolated:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.63.0-noble
+      - image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
     resource_class: medium
     working_directory: /home/pwuser/clipforge
     environment:
@@ -25,16 +27,21 @@ jobs:
               fi
             done
       - run:
+          name: Prepare isolated non-root test workspace
+          command: |
+            set -euo pipefail
+            chown -R pwuser:pwuser /home/pwuser/clipforge
+      - run:
           name: Install pinned npm dependencies
-          command: npm ci
+          command: runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm ci
       - run:
           name: Unit tests, lint, types, production build
           command: |
             set -euo pipefail
-            npm test
-            npm run lint
-            npm run typecheck
-            npm run build -- --webpack
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm test
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm run lint
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm run typecheck
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm run build -- --webpack
       - run:
           name: Install PostgreSQL 16 binaries for disposable local DB
           command: |
@@ -47,15 +54,12 @@ jobs:
           command: |
             set -euo pipefail
             test -d /home/pwuser/clipforge
-            runuser -u pwuser -- env HOME=/home/pwuser npm run test:db
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm run test:db
       - run:
           name: Playwright desktop and iPhone browser suites
           command: |
             set -euo pipefail
-            PLAYWRIGHT_JUNIT_OUTPUT_FILE=test-results/e2e.xml \
-              PLAYWRIGHT_HTML_OPEN=never \
-              PLAYWRIGHT_HTML_REPORT=playwright-report \
-              npm run test:e2e -- --reporter=list,junit,html
+            PLAYWRIGHT_JUNIT_OUTPUT_FILE=test-results/e2e.xml               PLAYWRIGHT_HTML_OPEN=never               PLAYWRIGHT_HTML_REPORT=playwright-report               npm run test:e2e -- --reporter=list,junit,html
             test -s test-results/e2e.xml
             test -s playwright-report/index.html
       - store_test_results:
