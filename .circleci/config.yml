@@ -59,7 +59,7 @@ jobs:
           name: Playwright desktop and iPhone browser suites
           command: |
             set -euo pipefail
-            PLAYWRIGHT_JUNIT_OUTPUT_FILE=test-results/e2e.xml               PLAYWRIGHT_HTML_OPEN=never               PLAYWRIGHT_HTML_REPORT=playwright-report               npm run test:e2e -- --reporter=list,junit,html
+            runuser -u pwuser -- env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/pwuser CI=true NEXT_TELEMETRY_DISABLED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright PLAYWRIGHT_JUNIT_OUTPUT_FILE=test-results/e2e.xml PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_HTML_REPORT=playwright-report npm run test:e2e -- --reporter=list,junit,html
             test -s test-results/e2e.xml
             test -s playwright-report/index.html
       - store_test_results:
