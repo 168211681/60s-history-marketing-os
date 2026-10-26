@@ -1,29 +1,19 @@
 import { Pool, type PoolClient } from "pg";
+import { normalizeSecureDatabaseUrl, remoteTlsOptions } from "./database-tls-policy";
 
 let pool: Pool | undefined;
 
 function connectionString() {
   const value = process.env.DATABASE_URL;
   if (!value) throw new Error("Database is not configured");
-  try {
-    const url = new URL(value);
-    // pg's connection-string parser turns sslmode=require into full
-    // certificate verification and overrides the ssl option below. The
-    // Supabase shared pooler is already TLS-only, so let pg negotiate TLS
-    // while accepting the provider's runtime certificate chain.
-    url.searchParams.delete("sslmode");
-    url.searchParams.delete("uselibpqcompat");
-    return url.toString();
-  } catch {
-    return value;
-  }
+  return normalizeSecureDatabaseUrl(value);
 }
 
 function localDatabase(value: string | undefined) {
   if (!value) return false;
   try {
     const url = new URL(value);
-    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
   } catch {
     return false;
   }
@@ -40,10 +30,8 @@ export function database() {
     max: 2,
     idleTimeoutMillis: 10000,
     allowExitOnIdle: true,
-    // Supabase's shared pooler presents a chain that Node's bundled CA
-    // store may not trust in serverless runtimes. Keep TLS encryption while
-    // allowing the provider endpoint to complete its certificate handshake.
-    ssl: localDatabase(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false },
+    // Always verify the remote server identity; an optional provider CA can be configured.
+    ssl: localDatabase(process.env.DATABASE_URL) ? false : remoteTlsOptions(process.env.DATABASE_SSL_CA_PEM),
   });
   return pool;
 }
