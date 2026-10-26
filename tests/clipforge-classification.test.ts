@@ -499,10 +499,10 @@ test("accepted and rejected suggestions keep their decision when later input cha
     suggestedProductionType: "unknown",
   }).ok, false);
   const review = readFileSync("src/lib/clipforge/classification-store.ts", "utf8");
-  const reviewFunction = review.slice(review.indexOf("export async function reviewLockedSuggestion"), review.indexOf("export async function assertContentPillar"));
+  const reviewFunction = readFileSync("src/lib/clipforge/classification-review.ts", "utf8");
   assert.doesNotMatch(reviewFunction, /source_fingerprint\s*=/);
   assert.match(reviewFunction, /set status = 'accepted'/);
-  assert.match(reviewFunction, /transaction\(\(client\) => reviewLockedSuggestion/);
+  assert.match(review, /transaction\(\(client\) => reviewLockedSuggestion/);
   assert.ok(reviewFunction.indexOf("lockClassificationContext") < reviewFunction.indexOf("for update"));
 });
 

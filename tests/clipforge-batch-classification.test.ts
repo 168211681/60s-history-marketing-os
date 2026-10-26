@@ -193,7 +193,7 @@ test("batch classification does not write canonical metadata or add a bulk accep
   assert.doesNotMatch(run, /Promise\.all/);
   assert.match(run, /await input\.classify\(item\.id\)/);
   const store = readFileSync("src/lib/clipforge/classification-store.ts", "utf8");
-  const preview = store.slice(store.indexOf("export async function previewBatchClassification"), store.indexOf("export async function reviewLockedSuggestion"));
+  const preview = store.slice(store.indexOf("export async function previewBatchClassification"), store.indexOf("export async function reviewContentSuggestion"));
   assert.match(preview, /owner_id = \$1/);
   assert.match(preview, /p\.owner_id = i\.owner_id/);
   assert.doesNotMatch(preview, /for update|update public\.content_items|insert into public\.content_classification_suggestions/);

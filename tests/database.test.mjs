@@ -142,13 +142,13 @@ test("migrations create protected tables with forced RLS and safe grants", () =>
     sql(
       "select count(*) from pg_tables where schemaname in ('public', 'private')",
     ),
-    "24",
+    "25",
   );
   assert.equal(
     sql(
       "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-      "24",
+      "25",
   );
   assert.equal(sql("select has_table_privilege('authenticated','private.production_workflow_events','select')"), "f");
   assert.equal(sql("select has_table_privilege('service_role','private.production_workflow_events','insert')"), "t");
@@ -1187,7 +1187,7 @@ test("classification suggestions stay owner-readable and change canonical metada
     "0",
   );
   assert.equal(
-    sql("select count(*) from pg_policies where schemaname='public' and tablename='content_classification_suggestions' and cmd <> 'SELECT'"),
+    sql("select count(*) from pg_policies where schemaname='public' and tablename='content_classification_suggestions' and cmd <> 'SELECT' and roles @> array['authenticated']::name[]"),
     "0",
   );
   assert.equal(sql("select has_table_privilege('authenticated','public.content_classification_suggestions','select')"), "t");
@@ -1455,3 +1455,7 @@ test("review queue reads an owner snapshot with bounded pagination, current sugg
     assert.deepEqual(after.rows, before.rows);
   } finally { await client.end(); }
 });
+
+// Reuse this isolated cluster; never accept a hosted DATABASE_URL.
+const { registerBulkReviewTests } = await import("./database/bulk-review.mjs");
+registerBulkReviewTests({ Client, root });

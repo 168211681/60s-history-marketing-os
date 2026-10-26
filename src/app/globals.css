@@ -1304,3 +1304,17 @@ footer {
   .review-clip-link { width: 100%; justify-content: center; }
   .review-pagination .button { flex: 1 1 auto; justify-content: center; }
 }
+
+/* Human-controlled bulk review: stacked comparisons and 44px touch targets. */
+.bulk-review { border: 1px solid var(--border); border-radius: 1rem; padding: 1rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
+.bulk-review h3:focus { outline: 2px solid currentColor; outline-offset: 4px; }
+.bulk-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.bulk-actions .button { min-height: 44px; white-space: normal; }
+.bulk-checkbox { display: flex; align-items: center; gap: .75rem; min-height: 44px; cursor: pointer; padding: .5rem 0; }
+.bulk-checkbox input { flex: 0 0 22px; width: 22px; height: 22px; }
+.bulk-checkbox input:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.bulk-preview-item { min-width: 0; border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; margin: 1rem 0; }
+.bulk-preview-item legend { font-weight: 700; max-width: 100%; padding: 0 .25rem; }
+.bulk-preview-field { border-top: 1px solid var(--border); padding: .75rem 0; }
+.bulk-preview-field p { margin: .35rem 0; }
+@media (max-width: 600px) { .bulk-actions .button { width: 100%; } }

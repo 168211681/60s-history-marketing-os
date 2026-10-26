@@ -1,10 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import { BulkReview } from "./bulk-review";
+import { BULK_REVIEW_LIMIT, bulkEligible } from "@/lib/clipforge/bulk-review";
 import { EmptyState, PageHeading, Panel } from "./ui";
 import { clipforgeLabel } from "@/lib/clipforge/labels";
 import { reviewConfidence, reviewHref, reviewLabels, reviewStates, type ReviewFilters, type ReviewItem, type ReviewQueueData } from "@/lib/clipforge/review-queue";
 
 export function ReviewQueueHeading() {
-  return <PageHeading eyebrow="CLIPFORGE" title="Metadata review queue" description="Inspect AI suggestions across your library. Open a clip to review its metadata." action={<Link className="text-link" href="/library">Back to Library →</Link>} />;
+  return <PageHeading eyebrow="CLIPFORGE" title="Metadata review queue" description="Inspect AI suggestions. Review clips individually or select up to ten for an explicit batch review." action={<Link className="text-link" href="/library">Back to Library →</Link>} />;
 }
 
 export function ReviewQueueUnavailable({ invalid = false }: { invalid?: boolean }) {
@@ -20,10 +25,11 @@ export function ReviewQueueLoading() {
   </div>;
 }
 
-function ReviewCard({ item }: { item: ReviewItem }) {
+function ReviewCard({ item, selection }: { item: ReviewItem; selection: ReactNode }) {
   const suggestion = item.suggestion;
   const reviewed = suggestion?.status === "accepted" || suggestion?.status === "rejected";
   return <li className="review-card">
+    {selection}
     <div className="review-card-heading">
       <div><p className="eyebrow">{item.projectName}</p><h3>{item.title}</h3></div>
       <span className="badge neutral">{reviewLabels[item.state]}</span>
@@ -47,9 +53,16 @@ function ReviewCard({ item }: { item: ReviewItem }) {
 }
 
 export function ReviewQueue({ filters, data }: { filters: ReviewFilters; data: ReviewQueueData }) {
+  // New page/filter/snapshot => a fresh selection and no reusable confirmation.
+  return <ReviewQueuePage key={JSON.stringify([filters, data])} filters={filters} data={data} />;
+}
+
+function ReviewQueuePage({ filters, data }: { filters: ReviewFilters; data: ReviewQueueData }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [locked, setLocked] = useState(false);
   const count = data.totals[filters.state];
   return <><ReviewQueueHeading />
-    <Panel title="Find suggestions" description="Suggestions are read-only here. Accept, Reject, and Regenerate remain on each clip.">
+    <Panel title="Find suggestions" description="Select pending, non-stale suggestions on this page for human-controlled bulk review. Individual review remains available on each clip.">
       <form className="filters review-filters" method="get" action="/review">
         <label className="search-label">Search title<input name="q" defaultValue={filters.q} maxLength={200} type="search" /></label>
         <label>Project<select name="project" defaultValue={filters.project}>
@@ -71,7 +84,7 @@ export function ReviewQueue({ filters, data }: { filters: ReviewFilters; data: R
       </nav>
     </Panel>
     <Panel title="Suggestions" description={`${count} ${count === 1 ? "clip" : "clips"} · ${reviewLabels[filters.state]}`}>
-      {data.items.length ? <ul className="review-cards">{data.items.map((item) => <ReviewCard key={item.id} item={item} />)}</ul> : <EmptyState title={count ? "No clips on this page" : "No matching clips"}>
+      {data.items.length ? <><BulkReview key={selected.join(",")} ids={selected} lockSelection={setLocked} /><ul className="review-cards">{data.items.map((item) => <ReviewCard key={item.id} item={item} selection={bulkEligible(item) ? <label className="bulk-checkbox"><input type="checkbox" aria-label={`Select ${item.title}`} checked={selected.includes(item.id)} disabled={locked || (!selected.includes(item.id) && selected.length >= BULK_REVIEW_LIMIT)} onChange={(event) => setSelected((ids) => event.target.checked ? (ids.length < BULK_REVIEW_LIMIT && !ids.includes(item.id) ? [...ids, item.id] : ids) : ids.filter((id) => id !== item.id))} />Select for bulk review</label> : null} />)}</ul></> : <EmptyState title={count ? "No clips on this page" : "No matching clips"}>
         <p>{count ? "Return to the first page to see this selection." : "Try another review state, project, or title. Only your content appears here."}</p>
         <Link className="text-link" href={count ? reviewHref(filters, { page: 1 }) : "/review"} prefetch={false}>{count ? "First page" : "Clear filters"}</Link>
       </EmptyState>}

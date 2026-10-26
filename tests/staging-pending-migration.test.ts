@@ -92,7 +92,8 @@ test("reads only valid local migration filenames", async () => {
 
 test("this branch includes the password and ClipForge migrations", async () => {
   const versions = await readLocalMigrationVersions("supabase/migrations");
-  assert.equal(versions.length, 22);
+  assert.equal(versions.length, 23);
+  assert.ok(versions.includes("20261009180957"));
   assert.ok(versions.includes("20260928140124"));
   assert.ok(versions.includes("20261006175601"));
   assert.ok(versions.includes("20261006210730"));
